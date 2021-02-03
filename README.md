@@ -1,7 +1,7 @@
 # AlmaLinux Cloud Images
 
 AlmaLinux Cloud Images is a project that contains
-[packer](https://www.packer.io/) templates and other tools for building
+[Packer](https://www.packer.io/) templates and other tools for building
 AlmaLinux images for various cloud platforms.
 
 Vagrant boxes are published to the
@@ -18,6 +18,13 @@ Cloud.
 * [ ] Google Cloud support
 * [ ] Microsoft Azure support
 * [ ] DigitalOcean support
+
+
+## Requirements
+
+* [Packer](https://www.packer.io/)
+* [Ansible](https://www.ansible.com/)
+* [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
 
 
 ## License
