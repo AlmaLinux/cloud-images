@@ -1,0 +1,76 @@
+---
+- name: Remove old kernels
+  shell: dnf remove $(dnf repoquery --installonly --latest-limit=-1 -q)
+
+- name: Delete DNF cache
+  command: dnf clean all
+
+- name: Find temporary files
+  find:
+    file_type: any
+    paths:
+      - /tmp
+      - /var/tmp
+    patterns: '*'
+  register: tmp_files
+
+- name: Find SSH host keys
+  find:
+    paths: /etc/ssh
+    patterns: '*host*key*'
+  register: host_keys
+
+- name: Remove temporary files and SSH host keys
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ tmp_files.files + host_keys.files}}"
+
+- name: Remove kickstart files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /root/anaconda-ks.cfg
+    - /root/original-ks.cfg
+
+- name: Truncate files
+  command: "truncate -s 0 {{ item }}"
+  loop:
+    - /etc/machine-id
+    - /var/log/audit/audit.log
+    - /var/log/wtmp
+    - /var/log/lastlog
+
+# TODO: this may fail with "No usable temporary directory found" error
+#       periodically because Ansible is unable to create a tmp file for
+#       subsequent tasks.
+- name: Fill free space with zeroes
+  shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || /bin/true
+
+- name: Remove zeroed file
+  file:
+    path: /zeroed_file
+    state: absent
+
+- name: Detect swap partition
+  command: grep -oP '^/dev/\w+' /proc/swaps
+  register: swaps
+
+- name: Unmount swap partition
+  command: "swapoff {{ swaps.stdout }}"
+
+- name: Fill swap partition with zeroes
+  shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
+
+- name: Format swap partition
+  command: "mkswap -f {{ swaps.stdout }}"
+
+- name: Mount swap partition
+  command: "swapon {{ swaps.stdout }}"
+
+- name: Sync disc
+  command: sync
+
+- name: Clear shell history
+  shell: history -c

@@ -1,0 +1,6 @@
+---
+- name: Install Vagrant public SSH key
+  ansible.posix.authorized_key:
+    user: vagrant
+    state: present
+    key: https://raw.githubusercontent.com/hashicorp/vagrant/main/keys/vagrant.pub

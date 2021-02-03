@@ -1,0 +1,6 @@
+---
+collections:
+  - name: ansible.posix
+
+roles:
+  - name: ezamriy.vbox_guest
