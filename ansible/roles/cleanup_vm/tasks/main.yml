@@ -57,6 +57,10 @@
   command: grep -oP '^/dev/\w+' /proc/swaps
   register: swaps
 
+- name: Get swap partition UUID
+  command: "blkid {{ swaps.stdout }} -s UUID -o value"
+  register: swap_blkid
+
 - name: Unmount swap partition
   command: "swapoff {{ swaps.stdout }}"
 
@@ -64,7 +68,7 @@
   shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
 
 - name: Format swap partition
-  command: "mkswap -f {{ swaps.stdout }}"
+  command: "mkswap -U {{ swap_blkid.stdout}} -f {{ swaps.stdout }}"
 
 - name: Mount swap partition
   command: "swapon {{ swaps.stdout }}"
