@@ -1,7 +1,7 @@
 source "virtualbox-iso" "almalinux-8" {
   guest_os_type = "RedHat_64"
-  iso_url = "https://repo.almalinux.org/almalinux/8.3-beta/isos/x86_64/AlmaLinux-8.3-beta-1-x86_64-boot.iso"
-  iso_checksum = "file:https://repo.almalinux.org/almalinux/8.3-beta/isos/x86_64/CHECKSUM"
+  iso_url = "https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/AlmaLinux-8.3-rc-1-x86_64-boot.iso"
+  iso_checksum = "file:https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/CHECKSUM"
   hard_drive_interface = "sata"
   cpus = "2"
   memory = "2048"
