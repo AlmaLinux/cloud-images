@@ -1,0 +1,5 @@
+---
+- name: Install open-vm-tools
+  dnf:
+    name: open-vm-tools
+    state: latest

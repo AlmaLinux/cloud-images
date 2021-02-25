@@ -12,7 +12,7 @@ Cloud.
 ## Roadmap
 
 * [x] Vagrant + VirtualBox support
-* [ ] Vagrant + VMWare support
+* [x] Vagrant + VMWare support
 * [ ] Vagrant + Parallels support
 * [ ] AWS support
 * [ ] Google Cloud support
@@ -20,11 +20,27 @@ Cloud.
 * [ ] DigitalOcean support
 
 
+## Usage
+
+Build a VirtualBox box:
+
+```sh
+$ packer build -only=virtualbox-iso.almalinux-8 almalinux-8.pkr.hcl
+```
+
+Build a VMWare box:
+
+```sh
+$ packer build -only=vmware-iso.almalinux-8 almalinux-8.pkr.hcl
+```
+
+
 ## Requirements
 
 * [Packer](https://www.packer.io/)
 * [Ansible](https://www.ansible.com/)
 * [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
+* [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images only)
 
 
 ## License

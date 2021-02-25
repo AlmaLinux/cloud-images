@@ -1,42 +1,89 @@
-source "virtualbox-iso" "almalinux-8" {
-  guest_os_type = "RedHat_64"
+variables {
   iso_url = "https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/AlmaLinux-8.3-rc-1-x86_64-boot.iso"
   iso_checksum = "file:https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/CHECKSUM"
-  hard_drive_interface = "sata"
-  cpus = "2"
-  memory = "2048"
-  headless = false
+  headless = true
+  boot_command = [
+    "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"
+  ]
+  boot_wait = "10s"
   http_directory = "http"
+  shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"
+  cpus = 2
+  memory = 2048
+  disk_size = 20000
   ssh_username = "vagrant"
   ssh_password = "vagrant"
-  shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"
-  boot_command = ["<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"]
-  boot_wait = "10s"
-  ssh_wait_timeout = "3600s"
-  disk_size = 20000
+  ssh_timeout = "3600s"
+  post_memory = 1024
+  post_cpus = 1
+}
+
+
+source "virtualbox-iso" "almalinux-8" {
+  iso_url = var.iso_url
+  iso_checksum = var.iso_checksum
+  boot_command = var.boot_command
+  boot_wait = var.boot_wait
+  cpus = var.cpus
+  memory = var.memory
+  disk_size = var.disk_size
+  headless = var.headless
+  http_directory = var.http_directory
+  guest_os_type = "RedHat_64"
+  shutdown_command = var.shutdown_command
+  ssh_username = var.ssh_username
+  ssh_password = var.ssh_password
+  ssh_timeout = var.ssh_timeout
+  hard_drive_interface = "sata"
   vboxmanage_post = [
-    ["modifyvm", "{{.Name}}", "--memory", "1024"],
-    ["modifyvm", "{{.Name}}", "--cpus", "1"]
+    ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
   ]
 }
 
+
+source "vmware-iso" "almalinux-8" {
+  iso_url = var.iso_url
+  iso_checksum = var.iso_checksum
+  boot_command = var.boot_command
+  boot_wait = var.boot_wait
+  cpus = var.cpus
+  memory = var.memory
+  disk_size = var.disk_size
+  headless = var.headless
+  http_directory = var.http_directory
+  guest_os_type = "centos-64"
+  shutdown_command = var.shutdown_command
+  ssh_username = var.ssh_username
+  ssh_password = var.ssh_password
+  ssh_timeout = var.ssh_timeout
+  vmx_data = {
+    "cpuid.coresPerSocket": "1"
+  }
+  vmx_data_post = {
+    "memsize": var.post_memory
+    "numvcpus": var.post_cpus
+  }
+  vmx_remove_ethernet_interfaces = true
+}
+
+
 build {
-  sources = ["sources.virtualbox-iso.almalinux-8"]
+  sources = ["sources.virtualbox-iso.almalinux-8", "sources.vmware-iso.almalinux-8"]
 
   provisioner "ansible" {
-    playbook_file = "./ansible/vagrant-virtualbox.yml"
+    playbook_file = "./ansible/vagrant-box.yml"
     galaxy_file = "./ansible/requirements.yml"
     roles_path = "./ansible/roles"
     collections_path = "./ansible/collections"
     ansible_env_vars = [
       "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
-    only = ["virtualbox-iso.almalinux-8"]
+    extra_arguments = ["--extra-vars", "packer_provider=${source.type}"]
   }
 
   post-processor "vagrant" {
     compression_level = "9"
-    provider_override = "virtualbox"
-    output = "almalinux-8-x86_64.{{isotime \"20060102\"}}.box"
+    output = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
   }
 }
