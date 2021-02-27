@@ -14,6 +14,7 @@ Cloud.
 * [x] Vagrant + VirtualBox support
 * [x] Vagrant + VMWare support
 * [ ] Vagrant + Parallels support
+* [ ] Vagrant + Microsoft Hyper-V support
 * [ ] AWS support
 * [ ] Google Cloud support
 * [ ] Microsoft Azure support
