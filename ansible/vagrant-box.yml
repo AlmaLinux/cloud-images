@@ -3,6 +3,8 @@
 - name: 'AlmaLinux Vagrant Box'
   hosts: default
   become: true
+  collections:
+    - almalinux.ci
 
   roles:
     - upgrade_and_reboot
