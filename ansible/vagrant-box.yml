@@ -10,5 +10,7 @@
       when: packer_provider == 'virtualbox-iso'
     - role: vmware_guest
       when: packer_provider == 'vmware-iso'
+    - role: qemu_guest
+      when: packer_provider == 'qemu'
     - install_vagrant_key
     - cleanup_vm

@@ -68,8 +68,34 @@ source "vmware-iso" "almalinux-8" {
 }
 
 
+source "qemu" "almalinux-8" {
+  iso_checksum       = var.iso_checksum
+  iso_url            = var.iso_url
+  shutdown_command   = var.shutdown_command
+  accelerator        = "kvm"
+  http_directory     = var.http_directory
+  ssh_username       = var.ssh_username
+  ssh_password       = var.ssh_password
+  ssh_timeout        = var.ssh_timeout
+  cpus               = var.cpus
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  disk_compression   = true
+  format             = "qcow2"
+  headless           = var.headless
+  memory             = var.memory
+  net_device         = "virtio-net"
+  qemu_binary        = "/usr/libexec/qemu-kvm"
+  vm_name            = "almalinux-8"
+  boot_wait          = var.boot_wait
+  boot_command       = var.boot_command
+}
+
 build {
-  sources = ["sources.virtualbox-iso.almalinux-8", "sources.vmware-iso.almalinux-8"]
+  sources = ["sources.virtualbox-iso.almalinux-8", "sources.vmware-iso.almalinux-8", "sources.qemu.almalinux-8"]
 
   provisioner "ansible" {
     playbook_file = "./ansible/vagrant-box.yml"
@@ -84,6 +110,7 @@ build {
 
   post-processor "vagrant" {
     compression_level = "9"
+    vagrantfile_template = "tpl/vagrantfile.tpl"
     output = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
   }
 }

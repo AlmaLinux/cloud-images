@@ -1,0 +1,7 @@
+---
+- name: Install qemu-guest-agent and rsync
+  dnf:
+    name:
+      - qemu-guest-agent
+      - rsync
+    state: latest
