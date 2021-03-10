@@ -110,7 +110,14 @@ build {
 
   post-processor "vagrant" {
     compression_level = "9"
-    vagrantfile_template = "tpl/vagrantfile.tpl"
     output = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+    except = ["qemu.almalinux-8"]
+  }
+
+  post-processor "vagrant" {
+    compression_level = "9"
+    vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
+    output = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+    only = ["qemu.almalinux-8"]
   }
 }
