@@ -15,6 +15,7 @@ Cloud.
 * [x] Vagrant + VMWare support
 * [ ] Vagrant + Parallels support
 * [ ] Vagrant + Microsoft Hyper-V support
+* [x] Vagrant + Libvirt support
 * [ ] AWS support
 * [ ] Google Cloud support
 * [ ] Microsoft Azure support
@@ -35,6 +36,12 @@ Build a VMWare box:
 $ packer build -only=vmware-iso.almalinux-8 almalinux-8.pkr.hcl
 ```
 
+Build a Libvirt box:
+
+```sh
+$ packer build -only=qemu.almalinux-8 almalinux-8.pkr.hcl
+```
+
 
 ## Requirements
 
@@ -42,6 +49,7 @@ $ packer build -only=vmware-iso.almalinux-8 almalinux-8.pkr.hcl
 * [Ansible](https://www.ansible.com/)
 * [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images only)
+* [QEMU](https://www.qemu.org/) (for Libvirt images only)
 
 
 ## License
