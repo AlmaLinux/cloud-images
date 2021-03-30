@@ -1,6 +1,6 @@
 variables {
-  iso_url = "https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/AlmaLinux-8.3-rc-1-x86_64-boot.iso"
-  iso_checksum = "file:https://repo.almalinux.org/almalinux/8.3-rc/isos/x86_64/CHECKSUM"
+  iso_url = "https://repo.almalinux.org/almalinux/8.3/isos/x86_64/AlmaLinux-8.3-x86_64-boot.iso"
+  iso_checksum = "file:https://repo.almalinux.org/almalinux/8.3/isos/x86_64/CHECKSUM"
   headless = true
   boot_command = [
     "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"
