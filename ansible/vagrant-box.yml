@@ -15,4 +15,5 @@
     - role: qemu_guest
       when: packer_provider == 'qemu'
     - install_vagrant_key
+    - nfs-client
     - cleanup_vm

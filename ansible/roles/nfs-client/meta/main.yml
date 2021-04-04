@@ -1,0 +1,14 @@
+galaxy_info:
+  role_name: nfs-client
+  author: Elkhan Mammadli
+  description: Installs NFS
+  license: MIT
+  min_ansible_version: 2.5
+  platforms:
+    - name: EL
+      versions:
+        - 8
+  galaxy_tags:
+    - nfs
+
+dependencies: []
