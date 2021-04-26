@@ -1,0 +1,6 @@
+---
+- name: Install NFS
+  dnf:
+    name:
+      - nfs-utils
+    state: latest
