@@ -1,0 +1,37 @@
+variables {
+  //
+  // common variables
+  //
+  iso_url                  = "https://repo.almalinux.org/almalinux/8.3/isos/x86_64/AlmaLinux-8.3-x86_64-boot.iso"
+  iso_checksum             = "file:https://repo.almalinux.org/almalinux/8.3/isos/x86_64/CHECKSUM"
+  headless                 = true
+  boot_wait                = "10s"
+  cpus                     = 2
+  memory                   = 2048
+  post_cpus                = 1
+  post_memory              = 1024
+  http_directory           = "http"
+  ssh_timeout              = "3600s"
+  root_shutdown_command    = "/sbin/shutdown -hP now"
+  //
+  // AWS specific variables
+  //
+  aws_boot_command         = [
+    "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.aws.ks<enter><wait>"
+  ]
+  aws_disk_size            = 10240
+  aws_ssh_username         = "root"
+  aws_ssh_password         = "almalinux"
+  aws_s3_bucket_name       = ""
+  aws_role_name            = "vmimport"
+  //
+  // Vagrant specific variables
+  //
+  vagrant_boot_command     = [
+    "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"
+  ]
+  vagrant_disk_size        = 20000
+  vagrant_shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"
+  vagrant_ssh_username     = "vagrant"
+  vagrant_ssh_password     = "vagrant"
+}

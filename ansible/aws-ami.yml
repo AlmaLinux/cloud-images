@@ -1,0 +1,9 @@
+# An Ansible playbook that configures an Amazon AMI image
+---
+- name: AlmaLinux Amazon AMI
+  hosts: default
+  become: true
+
+  roles:
+    - aws_guest
+    - cleanup_vm

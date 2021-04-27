@@ -56,22 +56,26 @@
 - name: Detect swap partition
   command: grep -oP '^/dev/\w+' /proc/swaps
   register: swaps
+  ignore_errors: true
 
-- name: Get swap partition UUID
-  command: "blkid {{ swaps.stdout }} -s UUID -o value"
-  register: swap_blkid
+- name: Wipe out swap data
+  block:
+    - name: Get swap partition UUID
+      command: "blkid {{ swaps.stdout }} -s UUID -o value"
+      register: swap_blkid
 
-- name: Unmount swap partition
-  command: "swapoff {{ swaps.stdout }}"
+    - name: Unmount swap partition
+      command: "swapoff {{ swaps.stdout }}"
 
-- name: Fill swap partition with zeroes
-  shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
+    - name: Fill swap partition with zeroes
+      shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
 
-- name: Format swap partition
-  command: "mkswap -U {{ swap_blkid.stdout}} -f {{ swaps.stdout }}"
+    - name: Format swap partition
+      command: "mkswap -U {{ swap_blkid.stdout}} -f {{ swaps.stdout }}"
 
-- name: Mount swap partition
-  command: "swapon {{ swaps.stdout }}"
+    - name: Mount swap partition
+      command: "swapon {{ swaps.stdout }}"
+  when: swaps.rc == 0
 
 - name: Sync disc
   command: sync
