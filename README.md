@@ -4,22 +4,29 @@ AlmaLinux OS Cloud Images is a project that contains
 [Packer](https://www.packer.io/) templates and other tools for building
 AlmaLinux OS images for various cloud platforms.
 
-Vagrant boxes are published to the
-[almalinux organization](https://app.vagrantup.com/almalinux/) on Vagrant
-Cloud.
+
+## Download official images
+
+Vagrant boxes are distributed through Vagrant Cloud:
+[app.vagrantup.com/almalinux](https://app.vagrantup.com/almalinux/).
+
+Amazon AMI is provided by [AlmaLinux OS Foundation](https://aws.amazon.com/marketplace/seller-profile?id=529d1014-352c-4bed-8b63-6120e4bd3342):
+https://aws.amazon.com/marketplace/pp/B094C8ZZ8J.
 
 
 ## Roadmap
 
 * [x] Vagrant + VirtualBox support
 * [x] Vagrant + VMWare support
-* [ ] Vagrant + Parallels support
-* [ ] Vagrant + Microsoft Hyper-V support
+* [ ] Vagrant + Parallels support (#3)
+* [ ] Vagrant + Microsoft Hyper-V support (#4)
 * [x] Vagrant + Libvirt support
 * [x] AWS support (using the VMWare builder only, it would be nice to support VirtualBox or Qemu as well)
 * [ ] Google Cloud support
-* [ ] Microsoft Azure support
+* [ ] Microsoft Azure support (#14)
 * [ ] DigitalOcean support
+* [ ] OpenStack support (#12)
+* [ ] LXC/LXD support (#8)
 
 
 ## Usage
