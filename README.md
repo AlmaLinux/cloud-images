@@ -19,7 +19,7 @@ https://aws.amazon.com/marketplace/pp/B094C8ZZ8J.
 * [x] Vagrant + VirtualBox support
 * [x] Vagrant + VMWare support
 * [ ] Vagrant + Parallels support (#3)
-* [ ] Vagrant + Microsoft Hyper-V support (#4)
+* [x] Vagrant + Microsoft Hyper-V support (#4)
 * [x] Vagrant + Libvirt support
 * [x] AWS support (using the VMWare builder only, it would be nice to support VirtualBox or Qemu as well)
 * [ ] Google Cloud support
@@ -56,6 +56,12 @@ Build a Libvirt box:
 
 ```sh
 $ packer build -only=qemu.almalinux-8 .
+```
+
+Build a Hyper-V box:
+
+```powershell
+> packer build -only="hyperv-iso.almalinux-8" .
 ```
 
 

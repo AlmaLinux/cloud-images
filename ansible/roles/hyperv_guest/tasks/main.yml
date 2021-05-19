@@ -1,0 +1,16 @@
+---
+- name: Install Hyper-V dependencies
+  dnf:
+    name:
+      - cifs-utils
+      - hyperv-daemons
+    state: installed
+
+- name: Enable Hyper-V services
+  service:
+    name: "{{ item }}"
+    enabled: yes
+  with_items:
+    - hypervvssd
+    - hypervkvpd
+    - hypervfcopyd

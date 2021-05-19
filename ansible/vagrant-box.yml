@@ -14,6 +14,9 @@
       when: packer_provider == 'vmware-iso'
     - role: qemu_guest
       when: packer_provider == 'qemu'
+    - role: hyperv_guest
+      when: packer_provider == 'hyperv-iso'
     - install_vagrant_key
     - nfs-client
-    - cleanup_vm
+    - role: cleanup_vm
+      cleanup_ssh_host_keys: packer_provider != 'hyperv-iso'

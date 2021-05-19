@@ -25,10 +25,17 @@ variables {
   aws_s3_bucket_name       = ""
   aws_role_name            = "vmimport"
   //
+  // Hyper-V specific variables
+  //
+  hyperv_switch_name       = ""
+  //
   // Vagrant specific variables
   //
   vagrant_boot_command     = [
     "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"
+  ]
+  vagrant_efi_boot_command = [
+    "e<down><down><end><bs><bs><bs><bs><bs>text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<leftCtrlOn>x<leftCtrlOff>"
   ]
   vagrant_disk_size        = 20000
   vagrant_shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"

@@ -14,17 +14,26 @@
     patterns: '*'
   register: tmp_files
 
-- name: Find SSH host keys
-  find:
-    paths: /etc/ssh
-    patterns: '*host*key*'
-  register: host_keys
-
-- name: Remove temporary files and SSH host keys
+- name: Remove temporary files
   file:
     path: "{{ item.path }}"
     state: absent
-  loop: "{{ tmp_files.files + host_keys.files}}"
+  loop: "{{ tmp_files.files }}"
+
+- name: Remove SSH host keys
+  block:
+    - name: Find SSH host keys
+      find:
+        paths: /etc/ssh
+        patterns: '*host*key*'
+      register: host_keys
+
+    - name: Remove SSH host keys
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ host_keys.files }}"
+  when: cleanup_ssh_host_keys | bool
 
 - name: Remove kickstart files
   file:
