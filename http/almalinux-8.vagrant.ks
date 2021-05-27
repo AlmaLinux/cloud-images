@@ -17,7 +17,7 @@ timezone UTC
 network --bootproto=dhcp
 firewall --disabled
 services --enabled=sshd
-selinux --permissive
+selinux --enforcing
 
 bootloader --location=mbr
 zerombr
