@@ -166,7 +166,7 @@ def main(sys_args):
     with open(args.csv_output, 'w') as csv_fd:
         csv_writer = csv.writer(csv_fd, dialect='unix')
         for dst_region, dst_ami_id in sorted(public_amis.items()):
-            row = ('AlmaLinux OS', '8.3', dst_region,  dst_ami_id, 'x86_64')
+            row = ('AlmaLinux OS', '8.4', dst_region,  dst_ami_id, 'x86_64')
             csv_writer.writerow(row)
             md_rows.append(row)
     with open(args.md_output, 'w') as fd:

@@ -56,8 +56,8 @@ build {
 
   // comment this out if you don't want to import AMI to Amazon EC2 automatically
   post-processor "amazon-import" {
-    ami_name            = "AlmaLinux OS 8.3 x86_64"
-    ami_description     = "Official AlmaLinux OS 8.3 x86_64 image"
+    ami_name            = "AlmaLinux OS 8.4 x86_64"
+    ami_description     = "Official AlmaLinux OS 8.4 x86_64 image"
     ami_groups          = ["all"]
     s3_bucket_name      = var.aws_s3_bucket_name
     license_type        = "BYOL"
