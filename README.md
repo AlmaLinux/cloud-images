@@ -7,26 +7,32 @@ AlmaLinux OS images for various cloud platforms.
 
 ## Download official images
 
-Vagrant boxes are distributed through Vagrant Cloud:
-[app.vagrantup.com/almalinux](https://app.vagrantup.com/almalinux/).
-
-Amazon AMI is provided by [AlmaLinux OS Foundation](https://aws.amazon.com/marketplace/seller-profile?id=529d1014-352c-4bed-8b63-6120e4bd3342):
-https://aws.amazon.com/marketplace/pp/B094C8ZZ8J.
+|            Name            |                             Download URL                            |
+| -------------------------- | ------------------------------------------------------------------- |
+| AWS Marketplace AMI        | https://aws.amazon.com/marketplace/pp/B094C8ZZ8J                    |
+| AWS community AMIs         | https://wiki.almalinux.org/cloud/AWS.html                           |
+| Docker Hub                 | https://hub.docker.com/_/almalinux                                  |
+| Generic Cloud (cloud-init) | https://repo.almalinux.org/almalinux/8/cloud/x86_64/images/         |
+| Google Cloud               | https://cloud.google.com/compute/docs/images#almalinux              |
+| LXC/LXD                    | https://images.linuxcontainers.org                                  |
+| Quay.io                    | https://quay.io/repository/almalinux/almalinux                      |
+| Vagrant boxes              | [app.vagrantup.com/almalinux](https://app.vagrantup.com/almalinux/) |
 
 
 ## Roadmap
 
+* [ ] Add aarch64 architecture support
 * [x] Vagrant + VirtualBox support
 * [x] Vagrant + VMWare support
 * [ ] Vagrant + Parallels support (#3)
 * [x] Vagrant + Microsoft Hyper-V support (#4)
 * [x] Vagrant + Libvirt support
 * [x] AWS support (using the VMWare builder only, it would be nice to support VirtualBox or Qemu as well)
-* [ ] Google Cloud support
+* [x] Google Cloud support
 * [ ] Microsoft Azure support (#14)
 * [ ] DigitalOcean support
-* [ ] OpenStack support (#12)
-* [ ] LXC/LXD support (#8)
+* [x] Generic Cloud / OpenStack support (#12)
+* [x] LXC/LXD support (#8)
 
 
 ## Usage
@@ -99,13 +105,20 @@ $ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
 ```
 
 
+### Build a Generic Cloud (OpenStack compatible) image
+
+```sh
+$ packer build -only qemu.almalinux-8-gencloud-x86_64 .
+```
+
+
 ## Requirements
 
 * [Packer](https://www.packer.io/)
 * [Ansible](https://www.ansible.com/)
 * [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images and Amazon AMI's only)
-* [QEMU](https://www.qemu.org/) (for Libvirt images only)
+* [QEMU](https://www.qemu.org/) (for Generic Cloud and Libvirt images only)
 
 
 ## References

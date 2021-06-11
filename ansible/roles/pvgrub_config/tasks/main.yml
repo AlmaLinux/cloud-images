@@ -1,0 +1,52 @@
+---
+- name: Get root parition UUID
+  command: findmnt / -o UUID -n
+  changed_when: false
+  register: root_uuid
+
+- name: Get default boot record title
+  command: grubby --default-title
+  changed_when: false
+  register: grub_rec_title
+
+- name: Get default kernel path
+  command: grubby --default-kernel
+  changed_when: false
+  register: grub_kernel_path
+
+- name: Get default initrd path
+  shell: grubby --info=DEFAULT | grep initrd | grep -oP 'initrd="\K\S+?.img'
+  changed_when: false
+  register: grub_initrd_path
+
+- name: Create /boot/grub directory
+  file:
+    path: /boot/grub
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Render /boot/grub/grub.conf
+  template:
+    src: grub.conf.j2
+    dest: /boot/grub/grub.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create /boot/grub/menu.lst symlink
+  file:
+    src: grub.conf
+    dest: /boot/grub/menu.lst
+    owner: root
+    group: root
+    state: link
+
+- name: Create /etc/grub.conf symlink
+  file:
+    src: /boot/grub/grub.conf
+    dest: /etc/grub.conf
+    owner: root
+    group: root
+    state: link

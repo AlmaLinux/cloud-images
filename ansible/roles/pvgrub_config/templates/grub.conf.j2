@@ -1,0 +1,7 @@
+default=0
+timeout=0
+
+title {{ grub_rec_title.stdout }}
+        root (hd0)
+        kernel {{ grub_kernel_path.stdout }} ro root=UUID={{ root_uuid.stdout }} console=hvc0 LANG=en_US.UTF-8
+        initrd {{ grub_initrd_path.stdout }}

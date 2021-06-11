@@ -25,6 +25,15 @@ variables {
   aws_s3_bucket_name       = ""
   aws_role_name            = "vmimport"
   //
+  // Generic Cloud (OpenStack) variables
+  //
+  gencloud_boot_command    = [
+    "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud.ks<enter><wait>"
+  ]
+  gencloud_disk_size       = "10G"
+  gencloud_ssh_username    = "root"
+  gencloud_ssh_password    = "almalinux"
+  //
   // Hyper-V specific variables
   //
   hyperv_switch_name       = ""
