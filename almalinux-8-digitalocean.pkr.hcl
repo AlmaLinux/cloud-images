@@ -29,13 +29,13 @@ build {
 
   provisioner "shell" {
     scripts = [
-      "vm-scripts/digitalocean-00-wait_for_cloud-init.bash",
-      "vm-scripts/digitalocean-10-dnf_upgrade.bash",
-      "vm-scripts/digitalocean-50-mangle_os-release.bash",
-      "vm-scripts/digitalocean-80-root_lock-up.bash",
-      "vm-scripts/digitalocean-89-root_clean-up.bash",
-      "vm-scripts/digitalocean-90-cleanup.bash",
-      "vm-scripts/digitalocean-99-img-check-2.bash"
+      "vm-scripts-digitalocean/digitalocean-00-wait_for_cloud-init.bash",
+      "vm-scripts-digitalocean/digitalocean-10-dnf_upgrade.bash",
+      "vm-scripts-digitalocean/digitalocean-50-mangle_os-release.bash",
+      "vm-scripts-digitalocean/digitalocean-80-root_lock-up.bash",
+      "vm-scripts-digitalocean/digitalocean-89-root_clean-up.bash",
+      "vm-scripts-digitalocean/digitalocean-90-cleanup.bash",
+      "vm-scripts-digitalocean/digitalocean-99-img-check-2.bash"
     ]
   }
 }
