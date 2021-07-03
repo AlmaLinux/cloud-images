@@ -2,3 +2,4 @@
 packer_cache
 ansible/collections/
 ansible/roles/ezamriy*
+.env.digitalocean
