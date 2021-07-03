@@ -160,10 +160,10 @@ $ source .env.digitalocean
 $ doctl compute image list
 
 # set your packer token
-$ export DIGITALOCEAN_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
+$ export DIGITALOCEAN_API_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
 
 # build image
-$ packer build -only do.almalinux-8-digitalocean-x86_64 .
+$ packer build -only digitalocean.almalinux-8-digitalocean-x86_64 .
 ```
 
 
