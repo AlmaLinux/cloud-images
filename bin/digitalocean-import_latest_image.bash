@@ -24,7 +24,7 @@ output=$(
 
 # export image ID
 export DIGITALOCEAN_IMAGE=$( echo -e "$output" | tail -n 1 | cut -d ' ' -f 1 )
-echo "image id: $DIGITALOCEAN_IMAGE"
+echo "image ID: $DIGITALOCEAN_IMAGE"
 
 # sleep for 5 minutes
 echo "Sleeping 5 minutes to alow the image be downloaded by DigitalOcean..."
