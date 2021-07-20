@@ -25,6 +25,20 @@ variables {
   aws_s3_bucket_name       = ""
   aws_role_name            = "vmimport"
   //
+  // DigitalOcean variables
+  //
+  do_api_token             = env("DIGITALOCEAN_API_TOKEN")
+  do_image                 = env("DIGITALOCEAN_IMAGE")
+  do_image_name            = "AlmaLinux-x86_64-latest-{{timestamp}}"
+  do_image_regions         = ["nyc3"]
+  do_region                = "nyc3"
+  do_size                  = "s-1vcpu-1gb"
+  do_snapshot_name         = "AlmaLinux-x86_64-latest-{{timestamp}}"
+  do_spaces_key            = env("DIGITALOCEAN_SPACES_ACCESS_KEY")
+  do_spaces_name           = "almalinux-renich"
+  do_spaces_secret         = env("DIGITALOCEAN_SPACES_SECRET_KEY")
+  do_tags                  = ["AlmaLinux"]
+  //
   // Generic Cloud (OpenStack) variables
   //
   gencloud_boot_command    = [
