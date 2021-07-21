@@ -34,7 +34,7 @@ variables {
   do_size                  = "s-1vcpu-1gb"
   do_snapshot_name         = "AlmaLinux-x86_64-latest-{{timestamp}}"
   do_spaces_key            = env("DIGITALOCEAN_SPACES_ACCESS_KEY")
-  do_spaces_name           = "almalinux-renich"
+  do_spaces_name           = env("DIGITALOCEAN_SPACES_NAME")
   do_spaces_secret         = env("DIGITALOCEAN_SPACES_SECRET_KEY")
   do_tags                  = ["AlmaLinux"]
   //
