@@ -107,32 +107,7 @@ $ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
 
 ### Build a DigitalOcean image
 
-As with the Amazon AMI, you need to install and configure DigitalOcean credentials for `doctl`; as described in the relevant
-[documentation](https://docs.digitalocean.com/reference/doctl/how-to/install/).
-
-Now, you can use the provided script to pull the latest Generic Cloud image to DigitalOcean:
-
-```sh
-$ bin/digitalocean-import_latest_image.bash
-```
-
-This process takes around 5 minutes. Be sure to check with `doctl compute image list` and make sure your image is listed before
-proceeding.
-
-The script will write `.env.digitalocean` which, when sourced, will provide one of the required environment variables for this
-procedure: `DIGITALOCEAN_IMAGE`.
-
-```sh
-$ source .env.digitalocean
-```
-
-You can set this one manually as well:
-
-```sh
-$ export DIGITALOCEAN_IMAGE='YOUR_IMAGE_ID_GOES_HERE'
-```
-
-Now, you need to setup a key for packer to use. This is done by going to DigitalOcean's [cloud
+You need to setup a key for packer to use. This is done by going to DigitalOcean's [cloud
 console](https://cloud.digitalocean.com/account/api/tokens).
 
 Make it available through an environment variable:
@@ -141,29 +116,28 @@ Make it available through an environment variable:
 $ export DIGITALOCEAN_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
 ```
 
+A space needs to be created in order to import the image through it. Please, read the [relevant
+documentation](https://docs.digitalocean.com/products/spaces/how-to/create/). Take note of the access and secret keys in order to
+use them later on.
+
+There are a few environemnt variables you will need to make available.
+
+* The spaces bucket name through `DIGITALOCEAN_SPACES_NAME`.
+* The bucket's access key through `DIGITALOCEAN_SPACES_ACCESS_KEY`.
+* The bucket's secret key through `DIGITALOCEAN_SPACES_SECRET_KEY`.
+
+You can do this by exporting them as well:
+
+```sh
+$ export DIGITALOCEAN_SPACES_NAME='YOUR_SPACES_BUCKET_NAME'
+$ export DIGITALOCEAN_SPACES_ACCESS_KEY='YOUR_BUCKET_ACCESS_KEY'
+$ export DIGITALOCEAN_SPACES_SECRET_KEY='YOUR_BUCKET_SECRET_KEY'
+```
+
 Now, you're all setup. You can try building the image with:
 
 ```sh
-$ packer build -only do.almalinux-8-digitalocean-x86_64 .
-```
-
-For simplicity, the whole procedure looks like:
-
-```sh
-# get the image
-$ bin/digitalocean-import_latest_image.bash
-
-# set the image ID
-$ source .env.digitalocean
-
-# verify the new Generic Cloud image is in place
-$ doctl compute image list
-
-# set your packer token
-$ export DIGITALOCEAN_API_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
-
-# build image
-$ packer build -only digitalocean.almalinux-8-digitalocean-x86_64 .
+$ packer build -only qemu.almalinux-8-gencloud-do-x86_64 .
 ```
 
 
