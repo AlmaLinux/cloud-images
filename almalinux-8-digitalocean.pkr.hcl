@@ -1,6 +1,15 @@
 /*
- * AlmaLinux OS 8 Packer template for building Generic Cloud (OpenStack compatible) images.
+ * AlmaLinux OS 8 Packer template for building DigitalOcean images.
  */
+
+packer {
+  required_plugins {
+    digitalocean = {
+      version = ">= 1.0.0"
+      source  = "github.com/hashicorp/digitalocean"
+    }
+  }
+}
 
 source "qemu" "almalinux-8-gencloud-do-x86_64" {
   iso_url            = var.iso_url
