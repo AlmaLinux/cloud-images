@@ -28,7 +28,6 @@ variables {
   // DigitalOcean variables
   //
   do_api_token             = env("DIGITALOCEAN_API_TOKEN")
-  do_image                 = env("DIGITALOCEAN_IMAGE")
   do_image_name            = "AlmaLinux-x86_64-latest-{{timestamp}}"
   do_image_regions         = ["nyc3"]
   do_region                = "nyc3"
