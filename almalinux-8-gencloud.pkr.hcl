@@ -41,19 +41,9 @@ build {
     roles_path       = "./ansible/roles"
     collections_path = "./ansible/collections"
     ansible_env_vars = [
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
       "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
-  }
-
-  // it seems that Ansible leaves a tmp directory for unknown reason,
-  // cleanup it manually until we have a solution
-  provisioner "shell" {
-    inline = [
-      "rm -fr /root/~*",
-      "passwd -d root",
-      "passwd -l root",
-      "set +o history",
-      "history -c"
-      ]
   }
 }

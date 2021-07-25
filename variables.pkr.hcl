@@ -41,7 +41,7 @@ variables {
   // Generic Cloud (OpenStack) variables
   //
   gencloud_boot_command    = [
-    "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud.ks<enter><wait>"
+    "<tab> inst.text net.ifnames=0 inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud.ks<enter><wait>"
   ]
   gencloud_disk_size       = "10G"
   gencloud_ssh_username    = "root"
