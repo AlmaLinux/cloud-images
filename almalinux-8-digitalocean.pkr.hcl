@@ -34,7 +34,7 @@ source "qemu" "almalinux-8-gencloud-do-x86_64" {
   vm_name            = "almalinux-8-GenericCloud-8.4.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command
-  qemu_img_args      {
+  qemu_img_args {
     convert = ["-o", "compat=0.10"]
     create  = ["-o", "compat=0.10"]
   }
@@ -50,7 +50,9 @@ build {
     roles_path       = "./ansible/roles"
     collections_path = "./ansible/collections"
     ansible_env_vars = [
-      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes -o IdentitiesOnly=yes'"
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
   }
 
@@ -65,13 +67,12 @@ build {
   }
 
   post-processor "digitalocean-import" {
-    api_token      = var.do_api_token
-    spaces_key     = var.do_spaces_key
-    spaces_secret  = var.do_spaces_secret
-    spaces_region  = var.do_region
-    space_name     = var.do_spaces_name
-    image_name     = var.do_image_name
-    image_regions  = var.do_image_regions
+    api_token     = var.do_api_token
+    spaces_key    = var.do_spaces_key
+    spaces_secret = var.do_spaces_secret
+    spaces_region = var.do_region
+    space_name    = var.do_spaces_name
+    image_name    = var.do_image_name
+    image_regions = var.do_image_regions
   }
 }
-
