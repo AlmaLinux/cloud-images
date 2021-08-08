@@ -73,7 +73,7 @@ function checkAgent {
      echo -en "\e[41m[FAIL]\e[0m DigitalOcean Monitoring Agent detected.\n"
             ((FAIL++))
             STATUS=2
-      if [[ $OS == "CentOS Linux" ]]; then
+      if [[ $OS == "CentOS Linux" ]] || [[ $OS == "CentOS Stream" ]] || [[ $OS == "Rocky Linux" ]] || [[ $OS == "AlmaLinux" ]]; then
         echo "The agent can be removed with 'sudo yum remove do-agent' "
       elif [[ $OS == "Ubuntu" ]]; then
         echo "The agent can be removed with 'sudo apt-get purge do-agent' "
@@ -345,7 +345,7 @@ function checkFirewall {
         FW_VER="\e[93m[WARN]\e[0m No firewall is configured. Ensure ${fw} is installed and configured\n"
         ((WARN++))
       fi
-    elif [[ $OS == "CentOS Linux" ]]; then
+    elif [[ $OS == "CentOS Linux" ]] || [[ $OS == "CentOS Stream" ]] || [[ $OS == "Rocky Linux" ]] || [[ $OS == "AlmaLinux" ]]; then
       if [ -f /usr/lib/systemd/system/csf.service ]; then
         fw="csf"
         if [[ $(systemctl status $fw >/dev/null 2>&1) ]]; then
@@ -442,11 +442,11 @@ function checkUpdates {
         else
             echo -en "\e[32m[PASS]\e[0m There are no pending security updates for this image.\n\n"
         fi
-    elif [[ $OS == "CentOS Linux" ]]; then
+    elif [[ $OS == "CentOS Linux" ]] || [[ $OS == "CentOS Stream" ]] || [[ $OS == "Rocky Linux" ]]; then
         echo -en "\nChecking for available security updates, this may take a minute...\n\n"
 
         update_count=$(yum check-update --security --quiet | wc -l)
-        if [[ $update_count -gt 0 ]]; then
+         if [[ $update_count -gt 0 ]]; then
             echo -en "\e[41m[FAIL]\e[0m There are ${update_count} security updates available for this image that have not been installed.\n"
             ((FAIL++))
             STATUS=2
@@ -454,29 +454,30 @@ function checkUpdates {
             echo -en "\e[32m[PASS]\e[0m There are no pending security updates for this image.\n"
             ((PASS++))
         fi
+    elif [[ $OS == "AlmaLinux" ]]; then
+        echo -en "\nChecking for available security updates, this may take a minute...\n\n"
 
-        # logs to clear (one per line)
-        logs=(
-            /var/log/dnf.librepo.log
-            /var/log/dnf.log
-            /var/log/dnf.rpm.log
-            /var/log/hawkey.log
-        )
-
-        for log in ${logs[@]}; do
-            # check if they exist
-            if [ -f $log ]; then
-                # delete
-                echo "Deleting $log..."
-                rm -f "$log"
-            fi
-        done
+        update_count=$(yum updateinfo list --quiet | wc -l) # https://errata.almalinux.org/
+         if [[ $update_count -gt 0 ]]; then
+            echo -en "\e[41m[FAIL]\e[0m There are ${update_count} security updates available for this image that have not been installed.\n"
+            ((FAIL++))
+            STATUS=2
+        else
+            echo -en "\e[32m[PASS]\e[0m There are no pending security updates for this image.\n"
+            ((PASS++))
+        fi
     else
         echo "Error encountered"
         exit 1
     fi
 
     return 1;
+}
+function clearLogs {
+  # Clear log files after checking for security updates.
+    for f in /var/log/*.log; do
+        rm -f "${f}"
+    done
 }
 function checkCloudInit {
 
@@ -525,12 +526,10 @@ function checkMongoDB {
        ((PASS++))
      fi
 
-   elif [[ $OS == "CentOS Linux" ]]; then
+   elif [[ $OS == "CentOS Linux" ]] || [[ $OS == "CentOS Stream" ]] || [[ $OS == "Rocky Linux" ]] || [[ $OS == "AlmaLinux" ]]; then
 
     if [[ -f "/usr/bin/mongod" ]]; then
        version=$(/usr/bin/mongod --version --quiet | grep "db version" | sed -e "s/^db\ version\ v//")
-
-
        if version_gt $version 4.0.0; then
         if version_gt $version 4.0.3; then
           echo -en "\e[41m[FAIL]\e[0m An SSPL version of MongoDB is present"
@@ -621,6 +620,27 @@ elif [[ $OS == "CentOS Linux" ]]; then
     else
         osv=2
     fi
+elif [[ $OS == "CentOS Stream" ]]; then
+        ost=1
+    if [[ $VER == "8" ]]; then
+        osv=1
+    else
+        osv=2
+    fi
+elif [[ $OS == "Rocky Linux" ]]; then
+        ost=1
+    if [[ $VER =~ "8." ]]; then
+        osv=1
+    else
+        osv=2
+    fi
+elif [[ $OS == "AlmaLinux" ]]; then
+        ost=1
+    if [[ $VER =~ "8." ]]; then
+        osv=1
+    else
+        osv=2
+    fi
 else
     ost=0
 fi
@@ -657,6 +677,8 @@ echo -en "${FW_VER}"
 checkUpdates
 
 loadPasswords
+
+clearLogs
 
 checkLogs
 

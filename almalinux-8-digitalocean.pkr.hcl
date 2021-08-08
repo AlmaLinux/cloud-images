@@ -11,7 +11,8 @@ packer {
   }
 }
 
-source "qemu" "almalinux-8-gencloud-do-x86_64" {
+
+source "qemu" "almalinux-8-digitalocean-x86_64" {
   iso_url            = var.iso_url
   iso_checksum       = var.iso_checksum
   shutdown_command   = var.root_shutdown_command
@@ -31,10 +32,10 @@ source "qemu" "almalinux-8-gencloud-do-x86_64" {
   headless           = var.headless
   memory             = var.memory
   net_device         = "virtio-net"
-  vm_name            = "almalinux-8-GenericCloud-8.4.x86_64.qcow2"
+  vm_name            = "almalinux-8-DigitalOcean-8.4.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command
-  qemu_img_args      {
+  qemu_img_args {
     convert = ["-o", "compat=0.10"]
     create  = ["-o", "compat=0.10"]
   }
@@ -42,7 +43,7 @@ source "qemu" "almalinux-8-gencloud-do-x86_64" {
 
 
 build {
-  sources = ["qemu.almalinux-8-gencloud-do-x86_64"]
+  sources = ["qemu.almalinux-8-digitalocean-x86_64"]
 
   provisioner "ansible" {
     playbook_file    = "./ansible/digitalocean.yml"
@@ -50,7 +51,9 @@ build {
     roles_path       = "./ansible/roles"
     collections_path = "./ansible/collections"
     ansible_env_vars = [
-      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes -o IdentitiesOnly=yes'"
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
   }
 
@@ -58,20 +61,20 @@ build {
   // cleanup it manually until we have a solution
   provisioner "shell" {
     scripts = [
-      "vm-scripts-digitalocean/80-root_lock-up.bash",
-      "vm-scripts-digitalocean/89-root_clean-up.bash",
-      "vm-scripts-digitalocean/99-img-check.bash"
+      "vm-scripts/digitalocean/99-img-check.sh"
     ]
   }
 
   post-processor "digitalocean-import" {
-    api_token      = var.do_api_token
-    spaces_key     = var.do_spaces_key
-    spaces_secret  = var.do_spaces_secret
-    spaces_region  = var.do_region
-    space_name     = var.do_spaces_name
-    image_name     = var.do_image_name
-    image_regions  = var.do_image_regions
+    api_token          = var.do_api_token
+    spaces_key         = var.do_spaces_key
+    spaces_secret      = var.do_spaces_secret
+    spaces_region      = var.do_spaces_region
+    space_name         = var.do_space_name
+    image_name         = var.do_image_name
+    image_regions      = var.do_image_regions
+    image_description  = var.do_image_description
+    image_distribution = var.do_image_distribution
+    image_tags         = var.do_image_tags
   }
 }
-
