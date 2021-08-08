@@ -50,6 +50,35 @@
     - /var/log/audit/audit.log
     - /var/log/wtmp
     - /var/log/lastlog
+    - /var/log/btmp
+    - /var/log/cron
+    - /var/log/maillog
+    - /var/log/messages
+    - /var/log/secure
+    - /var/log/spooler
+
+- name: Remove log folders.
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/log/anaconda
+    - /var/log/qemu-ga
+    - /var/log/tuned
+    - /var/log/sssd
+
+- name: Find log files.
+  find:
+    paths: /var/log
+    patterns: '*log,*.old,*.log.gz,*.[0-9],*.gz,*-????????'
+  register: log_files
+
+- name: Remove log files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ log_files.files }}"
+
 
 # TODO: this may fail with "No usable temporary directory found" error
 #       periodically because Ansible is unable to create a tmp file for
@@ -80,7 +109,7 @@
       shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
 
     - name: Format swap partition
-      command: "mkswap -U {{ swap_blkid.stdout}} -f {{ swaps.stdout }}"
+      command: "mkswap -U {{ swap_blkid.stdout }} -f {{ swaps.stdout }}"
 
     - name: Mount swap partition
       command: "swapon {{ swaps.stdout }}"
