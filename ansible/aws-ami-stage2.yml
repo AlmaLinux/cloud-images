@@ -1,0 +1,108 @@
+---
+- name: AlmaLinux Amazon AMI Stage 2
+  hosts: "_chroot"
+  become: true
+
+  tasks:
+    - name: Add IPv6 Support
+      lineinfile:
+        path: /etc/sysconfig/network-scripts/ifcfg-eth0
+        insertafter: '^IPV6INIT'
+        line: 'IPV6_FAILURE_FATAL=no'
+        state: present
+
+
+    - name: Fix SELinux contexts
+      shell: chcon -t {{ item.setype }} {{ item.target }}
+      loop:
+        - { setype: 'etc_t', target: '/etc/sysconfig/network' }
+        - { setype: 'net_conf_t', target: '/etc/sysconfig/network-scripts/ifcfg*' }
+        - { setype: 'etc_t', target: '/etc/fstab' }
+        - { setype: 'etc_t', target: '/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg' }
+        - { setype: 'bootloader_etc_t', target: '/etc/default/grub' }
+        - { setype: 'boot_t', target: '/boot/grub2/grub.cfg-bkup' }
+        - { setype: 'initrc_exec_t', target: '/etc/rc.d/rc.local.vmimport' }
+
+
+    - name: Remove ec2-user Cloud user
+      user:
+        name: ec2-user
+        state: absent
+        force: yes
+
+
+    - name: Find vmimport lefovers
+      find:
+        paths:
+          - /etc/sysconfig/network-scripts
+        patterns: 'vmimport*'
+        file_type: any
+        hidden: yes
+      register: vmimport_leftover
+
+
+    - name: Find Cloud-init leftovers
+      find:
+        paths:
+          - /var/lib/cloud/instances
+        patterns: '*'
+        file_type: any
+        hidden: yes
+      register: cloudinit_leftover
+
+    - name: Remove vmimport leftovers
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ vmimport_leftover.files }}"
+
+
+    - name: Remove Cloud-init leftovers
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ cloudinit_leftover.files }}"
+
+
+    - name: Remove leftovers from the system
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/cloud/cloud.cfg.d/vmimport.99-disable-network-config.cfg
+        - /etc/resolv.conf
+        - /tmp
+        - /var/tmp
+        - /var/log/sssd
+        - /var/log/tuned
+
+
+    - name: Find log files
+      find:
+        file_type: file
+        paths:
+          - /var/log
+        patterns: '*.log, *.old, *.log.gz, *.[0-9], *.gz, *-????????'
+      register: log_files
+
+
+    - name: Remove log files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ log_files.files }}"
+
+
+    - name: Truncate files
+      command: "truncate -s 0 {{ item }}"
+      loop:
+        - /etc/machine-id
+        - /var/log/audit/audit.log
+        - /var/log/wtmp
+        - /var/log/lastlog
+        - /var/log/btmp
+        - /var/log/cron
+        - /var/log/maillog
+        - /var/log/spooler
+        - /var/log/secure
+        - /var/log/messages

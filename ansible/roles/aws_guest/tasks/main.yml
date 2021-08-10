@@ -35,21 +35,12 @@
     - NOZEROCONF=yes
 
 - name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
-  lineinfile:
-    path: /etc/sysconfig/network-scripts/ifcfg-eth0
-    line: "{{ item }}"
-    create: true
+  copy:
+    src: ifcfg-eth0
+    dest: /etc/sysconfig/network-scripts/ifcfg-eth0
     owner: root
     group: root
-    mode: 0644
-  with_items:
-    - DEVICE="eth0"
-    - BOOTPROTO="dhcp"
-    - ONBOOT="yes"
-    - TYPE="Ethernet"
-    - USERCTL="yes"
-    - PEERDNS="yes"
-    - IPV6INIT="no"
+    mode: '0644'
 
 - name: Disable consistent network device naming
   file:
@@ -108,6 +99,26 @@
       - qemu-guest-agent
       - yum-utils
     state: present
+
+- name: Set up AWS Systems Manager Agent (SSM Agent)
+  block:
+    - name: Get the SSM Agent's Public key
+      copy:
+        src: amazon-ssm-agent.gpg
+        dest: /tmp/amazon-ssm-agent.gpg
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Import SSM Agent's Public Key
+      rpm_key:
+        state: present
+        key: /tmp/amazon-ssm-agent.gpg
+
+    - name: Install AWS Systems Manager Agent (SSM Agent)
+      dnf:
+        name: https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm
+        state: present
 
 - name: Enable cloud-init services
   service:
