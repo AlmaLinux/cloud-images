@@ -92,17 +92,76 @@ the self-service AMI scanner supports only that region.
 After configuring the AWS credentials and creating the S3 bucket, run the
 following command to build an AMI and import it to EC2:
 
+The Build process has two stages:
+
+* Stage 1: Build the first stage's AMI on your system and import it to the AWS. 
+
+* Stage 2: Build the second stage's AMI on the EC2 Instance.
+
+The First Stage:
+
+QEMU:
+
 ```sh
-$ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" -only=vmware-iso.almalinux-8-aws .
+$ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" -only=qemu.almalinux-8-aws-stage1 .
+```
+
+VMware:
+
+```sh
+$ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" -only=vmware-iso.almalinux-8-aws-stage1 .
 ```
 
 If you are using a non-standard [role name](https://www.packer.io/docs/post-processors/amazon#role_name),
 it's possible to define it as a variable:
 
+QEMU:
+
 ```sh
 $ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
-               -var aws_role_name="YOUR_IAM_ROLE_NAME" -only=vmware-iso.almalinux-8-aws .
+               -var aws_role_name="YOUR_IAM_ROLE_NAME" -only=qemu.almalinux-8-aws-stage1 .
 ```
+VMware:
+
+```sh
+$ packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
+               -var aws_role_name="YOUR_IAM_ROLE_NAME" -only=vmware-iso.almalinux-8-aws-stage1 .
+```
+The Second Stage:
+
+To finalize the AMI build process, you need to launch a minimum `t2.micro` EC2 instance from the first stage's AMI.
+
+Launch an instance with the `build-tools-on-ec2-userdata.yml` Cloud-init User Data. It will install all needed packages - `Packer`, `Ansible`, `Git` and `tmux` (if your connection is not stable) and clone the repo automatically.
+
+login as `ec2-user`:
+
+```sh
+$ cd cloud-images
+```
+
+Switch to the `root` user:
+```sh
+$ sudo su
+```
+
+Confugire the AWS credentials:
+
+```sh
+export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
+export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
+export AWS_DEFAULT_REGION='us-east-1'
+```
+
+Install required Packer plugins:
+```sh
+packer init .
+```
+
+Start the Build:
+```sh
+packer.io build -only=amazon-chroot.almalinux-8-aws-stage2 .
+```
+You can remove the first stage's AMI after the build complete
 
 
 ### Build a DigitalOcean image
@@ -166,7 +225,30 @@ $ packer build -only qemu.almalinux-8-gencloud-x86_64 .
 * [RHEL® 8 documentation: Kickstart installation basics](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/performing_an_advanced_rhel_installation/kickstart-installation-basics_installing-rhel-as-an-experienced-user)
 * [CentOS kickstart files](https://git.centos.org/centos/kickstarts)
 
+## FAQ:
+**Issue:** build stuck after running the packer command.
 
+**Solution:** Use `packer.io` instead of the `packer`. See: https://learn.hashicorp.com/tutorials/packer/get-started-install-cli#troubleshooting
+
+example:
+
+```sh
+ln -s /usr/bin/packer /usr/bin/packer.io
+```
+
+**Issue:** `Failed creating Qemu driver: exec: "qemu-system-x86_64": executable file not found in $PATH`
+
+**Solution:** If you run packer from an EL distribution, You need to add the `qemu_binary` parameter on the QEMU builder :
+
+example:
+
+```sh
+..
+  format             = "raw"
+  qemu_binary        = "/usr/libexec/qemu-kvm" 
+  headless           = var.headless
+..
+```
 ## License
 
 Licensed under the MIT license, see the [LICENSE](LICENSE) file for details.
