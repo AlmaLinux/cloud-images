@@ -172,7 +172,7 @@ console](https://cloud.digitalocean.com/account/api/tokens).
 Make it available through an environment variable:
 
 ```sh
-$ export DIGITALOCEAN_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
+$ export DIGITALOCEAN_API_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
 ```
 
 A space needs to be created in order to import the image through it. Please, read the [relevant
@@ -181,14 +181,14 @@ use them later on.
 
 There are a few environemnt variables you will need to make available.
 
-* The spaces bucket name through `DIGITALOCEAN_SPACES_NAME`.
+* The spaces bucket name through `DIGITALOCEAN_SPACE_NAME`.
 * The bucket's access key through `DIGITALOCEAN_SPACES_ACCESS_KEY`.
 * The bucket's secret key through `DIGITALOCEAN_SPACES_SECRET_KEY`.
 
 You can do this by exporting them as well:
 
 ```sh
-$ export DIGITALOCEAN_SPACES_NAME='YOUR_SPACES_BUCKET_NAME'
+$ export DIGITALOCEAN_SPACE_NAME='YOUR_SPACES_BUCKET_NAME'
 $ export DIGITALOCEAN_SPACES_ACCESS_KEY='YOUR_BUCKET_ACCESS_KEY'
 $ export DIGITALOCEAN_SPACES_SECRET_KEY='YOUR_BUCKET_SECRET_KEY'
 ```
@@ -196,7 +196,7 @@ $ export DIGITALOCEAN_SPACES_SECRET_KEY='YOUR_BUCKET_SECRET_KEY'
 Now, you're all setup. You can try building the image with:
 
 ```sh
-$ packer build -only qemu.almalinux-8-gencloud-do-x86_64 .
+$ packer build -only qemu.almalinux-8-digitalocean-x86_64 .
 ```
 
 

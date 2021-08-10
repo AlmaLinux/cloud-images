@@ -30,16 +30,16 @@ variables {
   //
   // DigitalOcean variables
   //
-  do_api_token             = env("DIGITALOCEAN_API_TOKEN")
-  do_image_name            = "AlmaLinux-x86_64-latest-{{timestamp}}"
-  do_image_regions         = ["nyc3"]
-  do_region                = "nyc3"
-  do_size                  = "s-1vcpu-1gb"
-  do_snapshot_name         = "AlmaLinux-x86_64-latest-{{timestamp}}"
-  do_spaces_key            = env("DIGITALOCEAN_SPACES_ACCESS_KEY")
-  do_spaces_name           = env("DIGITALOCEAN_SPACES_NAME")
-  do_spaces_secret         = env("DIGITALOCEAN_SPACES_SECRET_KEY")
-  do_tags                  = ["AlmaLinux"]
+  do_api_token          = env("DIGITALOCEAN_API_TOKEN")
+  do_spaces_key         = env("DIGITALOCEAN_SPACES_ACCESS_KEY")
+  do_spaces_secret      = env("DIGITALOCEAN_SPACES_SECRET_KEY")
+  do_spaces_region      = "nyc3"
+  do_space_name         = env("DIGITALOCEAN_SPACE_NAME")
+  do_image_name         = "AlmaLinux OS 8.4.{{isotime \"20060102\"}} x86_64"
+  do_image_regions      = ["nyc3"]
+  do_image_description  = "Official AlmaLinux OS Image"
+  do_image_distribution = "AlmaLinux OS"
+  do_image_tags         = ["AlmaLinux", "8.4", "8"]
   //
   // Generic Cloud (OpenStack) variables
   //

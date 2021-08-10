@@ -1,10 +1,9 @@
-# An Ansible playbook that configures a Generic Cloud (OpenStack) image
+# An Ansible playbook that configures a DigitalOcean image
 ---
-- name: AlmaLinux Generic Cloud on DigitalOcean
+- name: AlmaLinux DigitalOcean Image
   hosts: default
   become: true
 
   roles:
-    - gencloud_do_guest
+    - digitalocean_guest
     - cleanup_vm
-

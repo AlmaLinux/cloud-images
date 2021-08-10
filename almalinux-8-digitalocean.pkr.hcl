@@ -61,9 +61,7 @@ build {
   // cleanup it manually until we have a solution
   provisioner "shell" {
     scripts = [
-      "vm-scripts-digitalocean/80-root_lock-up.bash",
-      "vm-scripts-digitalocean/89-root_clean-up.bash",
-      "vm-scripts-digitalocean/99-img-check.bash"
+      "vm-scripts/digitalocean/99-img-check.sh"
     ]
   }
 
