@@ -30,7 +30,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] AWS support (using the VMWare builder only, it would be nice to support VirtualBox or Qemu as well)
 * [x] Google Cloud support
 * [ ] Microsoft Azure support (#14)
-* [ ] DigitalOcean support
+* [x] DigitalOcean support
 * [x] Generic Cloud / OpenStack support (#12)
 * [x] LXC/LXD support (#8)
 
