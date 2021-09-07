@@ -65,11 +65,12 @@
     - /var/log/anaconda
     - /var/log/qemu-ga
     - /var/log/tuned
-    - /var/log/sssd
 
 - name: Find log files.
   find:
-    paths: /var/log
+    paths:
+      - /var/log
+      - /var/log/sssd
     patterns: '*log,*.old,*.log.gz,*.[0-9],*.gz,*-????????'
   register: log_files
 
