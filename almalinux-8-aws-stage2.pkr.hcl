@@ -35,6 +35,13 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
     owners      = ["self"]
     most_recent = true
   }
+  root_volume_size = 10
+  root_device_name = "/dev/sda1"
+  ami_block_device_mappings {
+    device_name           = "/dev/sda1"
+    delete_on_termination = true
+    volume_type           = "gp2"
+  }
 }
 
 
