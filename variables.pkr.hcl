@@ -2,8 +2,10 @@ variables {
   //
   // common variables
   //
-  iso_url               = "http://repo.almalinux.org/almalinux/8.4/isos/x86_64/AlmaLinux-8.4-x86_64-boot.iso"
-  iso_checksum          = "file:http://repo.almalinux.org/almalinux/8.4/isos/x86_64/CHECKSUM"
+  iso_url_x86_64        = "https://repo.almalinux.org/almalinux/8.4/isos/x86_64/AlmaLinux-8.4-x86_64-boot.iso"
+  iso_checksum_x86_64   = "file:https://repo.almalinux.org/almalinux/8.4/isos/x86_64/CHECKSUM"
+  iso_url_aarch64       = "https://repo.almalinux.org/almalinux/8.4/isos/aarch64/AlmaLinux-8.4-aarch64-boot.iso"
+  iso_checksum_aarch64  = "file:https://repo.almalinux.org/almalinux/8.4/isos/aarch64/CHECKSUM"
   headless              = true
   boot_wait             = "10s"
   cpus                  = 2

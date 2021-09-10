@@ -3,8 +3,8 @@
  */
 
 source "hyperv-iso" "almalinux-8" {
-  iso_url               = var.iso_url
-  iso_checksum          = var.iso_checksum
+  iso_url               = var.iso_url_x86_64
+  iso_checksum          = var.iso_checksum_x86_64
   boot_command          = var.vagrant_efi_boot_command
   boot_wait             = var.boot_wait
   generation            = 2
@@ -25,8 +25,8 @@ source "hyperv-iso" "almalinux-8" {
 
 
 source "virtualbox-iso" "almalinux-8" {
-  iso_url              = var.iso_url
-  iso_checksum         = var.iso_checksum
+  iso_url              = var.iso_url_x86_64
+  iso_checksum         = var.iso_checksum_x86_64
   boot_command         = var.vagrant_boot_command
   boot_wait            = var.boot_wait
   cpus                 = var.cpus
@@ -48,8 +48,8 @@ source "virtualbox-iso" "almalinux-8" {
 
 
 source "vmware-iso" "almalinux-8" {
-  iso_url          = var.iso_url
-  iso_checksum     = var.iso_checksum
+  iso_url          = var.iso_url_x86_64
+  iso_checksum     = var.iso_checksum_x86_64
   boot_command     = var.vagrant_boot_command
   boot_wait        = var.boot_wait
   cpus             = var.cpus
@@ -75,8 +75,8 @@ source "vmware-iso" "almalinux-8" {
 
 
 source "qemu" "almalinux-8" {
-  iso_checksum       = var.iso_checksum
-  iso_url            = var.iso_url
+  iso_checksum       = var.iso_checksum_x86_64
+  iso_url            = var.iso_url_x86_64
   shutdown_command   = var.vagrant_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory

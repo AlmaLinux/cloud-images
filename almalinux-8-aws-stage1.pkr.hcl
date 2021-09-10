@@ -13,8 +13,8 @@ packer {
 
 
 source "vmware-iso" "almalinux-8-aws-stage1" {
-  iso_url          = var.iso_url
-  iso_checksum     = var.iso_checksum
+  iso_url          = var.iso_url_x86_64
+  iso_checksum     = var.iso_checksum_x86_64
   boot_command     = var.aws_boot_command
   boot_wait        = var.boot_wait
   cpus             = var.cpus
@@ -41,8 +41,8 @@ source "vmware-iso" "almalinux-8-aws-stage1" {
 
 
 source "qemu" "almalinux-8-aws-stage1" {
-  iso_url            = var.iso_url
-  iso_checksum       = var.iso_checksum
+  iso_url            = var.iso_url_x86_64
+  iso_checksum       = var.iso_checksum_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
