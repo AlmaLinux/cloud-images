@@ -33,6 +33,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] DigitalOcean support
 * [x] Generic Cloud / OpenStack support (#12)
 * [x] LXC/LXD support (#8)
+* [x] OpenNebula `x86_64` and `aarch64` support
 
 
 ## Usage
@@ -204,6 +205,18 @@ $ packer build -only qemu.almalinux-8-digitalocean-x86_64 .
 
 ```sh
 $ packer build -only qemu.almalinux-8-gencloud-x86_64 .
+```
+
+### Build a OpenNebula image
+
+`x86_64`
+```sh
+$ packer build -only=qemu.almalinux-8-opennebula-x86_64 .
+```
+
+`aarch64`
+```sh
+$ packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 ```
 
 

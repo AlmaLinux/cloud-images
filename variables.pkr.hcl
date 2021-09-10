@@ -69,4 +69,18 @@ variables {
   vagrant_shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"
   vagrant_ssh_username     = "vagrant"
   vagrant_ssh_password     = "vagrant"
+  //
+  // OpenNebula variables
+  //
+  opennebula_boot_command_x86_64 = [
+    "<tab> inst.text net.ifnames=0 inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.opennebula-x86_64.ks<enter><wait>"
+  ]
+  opennebula_boot_command_aarch64 = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-4-aarch64-dvd ro",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.opennebula-aarch64.ks<enter>",
+    "initrd /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
+  ]
 }

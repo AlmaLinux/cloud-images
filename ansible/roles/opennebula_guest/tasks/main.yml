@@ -1,0 +1,28 @@
+---
+- name: Enable opennebula-addons repositroy
+  dnf:
+    name: almalinux-release-opennebula-addons
+    state: present
+
+- name: Install OpenNebula Linux VM Contextualization
+  dnf:
+    name: one-context
+    state: present
+
+- name: Enable one-context and network services
+  service:
+    name: "{{ item }}"
+    enabled: true
+  loop:
+    - one-context
+    - network
+
+- name: Install disk resize dependencies
+  package:
+    name:
+      - cloud-utils-growpart
+      - parted
+    state: latest
+
+- name: Update initramfs
+  command: dracut -f

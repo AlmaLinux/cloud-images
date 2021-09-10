@@ -1,0 +1,9 @@
+# An Ansible playbook that configures a OpenNebula image
+---
+- name: AlmaLinux OpenNebula
+  hosts: default
+  become: true
+
+  roles:
+    - opennebula_guest
+    - cleanup_vm

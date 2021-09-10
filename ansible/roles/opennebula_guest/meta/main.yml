@@ -1,0 +1,4 @@
+---
+dependencies:
+  - role: almalinux.ci.disable_firstboot
+  - role: pvgrub_config
