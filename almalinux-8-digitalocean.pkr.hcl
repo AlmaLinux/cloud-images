@@ -32,6 +32,7 @@ source "qemu" "almalinux-8-digitalocean-x86_64" {
   headless           = var.headless
   memory             = var.memory
   net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-DigitalOcean-8.4.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command

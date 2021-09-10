@@ -13,6 +13,7 @@ variables {
   http_directory        = "http"
   ssh_timeout           = "3600s"
   root_shutdown_command = "/sbin/shutdown -hP now"
+  qemu_binary           = ""
   //
   // AWS specific variables
   //
