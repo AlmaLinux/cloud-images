@@ -60,6 +60,7 @@ source "qemu" "almalinux-8-aws-stage1" {
   headless           = var.headless
   memory             = var.memory
   net_device         = "virtio-net"
+  qemu_binary        = "/usr/libexec/qemu-kvm" # Comment it if your system using qemu-system-x86_64
   vm_name            = "almalinux-8-AWS-8.4.x86_64.raw"
   boot_wait          = var.boot_wait
   boot_command       = var.aws_boot_command

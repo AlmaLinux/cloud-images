@@ -22,6 +22,7 @@ source "qemu" "almalinux-8-gencloud-x86_64" {
   headless           = var.headless
   memory             = var.memory
   net_device         = "virtio-net"
+  qemu_binary        = "/usr/libexec/qemu-kvm" # Comment it if your system using qemu-system-x86_64
   vm_name            = "almalinux-8-GenericCloud-8.4.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command
