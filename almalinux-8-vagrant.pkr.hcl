@@ -94,6 +94,7 @@ source "qemu" "almalinux-8" {
   headless           = var.headless
   memory             = var.memory
   net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8"
   boot_wait          = var.boot_wait
   boot_command       = var.vagrant_boot_command
