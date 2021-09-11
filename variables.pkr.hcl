@@ -46,8 +46,16 @@ variables {
   //
   // Generic Cloud (OpenStack) variables
   //
-  gencloud_boot_command = [
-    "<tab> inst.text net.ifnames=0 inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud.ks<enter><wait>"
+  gencloud_boot_command_x86_64 = [
+    "<tab> inst.text net.ifnames=0 inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-x86_64.ks<enter><wait>"
+  ]
+  gencloud_boot_command_aarch64 = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-4-aarch64-dvd ro",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-aarch64.ks<enter>",
+    "initrd /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
   ]
   gencloud_disk_size    = "10G"
   gencloud_ssh_username = "root"

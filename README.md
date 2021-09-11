@@ -31,7 +31,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] Google Cloud support
 * [ ] Microsoft Azure support (#14)
 * [x] DigitalOcean support
-* [x] Generic Cloud / OpenStack support (#12)
+* [x] Generic Cloud / OpenStack `x86_64` and `aarch64` support (#12)
 * [x] LXC/LXD support (#8)
 
 
@@ -202,8 +202,14 @@ $ packer build -only qemu.almalinux-8-digitalocean-x86_64 .
 
 ### Build a Generic Cloud (OpenStack compatible) image
 
+`x86_64`
 ```sh
-$ packer build -only qemu.almalinux-8-gencloud-x86_64 .
+$ packer build -only=qemu.almalinux-8-gencloud-x86_64 .
+```
+
+`aarch64`
+```sh
+$ packer build -only=qemu.almalinux-8-gencloud-aarch64 .
 ```
 
 
