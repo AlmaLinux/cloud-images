@@ -1,0 +1,10 @@
+---
+# tasks file for configuring bootloader
+- name: Configuring GRUB
+  copy:
+    src: /etc/default/grub
+    dest: /rootfs/etc/default/grub
+    mode: '0644'
+
+- name: Creating GRUB config
+  command: chroot /rootfs grub2-mkconfig -o /etc/grub2-efi.cfg

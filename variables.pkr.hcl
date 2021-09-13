@@ -19,14 +19,16 @@ variables {
   aws_boot_command = [
     "<tab> inst.text net.ifnames=0 inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.aws.ks<enter><wait>"
   ]
-  aws_disk_size       = 10240
-  aws_ssh_username    = "root"
-  aws_ssh_password    = "almalinux"
-  aws_s3_bucket_name  = ""
-  aws_role_name       = "vmimport"
-  aws_ami_name        = "AlmaLinux OS 8.4.{{isotime \"20060102\"}} x86_64"
-  aws_ami_description = "Official AlmaLinux OS 8.4 x86_64 image"
-  aws_ami_version     = "8.4.{{isotime \"20060102\"}}"
+  aws_disk_size               = 10240
+  aws_ssh_username            = "root"
+  aws_ssh_password            = "almalinux"
+  aws_s3_bucket_name          = ""
+  aws_role_name               = "vmimport"
+  aws_ami_name_x86_64         = "AlmaLinux OS 8.4.{{isotime \"20060102\"}} x86_64"
+  aws_ami_name_aarch64        = "AlmaLinux OS 8.4.{{isotime \"20060102\"}} aarch64"
+  aws_ami_description_x86_64  = "Official AlmaLinux OS 8.4 x86_64 image"
+  aws_ami_description_aarch64 = "Official AlmaLinux OS 8.4 aarch64 image"
+  aws_ami_version             = "8.4.{{isotime \"20060102\"}}"
   //
   // DigitalOcean variables
   //

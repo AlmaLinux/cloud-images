@@ -86,14 +86,14 @@ build {
 
   // comment this out if you don't want to import AMI to Amazon EC2 automatically
   post-processor "amazon-import" {
-    ami_name        = "${var.aws_ami_name}-stage1"
-    ami_description = var.aws_ami_description
+    ami_name        = "${var.aws_ami_name_x86_64}-stage1"
+    ami_description = var.aws_ami_description_x86_64
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "${var.aws_ami_name}-stage1"
+      Name = "${var.aws_ami_name_x86_64}-stage1"
     }
     keep_input_artifact = true
     except = [
@@ -102,15 +102,15 @@ build {
   }
 
   post-processor "amazon-import" {
-    ami_name        = "${var.aws_ami_name}-stage1"
+    ami_name        = "${var.aws_ami_name_x86_64}-stage1"
     format          = "raw"
-    ami_description = var.aws_ami_description
+    ami_description = var.aws_ami_description_x86_64
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "${var.aws_ami_name}-stage1"
+      Name = "${var.aws_ami_name_x86_64}-stage1"
     }
     keep_input_artifact = true
     only = [

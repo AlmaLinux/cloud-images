@@ -27,7 +27,7 @@ AlmaLinux OS images for various cloud platforms.
 * [ ] Vagrant + Parallels support (#3)
 * [x] Vagrant + Microsoft Hyper-V support (#4)
 * [x] Vagrant + Libvirt support
-* [x] AWS support (using the VMWare builder only, it would be nice to support VirtualBox or Qemu as well)
+* [x] AWS AMI `x86_64` and `aarch64` support
 * [x] Google Cloud support
 * [ ] Microsoft Azure support (#14)
 * [ ] DigitalOcean support
@@ -72,6 +72,8 @@ Build a Hyper-V box:
 
 
 ### Build an Amazon AMI
+
+`x86_64`
 
 Before building AMI's you need to configure AWS credentials as described in
 the Packer [documentation](https://www.packer.io/docs/builders/amazon#environment-variables).
@@ -162,6 +164,26 @@ Start the Build:
 packer.io build -only=amazon-chroot.almalinux-8-aws-stage2 .
 ```
 You can remove the first stage's AMI after the build complete
+
+`aarch64`
+
+Confugire the AWS credentials:
+
+```sh
+export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
+export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
+export AWS_DEFAULT_REGION='us-east-1'
+```
+
+Install required Packer plugins:
+```sh
+packer init .
+```
+
+Start the Build:
+```sh
+packer build -only=amazon-ebssurrogate.almalinux-8-aws-aarch64 .
+```
 
 
 ### Build a DigitalOcean image

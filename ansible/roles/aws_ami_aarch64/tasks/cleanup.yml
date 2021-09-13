@@ -1,0 +1,71 @@
+---
+# tasks file for cleanup system files and logs
+- name: Delete DNF cache
+  command: dnf -y --installroot=/rootfs --nogpgcheck clean all
+
+- name: Find DNF leftovers
+  find:
+    paths: /rootfs/var/cache/dnf
+    file_type: any
+    patterns: "*"
+    hidden: yes
+    recurse: yes
+  register: dnf_cache
+
+- name: Delete DNF leftovers
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ dnf_cache.files }}"
+
+- name: Find temporary files
+  find:
+    file_type: any
+    paths:
+      - /rootfs/tmp
+      - /rootfs/var/tmp
+    patterns: '*'
+  register: tmp_files
+
+- name: Remove temporary files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ tmp_files.files }}"
+
+- name: Truncate files
+  command: "truncate -s 0 {{ item }}"
+  loop:
+    - /rootfs/etc/machine-id
+    - /rootfs/var/log/wtmp
+    - /rootfs/var/log/lastlog
+    - /rootfs/var/log/btmp
+    - /rootfs/var/log/cron
+    - /rootfs/var/log/maillog
+    - /rootfs/var/log/messages
+    - /rootfs/var/log/secure
+    - /rootfs/var/log/spooler
+
+- name: Remove log folders.
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /rootfs/var/log/anaconda
+    - /rootfs/var/log/qemu-ga
+    - /rootfs/var/log/tuned
+
+- name: Find log files.
+  find:
+    paths: /rootfs/var/log
+    patterns: '*log,*.old,*.log.gz,*.[0-9],*.gz,*-????????'
+  register: log_files
+
+- name: Remove log files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ log_files.files }}"
+
+- name: Sync disc
+  command: sync
