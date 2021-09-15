@@ -1,0 +1,13 @@
+---
+# tasks file for install and relabel selinux
+- name: relabel the filesystem 1/2
+  file:
+    force: yes
+    path: /rootfs/.autorelabel
+    state: absent
+
+- name: relabel the filesystem 2/2 
+  command: chroot /rootfs /sbin/fixfiles -f -F relabel
+
+- name: Install SELinux
+  command: dnf --installroot=/rootfs --nogpgcheck -y reinstall selinux-policy-targeted policycoreutils

@@ -1,0 +1,38 @@
+---
+# tasks file for installing base system
+- name: Creating a new RPM database
+  command: rpm --root=/rootfs --initdb
+
+- name: Installing the system release files
+  command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-8.aarch64.rpm
+
+- name: Update the system
+  command: dnf -y --installroot=/rootfs --nogpgcheck upgrade
+
+- name: Creating fstab
+  template:
+    src: templates/fstab.j2
+    dest: /rootfs/etc/fstab
+    mode: '0644'
+
+- name: Install Base System on chroot
+  shell: >
+    dnf -y --installroot=/rootfs --nogpgcheck install
+    kernel chrony dhcp-client rng-tools
+    grub2-efi-aa64 efibootmgr shim-aa64
+    NetworkManager-cloud-setup
+    @minimal-environment
+    --exclude="kexec-tools"
+    --exclude="biosdevname"
+    --exclude="open-vm-tools"
+    --exclude="rhn*"
+    --exclude="iprutils"
+    --exclude="iwl*-firmware"
+    --exclude="dnf-plugin-spacewalk"
+    --exclude="plymouth*"
+
+- name: Set default target/runlevel and disable tmp.mount
+  command: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  loop:
+    - { cmd: 'set-default', unit: 'multi-user.target' }
+    - { cmd: 'mask', unit: 'tmp.mount' }
