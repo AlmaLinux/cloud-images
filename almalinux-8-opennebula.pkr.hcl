@@ -50,7 +50,6 @@ source "qemu" "almalinux-8-opennebula-aarch64" {
   headless           = var.headless
   machine_type       = "virt,gic-version=max"
   memory             = var.memory
-  qemu_binary        = "/usr/libexec/qemu-kvm"
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-OpenNebula-8.4.aarch64.qcow2"
