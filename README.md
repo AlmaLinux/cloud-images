@@ -289,10 +289,7 @@ ln -s /usr/bin/packer /usr/bin/packer.io
 example:
 
 ```sh
-..
 $ packer build -var qemu_binary="/usr/libexec/qemu-kvm" -only=qemu.almalinux-8-gencloud-x86_64 .
-
-..
 ```
 ## License
 
