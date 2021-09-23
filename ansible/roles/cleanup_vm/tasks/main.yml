@@ -65,6 +65,7 @@
     - /var/log/anaconda
     - /var/log/qemu-ga
     - /var/log/tuned
+    - /var/lib/cloud
 
 - name: Find log files.
   find:

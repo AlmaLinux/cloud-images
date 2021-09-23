@@ -28,7 +28,7 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
   mount_partition = "2"
   source_ami_filter {
     filters = {
-      name                = "AlmaLinux OS 8.4.* x86_64-stage1"
+      name                = "Alma 8.4 internal use only*x86_64"
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
