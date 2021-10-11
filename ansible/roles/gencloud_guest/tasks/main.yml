@@ -90,6 +90,18 @@
     regexp: '^(DEFAULTKERNEL=).*$'
     replace: '\1kernel'
 
+- name: Enable xen drivers in dracut
+  lineinfile:
+    path: /etc/dracut.conf.d/xen.conf
+    line: 'add_drivers+=" xen-netfront xen-blkfront "'
+    create: true
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Upgrade initramfs
+  command: dracut -f --regenerate-all
+
 - name: Add almalinux user to /etc/sudoers
   lineinfile:
     path: /etc/sudoers
