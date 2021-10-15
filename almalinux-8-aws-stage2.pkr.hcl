@@ -19,8 +19,9 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
   ami_virtualization_type = "hvm"
   ami_regions             = ["us-east-1"]
   tags = {
-    Name    = "${var.aws_ami_name_x86_64}",
-    Version = "${var.aws_ami_version}"
+    Name         = "${var.aws_ami_name_x86_64}",
+    Version      = "${var.aws_ami_version}",
+    Architecture = "${var.aws_ami_architecture}"
   }
   region          = "us-east-1"
   device_path     = "/dev/xvdb"
