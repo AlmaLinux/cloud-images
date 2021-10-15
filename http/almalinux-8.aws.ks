@@ -12,7 +12,7 @@ firstboot --disabled
 
 lang en_US.UTF-8
 keyboard us
-timezone UTC
+timezone UTC --isUtc
 
 network --bootproto=dhcp
 firewall --disabled
