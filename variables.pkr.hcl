@@ -32,6 +32,7 @@ variables {
   aws_ami_description_x86_64  = "Official AlmaLinux OS 8.4 x86_64 image"
   aws_ami_description_aarch64 = "Official AlmaLinux OS 8.4 aarch64 image"
   aws_ami_version             = "8.4.{{isotime \"20060102\"}}"
+  aws_ami_architecture        = "x86_64"
   //
   // DigitalOcean variables
   //
