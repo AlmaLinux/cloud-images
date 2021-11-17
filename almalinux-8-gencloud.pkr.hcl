@@ -23,7 +23,7 @@ source "qemu" "almalinux-8-gencloud-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-8-GenericCloud-8.4.x86_64.qcow2"
+  vm_name            = "almalinux-8-GenericCloud-8.5.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_x86_64
 }
@@ -52,7 +52,7 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-8-GenericCloud-8.4.aarch64.qcow2"
+  vm_name            = "almalinux-8-GenericCloud-8.5.aarch64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_aarch64
   qemuargs = [
