@@ -61,7 +61,7 @@ source "qemu" "almalinux-8-aws-stage1" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-8-AWS-8.4.x86_64.raw"
+  vm_name            = "almalinux-8-AWS-8.5.x86_64.raw"
   boot_wait          = var.boot_wait
   boot_command       = var.aws_boot_command
 }
@@ -87,14 +87,14 @@ build {
 
   // comment this out if you don't want to import AMI to Amazon EC2 automatically
   post-processor "amazon-import" {
-    ami_name        = "Alma 8.4 internal use only {{isotime \"20060102\"}} x86_64"
+    ami_name        = "Alma 8.5 internal use only {{isotime \"20060102\"}} x86_64"
     ami_description = var.aws_ami_description_x86_64
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "Alma 8.4 internal use only {{isotime \"20060102\"}} x86_64"
+      Name = "Alma 8.5 internal use only {{isotime \"20060102\"}} x86_64"
     }
     keep_input_artifact = true
     except = [
@@ -103,7 +103,7 @@ build {
   }
 
   post-processor "amazon-import" {
-    ami_name        = "Alma 8.4 internal use only {{isotime \"20060102\"}} x86_64"
+    ami_name        = "Alma 8.5 internal use only {{isotime \"20060102\"}} x86_64"
     format          = "raw"
     ami_description = var.aws_ami_description_x86_64
     ami_groups      = ["all"]
@@ -111,7 +111,7 @@ build {
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "Alma 8.4 internal use only {{isotime \"20060102\"}} x86_64"
+      Name = "Alma 8.5 internal use only {{isotime \"20060102\"}} x86_64"
     }
     keep_input_artifact = true
     only = [
