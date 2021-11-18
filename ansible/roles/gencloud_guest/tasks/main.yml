@@ -90,17 +90,21 @@
     regexp: '^(DEFAULTKERNEL=).*$'
     replace: '\1kernel'
 
-- name: Enable xen drivers in dracut
-  lineinfile:
-    path: /etc/dracut.conf.d/xen.conf
-    line: 'add_drivers+=" xen-netfront xen-blkfront "'
-    create: true
-    owner: root
-    group: root
-    mode: 0644
+# https://bugzilla.redhat.com/show_bug.cgi?id=1849082#c7
+- name: Enable Xen support
+  block:
+    - name: Enable xen drivers in dracut
+      lineinfile:
+        path: /etc/dracut.conf.d/xen.conf
+        line: 'add_drivers+=" xen-netfront xen-blkfront "'
+        create: true
+        owner: root
+        group: root
+        mode: 0644
 
-- name: Upgrade initramfs
-  command: dracut -f --regenerate-all
+    - name: Upgrade initramfs
+      command: dracut -f --regenerate-all
+  when: ansible_facts['architecture'] == 'x86_64'
 
 - name: Add almalinux user to /etc/sudoers
   lineinfile:
