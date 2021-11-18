@@ -40,7 +40,7 @@ source "virtualbox-iso" "almalinux-8" {
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
   hard_drive_interface = "sata"
-  vboxmanage_post      = [
+  vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
     ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
   ]
@@ -62,12 +62,12 @@ source "vmware-iso" "almalinux-8" {
   ssh_username     = var.vagrant_ssh_username
   ssh_password     = var.vagrant_ssh_password
   ssh_timeout      = var.ssh_timeout
-  vmx_data         = {
-    "cpuid.coresPerSocket": "1"
+  vmx_data = {
+    "cpuid.coresPerSocket" : "1"
   }
-  vmx_data_post    = {
-    "memsize": var.post_memory
-    "numvcpus": var.post_cpus
+  vmx_data_post = {
+    "memsize" : var.post_memory
+    "numvcpus" : var.post_cpus
   }
 
   vmx_remove_ethernet_interfaces = true
@@ -103,6 +103,7 @@ source "qemu" "almalinux-8" {
 
 build {
   sources = [
+    "sources.hyperv-iso.almalinux-8",
     "sources.virtualbox-iso.almalinux-8",
     "sources.vmware-iso.almalinux-8",
     "sources.qemu.almalinux-8"
@@ -118,37 +119,18 @@ build {
       "ANSIBLE_REMOTE_TEMP=/tmp",
       "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
-    extra_arguments  = [
+    extra_arguments = [
       "--extra-vars",
       "packer_provider=${source.type}"
     ]
-  }
-
-  post-processor "vagrant" {
-    compression_level = "9"
-    output            = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
-    except            = [
-      "qemu.almalinux-8"
+    except = [
+      "hyperv-iso.almalinux-8"
     ]
   }
-
-  post-processor "vagrant" {
-    compression_level    = "9"
-    vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
-    output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
-    only                 = [
-      "qemu.almalinux-8"
-    ]
-  }
-}
-
-
-build {
-  sources = ["sources.hyperv-iso.almalinux-8"]
 
   provisioner "ansible" {
-    user = "vagrant"
-    use_proxy = false
+    user             = "vagrant"
+    use_proxy        = false
     playbook_file    = "./ansible/vagrant-box.yml"
     galaxy_file      = "./ansible/requirements.yml"
     roles_path       = "./ansible/roles"
@@ -158,9 +140,12 @@ build {
       "ANSIBLE_REMOTE_TEMP=/tmp",
       "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'"
     ]
-    extra_arguments  = [
+    extra_arguments = [
       "--extra-vars",
       "packer_provider=${source.type} ansible_ssh_pass=vagrant"
+    ]
+    only = [
+      "hyperv-iso.almalinux-8"
     ]
   }
 
@@ -169,13 +154,28 @@ build {
     inline = [
       "sudo rm -fr /etc/ssh/*host*key*"
     ]
+    only = [
+      "hyperv-iso.almalinux-8"
+    ]
   }
 
-  post-processor "vagrant" {
-    compression_level = "9"
-    output            = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
-    except            = [
-      "qemu.almalinux-8"
-    ]
+  post-processors {
+
+    post-processor "vagrant" {
+      compression_level = "9"
+      output            = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      except = [
+        "qemu.almalinux-8"
+      ]
+    }
+
+    post-processor "vagrant" {
+      compression_level    = "9"
+      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
+      output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      only = [
+        "qemu.almalinux-8"
+      ]
+    }
   }
 }
