@@ -4,3 +4,4 @@ dependencies:
   - role: 'setup_cloud_init'
     cloud_init_user: 'almalinux'
   - role: pvgrub_config
+  - role: qemu_guest
