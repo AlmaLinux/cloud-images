@@ -81,20 +81,11 @@
     state: absent
   loop: "{{ log_files.files }}"
 
-
-# TODO: this may fail with "No usable temporary directory found" error
-#       periodically because Ansible is unable to create a tmp file for
-#       subsequent tasks.
 - name: Fill free space with zeroes
-  shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || /bin/true
-
-- name: Remove zeroed file
-  file:
-    path: /zeroed_file
-    state: absent
+  shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || rm -f /zeroed_file
 
 - name: Detect swap partition
-  command: grep -oP '^/dev/\w+' /proc/swaps
+  command: grep -oP '^/dev/[\w-]+' /proc/swaps
   register: swaps
   ignore_errors: true
 
