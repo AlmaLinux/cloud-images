@@ -60,6 +60,12 @@ Build a VMWare box:
 $ packer build -only=vmware-iso.almalinux-8 .
 ```
 
+Build a Parallels box:
+
+```sh
+$ packer build -only=parallels-iso.almalinux-8 .
+```
+
 Build a Libvirt box:
 
 ```sh
@@ -258,6 +264,7 @@ $ packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 * [Packer](https://www.packer.io/)
 * [Ansible](https://www.ansible.com/)
 * [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
+* [Parallels](https://www.parallels.com/) (for Parallels images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images and Amazon AMI's only)
 * [QEMU](https://www.qemu.org/) (for Generic Cloud, Vagrant Libvirt, AWS AMI, OpenNebula and DigitalOcean images only)
 

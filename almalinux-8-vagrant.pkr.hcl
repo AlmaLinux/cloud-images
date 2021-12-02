@@ -24,6 +24,24 @@ source "hyperv-iso" "almalinux-8" {
 }
 
 
+source "parallels-iso" "almalinux-8" {
+  boot_command           = var.vagrant_boot_command
+  boot_wait              = var.boot_wait
+  cpus                   = var.cpus
+  disk_size              = var.vagrant_disk_size
+  guest_os_type          = "centos"
+  http_directory         = var.http_directory
+  iso_checksum           = var.iso_checksum_x86_64
+  iso_url                = var.iso_url_x86_64
+  memory                 = var.memory
+  parallels_tools_flavor = var.parallels_tools_flavor_x86_64
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
+  ssh_username           = var.vagrant_ssh_username
+}
+
+
 source "virtualbox-iso" "almalinux-8" {
   iso_url              = var.iso_url_x86_64
   iso_checksum         = var.iso_checksum_x86_64
@@ -104,6 +122,7 @@ source "qemu" "almalinux-8" {
 build {
   sources = [
     "sources.hyperv-iso.almalinux-8",
+    "sources.parallels-iso.almalinux-8",
     "sources.virtualbox-iso.almalinux-8",
     "sources.vmware-iso.almalinux-8",
     "sources.qemu.almalinux-8"
