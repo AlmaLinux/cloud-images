@@ -1,6 +1,6 @@
 # An Ansible playbook that configures a Vagrant box
 ---
-- name: 'AlmaLinux Vagrant Box'
+- name: "AlmaLinux Vagrant Box"
   hosts: default
   become: true
   collections:
@@ -19,4 +19,4 @@
     - install_vagrant_key
     - nfs-client
     - role: cleanup_vm
-      cleanup_ssh_host_keys: packer_provider != 'hyperv-iso'
+      cleanup_ssh_host_keys: "{{ packer_provider != 'hyperv-iso' }}"
