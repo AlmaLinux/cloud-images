@@ -94,4 +94,8 @@ variables {
     "initrd /images/pxeboot/initrd.img<enter>",
     "boot<enter><wait>"
   ]
+  //
+  // Parallels variables
+  //
+  parallels_tools_flavor_x86_64 = "lin"
 }

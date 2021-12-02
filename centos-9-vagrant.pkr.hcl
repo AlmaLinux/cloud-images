@@ -36,6 +36,23 @@ source "vmware-iso" "centos-9" {
   vmx_remove_ethernet_interfaces = true
 }
 
+source "parallels-iso" "centos-9" {
+  iso_checksum           = var.c9s_iso_checksum_x86_64
+  iso_url                = var.c9s_iso_url_x86_64
+  boot_command           = var.c9s_vagrant_boot_command
+  boot_wait              = var.boot_wait
+  cpus                   = var.cpus
+  memory                 = var.memory
+  disk_size              = var.vagrant_disk_size
+  parallels_tools_flavor = var.parallels_tools_flavor_x86_64
+  http_directory         = var.http_directory
+  guest_os_type          = "centos"
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_username           = var.vagrant_ssh_username
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
+}
+
 source "qemu" "centos-9" {
   iso_checksum       = var.c9s_iso_checksum_x86_64
   iso_url            = var.c9s_iso_url_x86_64
@@ -87,6 +104,7 @@ source "virtualbox-iso" "centos-9" {
 build {
   sources = [
     "sources.vmware-iso.centos-9",
+    "sources.parallels-iso.centos-9",
     "sources.qemu.centos-9",
     "sources.virtualbox-iso.centos-9"
   ]
