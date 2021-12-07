@@ -457,7 +457,7 @@ function checkUpdates {
     elif [[ $OS == "AlmaLinux" ]]; then
         echo -en "\nChecking for available security updates, this may take a minute...\n\n"
 
-        update_count=$(yum updateinfo list --quiet | wc -l) # https://errata.almalinux.org/
+        update_count=$(dnf updateinfo list --quiet | wc -l) # https://errata.almalinux.org/
          if [[ $update_count -gt 0 ]]; then
             echo -en "\e[41m[FAIL]\e[0m There are ${update_count} security updates available for this image that have not been installed.\n"
             ((FAIL++))
@@ -475,9 +475,8 @@ function checkUpdates {
 }
 function clearLogs {
   # Clear log files after checking for security updates.
-    for f in /var/log/*.log; do
-        rm -f "${f}"
-    done
+  find /var/log -mtime -1 -type f -exec truncate -s 0 {} \;
+  rm -rf /var/log/*.gz /var/log/*.[0-9] /var/log/*-????????
 }
 function checkCloudInit {
 
@@ -490,81 +489,6 @@ function checkCloudInit {
         STATUS=2
     fi
     return 1
-}
-function checkMongoDB {
-  # Check if MongoDB is installed
-  # If it is, verify the version is allowed (non-SSPL)
-
-   if [[ $OS == "Ubuntu" ]] || [[ "$OS" =~ Debian.* ]]; then
-
-     if [[ -f "/usr/bin/mongod" ]]; then
-       version=$(/usr/bin/mongod --version --quiet | grep "db version" | sed -e "s/^db\ version\ v//")
-
-      if version_gt $version 4.0.0; then
-        if version_gt $version 4.0.3; then
-          echo -en "\e[41m[FAIL]\e[0m An SSPL version of MongoDB is present, ${version}"
-          ((FAIL++))
-           STATUS=2
-        else
-          echo -en "\e[32m[PASS]\e[0m The version of MongoDB installed, ${version} is not under the SSPL"
-          ((PASS++))
-        fi
-      else
-         if version_gt $version 3.6.8; then
-          echo -en "\e[41m[FAIL]\e[0m An SSPL version of MongoDB is present, ${version}"
-          ((FAIL++))
-           STATUS=2
-        else
-          echo -en "\e[32m[PASS]\e[0m The version of MongoDB installed, ${version} is not under the SSPL"
-          ((PASS++))
-        fi
-      fi
-
-
-     else
-       echo -en "\e[32m[PASS]\e[0m MongoDB is not installed"
-       ((PASS++))
-     fi
-
-   elif [[ $OS == "CentOS Linux" ]] || [[ $OS == "CentOS Stream" ]] || [[ $OS == "Rocky Linux" ]] || [[ $OS == "AlmaLinux" ]]; then
-
-    if [[ -f "/usr/bin/mongod" ]]; then
-       version=$(/usr/bin/mongod --version --quiet | grep "db version" | sed -e "s/^db\ version\ v//")
-       if version_gt $version 4.0.0; then
-        if version_gt $version 4.0.3; then
-          echo -en "\e[41m[FAIL]\e[0m An SSPL version of MongoDB is present"
-          ((FAIL++))
-           STATUS=2
-        else
-          echo -en "\e[32m[PASS]\e[0m The version of MongoDB installed is not under the SSPL"
-          ((PASS++))
-        fi
-      else
-         if version_gt $version 3.6.8; then
-          echo -en "\e[41m[FAIL]\e[0m An SSPL version of MongoDB is present"
-          ((FAIL++))
-           STATUS=2
-        else
-          echo -en "\e[32m[PASS]\e[0m The version of MongoDB installed is not under the SSPL"
-          ((PASS++))
-        fi
-      fi
-
-
-
-     else
-       echo -en "\e[32m[PASS]\e[0m MongoDB is not installed"
-       ((PASS++))
-     fi
-
-  else
-    echo "ERROR: Unable to identify distribution"
-    ((FAIL++))
-    STATUS 2
-    return 1
-  fi
-
-
 }
 
 function version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
@@ -636,7 +560,7 @@ elif [[ $OS == "Rocky Linux" ]]; then
     fi
 elif [[ $OS == "AlmaLinux" ]]; then
         ost=1
-    if [[ $VER =~ "8." ]]; then
+    if [[ $VER =~ 8.[3-9] ]]; then
         osv=1
     else
         osv=2
@@ -689,8 +613,6 @@ echo -en "\n\nChecking the root account...\n"
 checkRoot
 
 checkAgent
-
-checkMongoDB
 
 
 # Summary

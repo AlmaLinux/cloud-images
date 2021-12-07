@@ -35,11 +35,7 @@ source "qemu" "almalinux-8-digitalocean-x86_64" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-DigitalOcean-8.5.x86_64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command
-  qemu_img_args {
-    convert = ["-o", "compat=0.10"]
-    create  = ["-o", "compat=0.10"]
-  }
+  boot_command       = var.gencloud_boot_command_x86_64
 }
 
 
@@ -58,8 +54,6 @@ build {
     ]
   }
 
-  // it seems that Ansible leaves a tmp directory for unknown reason,
-  // cleanup it manually until we have a solution
   provisioner "shell" {
     scripts = [
       "vm-scripts/digitalocean/99-img-check.sh"
