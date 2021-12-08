@@ -1,6 +1,6 @@
 # Tests for AlmaLinux Vagrant Boxes
 
-This TestInfra test checks the facts below:
+This [Testinfra](https://testinfra.readthedocs.io/) test checks the facts below:
 
 - [x] `vagrant` user created in a `vagrant` group and its `UID` and `GUID` values is `1000`.
 - [x] `vagrant` user's `/etc/sudoers.d/vagrant` file is present and it's content is `vagrant     ALL=(ALL)     NOPASSWD: ALL`.
