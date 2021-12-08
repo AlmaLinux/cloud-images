@@ -1,0 +1,52 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+
+nodes = [
+  {
+    vm_name: "almalinux-test-1",
+    hostname: "almalinux-test-1.test"
+  },
+  {
+    vm_name: "almalinux-test-2",
+    hostname: "almalinux-test-2.test"
+  }
+]
+
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "almalinux-8-test"
+  config.ssh.insert_key = false
+
+nodes.each do |node|
+  config.vm.define node[:vm_name] do |machine|
+    machine.vm.hostname = node[:hostname]
+  end
+end
+
+  config.vm.provider "libvirt" do |v, override|
+     override.vm.synced_folder ".", "/vagrant",
+      type: "nfs",
+      nfs_version: 4,
+      nfs_udp: false
+
+    v.qemu_use_session = false
+    v.channel :type => 'unix', :target_name => 'org.qemu.guest_agent.0', :target_type => 'virtio'
+    v.memory = 2048
+    v.cpus = 2
+  end
+  config.vm.provider "virtualbox" do |v, override|
+  end
+  config.vm.provider "vmware_desktop" do |v, override|
+  end
+  config.vm.provider "hyperv" do |v, override|
+    override.vm.synced_folder ".", "/vagrant",
+      type: "smb",
+      smb_username: ENV["SMB_USERNAME"],
+      smb_password: ENV["SMB_PASSWORD"]
+
+    v.vm_integration_services = {
+      guest_service_interface: true
+    }
+  end
+end
