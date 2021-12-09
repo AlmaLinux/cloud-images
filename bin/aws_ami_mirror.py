@@ -136,6 +136,41 @@ def copy_ami(ami_info, src_region, dst_region, aws_client_token):
         )
         return dst_ami_id, dst_region
 
+def ami_version(ami_info):
+    """
+    Finds source AMI version AMI tag.
+
+    Parameters
+    ----------
+    ami_info : dict
+        AMI information.
+
+    Returns
+    -------
+    string
+        Version of source AMI.
+    """
+    for tag in ami_info['Tags']:
+        if tag['Key'] == 'Version':
+            return tag['Value']
+
+def ami_architecture(ami_info):
+    """
+    Finds source AMI architecture AMI tag.
+
+    Parameters
+    ----------
+    ami_info : dict
+        AMI information.
+
+    Returns
+    -------
+    string
+        Architecture of source AMI.
+    """
+    for tag in ami_info['Tags']:
+        if tag['Key'] == 'Architecture':
+            return tag['Value']
 
 def main(sys_args):
     parser = init_arg_parser()
@@ -147,6 +182,8 @@ def main(sys_args):
     src_region = session.region_name
     log.info(f'started mirroring {args.ami} AMI from {src_region} region')
     ami_info = get_ami_info(ec2, src_ami_id)
+    version = ami_version(ami_info)
+    architecture = ami_architecture(ami_info)
     regions = [r for r in iter_regions(ec2) if r != src_region]
     public_amis = {src_region: ami_info['ImageId']}
     aws_client_token = args.aws_client_token or src_ami_id
@@ -166,7 +203,7 @@ def main(sys_args):
     with open(args.csv_output, 'w') as csv_fd:
         csv_writer = csv.writer(csv_fd, dialect='unix')
         for dst_region, dst_ami_id in sorted(public_amis.items()):
-            row = ('AlmaLinux OS', '8.4', dst_region,  dst_ami_id, 'x86_64')
+            row = ('AlmaLinux OS', version, dst_region, dst_ami_id, architecture)
             csv_writer.writerow(row)
             md_rows.append(row)
     with open(args.md_output, 'w') as fd:
