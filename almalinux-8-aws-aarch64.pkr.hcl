@@ -41,7 +41,7 @@ build {
     "sources.amazon-ebssurrogate.almalinux-8-aws-aarch64"
   ]
   provisioner "shell" {
-    inline = ["sudo dnf -y install tree python39-pip && sudo python3 -m pip install ansible"]
+    inline = ["sudo dnf -y install python39 python39-pip python39-{wheel,setuptools} && sudo python3 -m pip install ansible"]
   }
   provisioner "ansible-local" {
     playbook_dir   = "./ansible"
