@@ -112,6 +112,9 @@
     line: "almalinux\tALL=(ALL)\tNOPASSWD: ALL"
     state: present
 
+- name: Regenerate the initramfs
+  command: dracut -f --regenerate-all
+
 - name: Disable root login
   user:
     name: root
