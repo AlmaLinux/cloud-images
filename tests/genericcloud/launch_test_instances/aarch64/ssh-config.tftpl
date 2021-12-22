@@ -1,0 +1,21 @@
+Host almalinux-test-1
+  HostName ${Host1}
+  User almalinux
+  Port 22
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile ~/.ssh/alcib_rsa4096
+  IdentitiesOnly yes
+  LogLevel FATAL
+
+Host almalinux-test-2
+  HostName ${Host2}
+  User almalinux
+  Port 22
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile ~/.ssh/alcib_rsa4096
+  IdentitiesOnly yes
+  LogLevel FATAL
