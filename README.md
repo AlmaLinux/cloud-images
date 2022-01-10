@@ -11,6 +11,7 @@ AlmaLinux OS images for various cloud platforms.
 | -------------------------- | ------------------------------------------------------------------- |
 | AWS Marketplace AMI        | https://aws.amazon.com/marketplace/pp/B094C8ZZ8J                    |
 | AWS community AMIs         | https://wiki.almalinux.org/cloud/AWS.html                           |
+| Azure Marketplace          | https://azuremarketplace.microsoft.com/en-us/marketplace/apps/almalinux.almalinux |
 | Docker Hub                 | https://hub.docker.com/_/almalinux                                  |
 | Generic Cloud (cloud-init) | https://wiki.almalinux.org/cloud/Generic-cloud.html                 |
 | Google Cloud               | https://cloud.google.com/compute/docs/images#almalinux              |
@@ -30,7 +31,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] Vagrant + Libvirt support
 * [x] AWS AMI `x86_64` and `aarch64` support
 * [x] Google Cloud support
-* [ ] Microsoft Azure support (#14)
+* [x] Microsoft Azure support (#14)
 * [x] DigitalOcean support
 * [x] Generic Cloud / OpenStack `x86_64` and `aarch64` support (#12)
 * [x] LXC/LXD support (#8)
