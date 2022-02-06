@@ -26,14 +26,14 @@ AlmaLinux OS images for various cloud platforms.
 * [ ] Add aarch64 architecture support
 * [x] Vagrant + VirtualBox support
 * [x] Vagrant + VMWare support
-* [ ] Vagrant + Parallels support (#3)
+* [x] Vagrant + Parallels support (#3)
 * [x] Vagrant + Microsoft Hyper-V support (#4)
 * [x] Vagrant + Libvirt support
 * [x] AWS AMI `x86_64` and `aarch64` support
 * [x] Google Cloud support
 * [x] Microsoft Azure support (#14)
 * [x] DigitalOcean support
-* [x] Generic Cloud / OpenStack `x86_64` and `aarch64` support (#12)
+* [x] Generic Cloud / OpenStack `x86_64`, `aarch64` and `ppc64le` support
 * [x] LXC/LXD support (#8)
 * [x] OpenNebula `x86_64` and `aarch64` support
 
@@ -246,6 +246,32 @@ $ packer build -only=qemu.almalinux-8-gencloud-x86_64 .
 ```sh
 $ packer build -only=qemu.almalinux-8-gencloud-aarch64 .
 ```
+
+`ppc64le`
+
+Load the KVM-HV kernel module
+
+```sh
+modprobe kvm_hv
+```
+
+Verify that the KVM kernel module is loaded
+
+```sh
+lsmod | grep kvm
+```
+If KVM loaded successfully, the output of this command includes `kvm_hv`.
+
+The external packer plugins don't have the `ppc64le` builds yet, So use internal packer plugins.
+
+```sh
+mv versions.pkr.hcl versions.pkr.hcl.ignore
+```
+
+```sh
+$ packer build -only=qemu.almalinux-8-gencloud-ppc64le .
+```
+
 
 ### Build a OpenNebula image
 
