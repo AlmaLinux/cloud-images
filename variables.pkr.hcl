@@ -6,6 +6,8 @@ variables {
   iso_checksum_x86_64   = "file:https://repo.almalinux.org/almalinux/8.5/isos/x86_64/CHECKSUM"
   iso_url_aarch64       = "https://repo.almalinux.org/almalinux/8.5/isos/aarch64/AlmaLinux-8.5-aarch64-boot.iso"
   iso_checksum_aarch64  = "file:https://repo.almalinux.org/almalinux/8.5/isos/aarch64/CHECKSUM"
+  iso_url_ppc64le       = "https://repo.almalinux.org/almalinux/8.5/isos/ppc64le/AlmaLinux-8.5-beta-1-ppc64le-boot.iso"
+  iso_checksum_ppc64le  = "file:https://repo.almalinux.org/almalinux/8.5/isos/ppc64le/CHECKSUM"
   headless              = true
   boot_wait             = "10s"
   cpus                  = 2
@@ -60,9 +62,18 @@ variables {
     "initrd /images/pxeboot/initrd.img<enter>",
     "boot<enter><wait>"
   ]
-  gencloud_disk_size    = "10G"
-  gencloud_ssh_username = "root"
-  gencloud_ssh_password = "almalinux"
+  gencloud_boot_command_ppc64le = [
+    "c<wait>",
+    "linux /ppc/ppc64/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-5-beta-1-ppc64le-dvd ro",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-ppc64le.ks<enter>",
+    "initrd /ppc/ppc64/initrd.img<enter>",
+    "boot<enter><wait>"
+  ]
+  gencloud_disk_size         = "10G"
+  gencloud_ssh_username      = "root"
+  gencloud_ssh_password      = "almalinux"
+  gencloud_boot_wait_ppc64le = "8s"
   //
   // Hyper-V specific variables
   //
