@@ -2,17 +2,6 @@
  * AlmaLinux OS 8 Packer template for building AWS images Stage 2.
  */
 
-
-packer {
-  required_plugins {
-    ansible = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/ansible"
-    }
-  }
-}
-
-
 source "amazon-chroot" "almalinux-8-aws-stage2" {
   ami_name                = var.aws_ami_name_x86_64
   ami_description         = var.aws_ami_description_x86_64
