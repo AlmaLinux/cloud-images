@@ -2,16 +2,6 @@
  * AlmaLinux OS 8 Packer template for building AWS images.
  */
 
-packer {
-  required_plugins {
-    amazon = {
-      version = ">= 0.0.1"
-      source  = "github.com/hashicorp/amazon"
-    }
-  }
-}
-
-
 source "vmware-iso" "almalinux-8-aws-stage1" {
   iso_url          = var.iso_url_x86_64
   iso_checksum     = var.iso_checksum_x86_64
