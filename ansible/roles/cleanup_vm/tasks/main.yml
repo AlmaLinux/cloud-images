@@ -47,6 +47,7 @@
   command: "truncate -s 0 {{ item }}"
   loop:
     - /etc/machine-id
+    - /etc/resolv.conf
     - /var/log/audit/audit.log
     - /var/log/wtmp
     - /var/log/lastlog
