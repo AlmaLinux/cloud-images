@@ -75,9 +75,6 @@
     - 'timeout 300;'
     - 'retry 60;'
 
-- name: Empty /etc/resolv.conf
-  command: truncate -s 0 /etc/resolv.conf
-
 - name: Set infra yum variable to 'genclo'
   replace:
     path: /etc/yum/vars/infra
