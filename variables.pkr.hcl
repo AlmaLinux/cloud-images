@@ -18,6 +18,8 @@ variables {
   ssh_timeout           = "3600s"
   root_shutdown_command = "/sbin/shutdown -hP now"
   qemu_binary           = ""
+  firmware_x86_64       = "/usr/share/OVMF/OVMF_CODE.fd"
+  firmware_aarch64      = "/usr/share/AAVMF/AAVMF_CODE.fd"
   //
   // AWS specific variables
   //
@@ -53,6 +55,14 @@ variables {
   //
   gencloud_boot_command_x86_64 = [
     "<tab> inst.text net.ifnames=0 inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-x86_64.ks<enter><wait>"
+  ]
+  gencloud_boot_command_x86_64_uefi = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-5-x86_64-dvd ro",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-x86_64.ks<enter>",
+    "initrdefi /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
   ]
   gencloud_boot_command_aarch64 = [
     "c<wait>",

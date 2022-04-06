@@ -33,7 +33,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] Google Cloud support
 * [x] Microsoft Azure support (#14)
 * [x] DigitalOcean support
-* [x] Generic Cloud / OpenStack `x86_64`, `aarch64` and `ppc64le` support
+* [x] Generic Cloud / OpenStack `x86_64`, `x86_64 UEFI`, `aarch64` and `ppc64le` support
 * [x] LXC/LXD support (#8)
 * [x] OpenNebula `x86_64` and `aarch64` support
 
@@ -242,6 +242,39 @@ In [Images >> Custom Images](https://cloud.digitalocean.com/images/custom_images
 $ packer build -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
+`UEFI on x86_64`
+
+You need the `1.0.2` version of the [QEMU packer plugin](https://github.com/hashicorp/packer-plugin-qemu) and `edk2-ovmf`(RPM and ArchLinux)/`ovmf`(DEB) packages for the needed OVMF firmware files.
+
+```sh
+$ packer build -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
+```
+
+`How to build UEFI images on EL8 systems`
+
+By default the `firmware_x86_64` packer variable set to use `/usr/share/OVMF/OVMF_CODE.fd`.
+The `OVMF_CODE.fd` is not present on the EL8 systems and the packer qemu plugin's VM doesn't boot with the `OVMF_CODE.secboot.fd`.
+Thanks to the Fedora edk2 package maintainer [kraxel](https://www.kraxel.org) for his [Qemu firmware repo](https://www.kraxel.org/repos/),
+You can use the latest build of the OVMF from the repo without overwriting the system's package manager provided firmware files.
+
+Add the repository:
+
+```sh
+$ dnf config-manager --add-repo=https://www.kraxel.org/repos/firmware.repo
+```
+
+Recreate the DNF cache and install UEFI firmware for x64 qemu guests (OVMF):
+
+```sh
+$ dnf makecache && dnf -y install edk2.git-ovmf-x64
+```
+
+Build UEFI Image on the EL8:
+
+```sh
+$ packer build -var qemu_binary="/usr/libexec/qemu-kvm" -var firmware_x86_64="/usr/share/edk2.git/ovmf-x64/OVMF_CODE-pure-efi.fd" -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
+```
+
 `aarch64`
 ```sh
 $ packer build -only=qemu.almalinux-8-gencloud-aarch64 .
@@ -294,6 +327,7 @@ $ packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 * [Parallels](https://www.parallels.com/) (for Parallels images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images and Amazon AMI's only)
 * [QEMU](https://www.qemu.org/) (for Generic Cloud, Vagrant Libvirt, AWS AMI, OpenNebula and DigitalOcean images only)
+* [EDK II](https://github.com/tianocore/tianocore.github.io/wiki/OVMF) (for only UEFI supported `x86_64` ones and all `aarch64` images)
 
 
 ## References
