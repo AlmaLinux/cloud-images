@@ -2,7 +2,7 @@ packer {
   required_version = ">= 1.7.0"
   required_plugins {
     qemu = {
-      version = "1.0.2"
+      version = ">= 1.0.3"
       source  = "github.com/hashicorp/qemu"
     }
     virtualbox = {

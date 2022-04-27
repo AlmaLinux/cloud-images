@@ -24,6 +24,8 @@
       - nfs-utils
       - rsync
       - tar
+      - tuned
+      - tcpdump
 
 - name: Find persistent-net.rules
   find:
@@ -67,19 +69,23 @@
     regexp: '^#?NAutoVTs=\d+'
     replace: 'NAutoVTs=0'
 
-- name: Configure dhclient
-  lineinfile:
-    path: /etc/dhcp/dhclient.conf
-    line: "{{ item }}"
-  with_items:
-    - 'timeout 300;'
-    - 'retry 60;'
+- name: Configure NetworkManager default DHCP timeout
+  community.general.ini_file:
+    path: /etc/NetworkManager/conf.d/dhcp.conf
+    section: connection
+    option: ipv4.dhcp-timeout
+    value: 300
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
 
 - name: Set infra yum variable to 'genclo'
   replace:
     path: /etc/yum/vars/infra
     regexp: '^(.*?)$'
     replace: 'genclo'
+  when: ansible_facts['distribution_major_version'] == '8'
 
 - name: Set default kernel package type to kernel
   replace:
@@ -108,6 +114,12 @@
     path: /etc/sudoers
     line: "almalinux\tALL=(ALL)\tNOPASSWD: ALL"
     state: present
+
+- name: Set virtual-guest as default profile for tuned
+  lineinfile:
+    path: /etc/tuned/active_profile
+    line: virtual-guest
+    create: yes
 
 - name: Regenerate the initramfs
   command: dracut -f --regenerate-all

@@ -3,9 +3,9 @@
  */
 
 source "vmware-iso" "almalinux-8-aws-stage1" {
-  iso_url          = var.iso_url_x86_64
-  iso_checksum     = var.iso_checksum_x86_64
-  boot_command     = var.aws_boot_command
+  iso_url          = var.iso_url_8_x86_64
+  iso_checksum     = var.iso_checksum_8_x86_64
+  boot_command     = var.aws_boot_command_8
   boot_wait        = var.boot_wait
   cpus             = var.cpus
   memory           = var.memory
@@ -31,8 +31,8 @@ source "vmware-iso" "almalinux-8-aws-stage1" {
 
 
 source "qemu" "almalinux-8-aws-stage1" {
-  iso_url            = var.iso_url_x86_64
-  iso_checksum       = var.iso_checksum_x86_64
+  iso_url            = var.iso_url_8_x86_64
+  iso_checksum       = var.iso_checksum_8_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -53,7 +53,7 @@ source "qemu" "almalinux-8-aws-stage1" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-AWS-8.5.x86_64.raw"
   boot_wait          = var.boot_wait
-  boot_command       = var.aws_boot_command
+  boot_command       = var.aws_boot_command_8
 }
 
 

@@ -1,7 +1,8 @@
 ---
 collections:
-  - name: ansible.posix
-  - name: almalinux.ci
+  - ansible.posix
+  - almalinux.ci
+  - community.general
 
 roles:
-  - name: ezamriy.vbox_guest
+  - ezamriy.vbox_guest

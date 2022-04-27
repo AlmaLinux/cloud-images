@@ -1,10 +1,10 @@
 /*
- * AlmaLinux OS 8 Packer template for building Generic Cloud (OpenStack compatible) images.
+ * AlmaLinux OS 9 Packer template for building Generic Cloud (OpenStack compatible) images.
  */
 
-source "qemu" "almalinux-8-gencloud-x86_64" {
-  iso_url            = var.iso_url_8_x86_64
-  iso_checksum       = var.iso_checksum_8_x86_64
+source "qemu" "almalinux-9-gencloud-bios-x86_64" {
+  iso_url            = var.iso_url_9_x86_64
+  iso_checksum       = var.iso_checksum_9_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -20,17 +20,21 @@ source "qemu" "almalinux-8-gencloud-x86_64" {
   disk_compression   = true
   format             = "qcow2"
   headless           = var.headless
+  machine_type       = "q35"
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-GenericCloud-8.5-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-BIOS-9-beta${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_8_x86_64
+  boot_command       = var.gencloud_boot_command_9_x86_64_bios
+  qemuargs = [
+    ["-cpu", "host"]
+  ]
 }
 
-source "qemu" "almalinux-8-gencloud-uefi-x86_64" {
-  iso_url            = var.iso_url_8_x86_64
-  iso_checksum       = var.iso_checksum_8_x86_64
+source "qemu" "almalinux-9-gencloud-x86_64" {
+  iso_url            = var.iso_url_9_x86_64
+  iso_checksum       = var.iso_checksum_9_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -48,18 +52,22 @@ source "qemu" "almalinux-8-gencloud-uefi-x86_64" {
   disk_compression   = true
   format             = "qcow2"
   headless           = var.headless
+  machine_type       = "q35"
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-GenericCloud-UEFI-8.5-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.0-beta-1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_8_x86_64_uefi
+  boot_command       = var.gencloud_boot_command_9_x86_64
+  qemuargs = [
+    ["-cpu", "host"]
+  ]
 }
 
 
-source "qemu" "almalinux-8-gencloud-aarch64" {
-  iso_url            = var.iso_url_8_aarch64
-  iso_checksum       = var.iso_checksum_8_aarch64
+source "qemu" "almalinux-9-gencloud-aarch64" {
+  iso_url            = var.iso_url_9_aarch64
+  iso_checksum       = var.iso_checksum_9_aarch64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -81,9 +89,9 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-GenericCloud-8.5-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.0-beta-1-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_8_aarch64
+  boot_command       = var.gencloud_boot_command_9_aarch64
   qemuargs = [
     ["-cpu", "max"],
     ["-boot", "strict=on"],
@@ -92,9 +100,9 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
 }
 
 
-source "qemu" "almalinux-8-gencloud-ppc64le" {
-  iso_url            = var.iso_url_8_ppc64le
-  iso_checksum       = var.iso_checksum_8_ppc64le
+source "qemu" "almalinux-9-gencloud-ppc64le" {
+  iso_url            = var.iso_url_9_ppc64le
+  iso_checksum       = var.iso_checksum_9_ppc64le
   shutdown_command   = var.root_shutdown_command
   http_directory     = var.http_directory
   ssh_username       = var.gencloud_ssh_username
@@ -112,9 +120,9 @@ source "qemu" "almalinux-8-gencloud-ppc64le" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-GenericCloud-8.5-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.0-beta-1-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
   boot_wait          = var.gencloud_boot_wait_ppc64le
-  boot_command       = var.gencloud_boot_command_8_ppc64le
+  boot_command       = var.gencloud_boot_command_9_ppc64le
   qemuargs = [
     ["-machine", "pseries,accel=kvm,kvm-type=HV"]
   ]
@@ -123,10 +131,10 @@ source "qemu" "almalinux-8-gencloud-ppc64le" {
 
 build {
   sources = [
-    "qemu.almalinux-8-gencloud-x86_64",
-    "qemu.almalinux-8-gencloud-uefi-x86_64",
-    "qemu.almalinux-8-gencloud-aarch64",
-    "qemu.almalinux-8-gencloud-ppc64le"
+    "qemu.almalinux-9-gencloud-bios-x86_64",
+    "qemu.almalinux-9-gencloud-x86_64",
+    "qemu.almalinux-9-gencloud-aarch64",
+    "qemu.almalinux-9-gencloud-ppc64le"
   ]
 
   provisioner "ansible" {
