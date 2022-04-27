@@ -3,8 +3,8 @@
  */
 
 source "qemu" "almalinux-8-opennebula-x86_64" {
-  iso_url            = var.iso_url_x86_64
-  iso_checksum       = var.iso_checksum_x86_64
+  iso_url            = var.iso_url_8_x86_64
+  iso_checksum       = var.iso_checksum_8_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -25,13 +25,13 @@ source "qemu" "almalinux-8-opennebula-x86_64" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-OpenNebula-8.5.x86_64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.opennebula_boot_command_x86_64
+  boot_command       = var.opennebula_boot_command_8_x86_64
 }
 
 
 source "qemu" "almalinux-8-opennebula-aarch64" {
-  iso_url            = var.iso_url_aarch64
-  iso_checksum       = var.iso_checksum_aarch64
+  iso_url            = var.iso_url_8_aarch64
+  iso_checksum       = var.iso_checksum_8_aarch64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -39,7 +39,8 @@ source "qemu" "almalinux-8-opennebula-aarch64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = "/usr/share/AAVMF/AAVMF_CODE.fd"
+  firmware           = var.firmware_aarch64
+  use_pflash         = false
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -54,7 +55,7 @@ source "qemu" "almalinux-8-opennebula-aarch64" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8-OpenNebula-8.5.aarch64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.opennebula_boot_command_aarch64
+  boot_command       = var.opennebula_boot_command_8_aarch64
   qemuargs = [
     ["-cpu", "max"],
     ["-boot", "strict=on"],
