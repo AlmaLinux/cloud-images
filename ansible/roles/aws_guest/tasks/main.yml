@@ -117,7 +117,7 @@
 
     - name: Install AWS Systems Manager Agent (SSM Agent)
       dnf:
-        name: https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm
+        name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
         state: present
 
 - name: Enable cloud-init services
@@ -135,6 +135,17 @@
     dest: /etc/cloud/cloud.cfg
     regexp: '^(\s+name:).*$'
     replace: '\1 ec2-user'
+
+- name: Configure NetworkManager default DHCP timeout
+  community.general.ini_file:
+    path: /rootfs/etc/NetworkManager/conf.d/dhcp.conf
+    section: connection
+    option: ipv4.dhcp-timeout
+    value: 300
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
 
 - name: Enable sgdisk in dracut
   lineinfile:

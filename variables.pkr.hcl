@@ -32,7 +32,7 @@ variables {
   aws_boot_command_8 = [
     "<tab> inst.text net.ifnames=0 inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.aws.ks<enter><wait>"
   ]
-  aws_disk_size               = 10240
+  aws_disk_size               = 4096
   aws_ssh_username            = "root"
   aws_ssh_password            = "almalinux"
   aws_s3_bucket_name          = ""
