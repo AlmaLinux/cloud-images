@@ -115,6 +115,7 @@
       - tar
       - qemu-guest-agent
       - yum-utils
+      - tuned
 
 - name: Set up AWS Systems Manager Agent (SSM Agent)
   block:
@@ -133,7 +134,7 @@
       dnf:
         installroot: "/rootfs"
         disable_gpg_check: yes
-        name: https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_arm64/amazon-ssm-agent.rpm
+        name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm
         state: present
 
 - name: configure NetworkManager in cloud
@@ -149,6 +150,17 @@
   with_items:
     - "[Service]"
     - Environment=NM_CLOUD_SETUP_EC2=yes
+
+- name: Configure NetworkManager default DHCP timeout
+  community.general.ini_file:
+    path: /rootfs/etc/NetworkManager/conf.d/dhcp.conf
+    section: connection
+    option: ipv4.dhcp-timeout
+    value: 300
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
 
 - name: Disable SSH password authentication
   lineinfile:
@@ -180,6 +192,12 @@
     regexp: '^(\s+name:).*$'
     replace: '\1 ec2-user'
 
+- name: Set virtual-guest as default profile for tuned
+  lineinfile:
+    path: /rootfs/etc/tuned/active_profile
+    line: virtual-guest
+    create: yes
+
 - name: Enable sgdisk in dracut
   lineinfile:
     path: /rootfs/etc/dracut.conf.d/sgdisk.conf
@@ -189,15 +207,14 @@
     group: root
     mode: 0644
 
-# https://bugzilla.redhat.com/show_bug.cgi?id=1849082
-# - name: Enable xen drivers in dracut
-#   lineinfile:
-#     path: /rootfs/etc/dracut.conf.d/xen.conf
-#     line: 'add_drivers+=" xen-netfront xen-blkfront "'
-#     create: true
-#     owner: root
-#     group: root
-#     mode: 0644
+- name: Enable NVME driver
+  lineinfile:
+    path: /rootfs/etc/dracut.conf.d/ec2.conf
+    line: 'add_drivers+=" nvme "'
+    create: true
+    owner: root
+    group: root
+    mode: 0644
 
 - name: Upgrade initramfs
   command: chroot /rootfs dracut -f --regenerate-all
