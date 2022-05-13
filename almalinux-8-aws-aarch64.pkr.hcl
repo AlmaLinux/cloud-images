@@ -17,12 +17,13 @@ source "amazon-ebssurrogate" "almalinux-8-aws-aarch64" {
     Version      = "${var.aws_ami_version}",
     Architecture = "aarch64"
   }
-  ena_support = true
+  ena_support   = true
+  sriov_support = true
 
 
   launch_block_device_mappings {
     device_name           = "/dev/sdb"
-    volume_size           = 10
+    volume_size           = 4
     volume_type           = "gp2"
     delete_on_termination = true
   }
