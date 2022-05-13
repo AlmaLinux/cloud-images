@@ -1,6 +1,5 @@
 # AlmaLinux 8 kickstart file for AWS EC2
 
-install
 url --url https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/8/BaseOS/x86_64/os/
 repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/8/AppStream/x86_64/os/
