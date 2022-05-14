@@ -128,8 +128,19 @@ variables {
   vagrant_boot_command_8_x86_64 = [
     "<tab> inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<enter><wait>"
   ]
+  vagrant_boot_command_9_x86_64 = [
+    "<tab> inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant.ks<enter><wait>"
+  ]
   vagrant_efi_boot_command_8_x86_64 = [
     "e<down><down><end><bs><bs><bs><bs><bs>inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<leftCtrlOn>x<leftCtrlOff>"
+  ]
+  vagrant_efi_boot_command_9_x86_64 = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-beta-1-x86_64-dvd ro ",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant.ks<enter>",
+    "initrdefi /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
   ]
   vagrant_disk_size        = 20000
   vagrant_shutdown_command = "echo vagrant | sudo -S /sbin/shutdown -hP now"
