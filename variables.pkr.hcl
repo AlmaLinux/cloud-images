@@ -8,12 +8,12 @@ variables {
   iso_checksum_8_aarch64 = "file:https://repo.almalinux.org/almalinux/8.6/isos/aarch64/CHECKSUM"
   iso_url_8_ppc64le      = "https://repo.almalinux.org/almalinux/8.6/isos/ppc64le/AlmaLinux-8.6-ppc64le-boot.iso"
   iso_checksum_8_ppc64le = "file:https://repo.almalinux.org/almalinux/8.6/isos/ppc64le/CHECKSUM"
-  iso_url_9_x86_64       = "https://repo.almalinux.org/almalinux/9.0-beta/isos/x86_64/AlmaLinux-9.0-beta-1-x86_64-boot.iso"
-  iso_checksum_9_x86_64  = "file:https://repo.almalinux.org/almalinux/9.0-beta/isos/x86_64/CHECKSUM"
-  iso_url_9_aarch64      = "https://repo.almalinux.org/almalinux/9.0-beta/isos/aarch64/AlmaLinux-9.0-beta-1-aarch64-boot.iso"
-  iso_checksum_9_aarch64 = "file:https://repo.almalinux.org/almalinux/9.0-beta/isos/aarch64/CHECKSUM"
-  iso_url_9_ppc64le      = "https://repo.almalinux.org/almalinux/9.0-beta/isos/ppc64le/AlmaLinux-9.0-beta-1-ppc64le-boot.iso"
-  iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/9.0-beta/isos/ppc64le/CHECKSUM"
+  iso_url_9_x86_64       = "https://repo.almalinux.org/almalinux/9.0/isos/x86_64/AlmaLinux-9.0-x86_64-boot.iso"
+  iso_checksum_9_x86_64  = "file:https://repo.almalinux.org/almalinux/9.0/isos/x86_64/CHECKSUM"
+  iso_url_9_aarch64      = "https://repo.almalinux.org/almalinux/9.0/isos/aarch64/AlmaLinux-9.0-aarch64-boot.iso"
+  iso_checksum_9_aarch64 = "file:https://repo.almalinux.org/almalinux/9.0/isos/aarch64/CHECKSUM"
+  iso_url_9_ppc64le      = "https://repo.almalinux.org/almalinux/9.0/isos/ppc64le/AlmaLinux-9.0-ppc64le-boot.iso"
+  iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/9.0/isos/ppc64le/CHECKSUM"
   headless               = true
   boot_wait              = "10s"
   cpus                   = 2
@@ -91,7 +91,7 @@ variables {
   ]
   gencloud_boot_command_9_x86_64 = [
     "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-beta-1-x86_64-dvd ro ",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64.ks<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
@@ -99,7 +99,7 @@ variables {
   ]
   gencloud_boot_command_9_aarch64 = [
     "c<wait>",
-    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-beta-1-aarch64-dvd ro ",
+    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-aarch64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks<enter>",
     "initrd /images/pxeboot/initrd.img<enter>",
@@ -107,7 +107,7 @@ variables {
   ]
   gencloud_boot_command_9_ppc64le = [
     "c<wait>",
-    "linux /ppc/ppc64/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-beta-1-ppc64le-dvd ro ",
+    "linux /ppc/ppc64/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-ppc64le-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks<enter>",
     "initrd /ppc/ppc64/initrd.img<enter>",
