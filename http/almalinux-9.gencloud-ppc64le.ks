@@ -1,8 +1,8 @@
 # AlmaLinux 9 kickstart file for Generic Cloud (OpenStack) ppc64le image
 
-url --url https://repo.almalinux.org/almalinux/9.0-beta/BaseOS/ppc64le/kickstart/
-repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9.0-beta/BaseOS/ppc64le/os/
-repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/9.0-beta/AppStream/ppc64le/os/
+url --url https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/kickstart/
+repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/os/
+repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/9/AppStream/ppc64le/os/
 
 text
 skipx
@@ -31,7 +31,7 @@ rootpw --plaintext almalinux
 reboot --eject
 
 
-%packages --instLangs=en
+%packages --inst-langs=en
 @core
 dracut-config-generic
 usermode
