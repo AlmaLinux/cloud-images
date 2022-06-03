@@ -1,0 +1,29 @@
+---
+# The main tasks file for ami_9_x86_64
+- name: Create partition table, partitions and format
+  include_tasks:
+    file: disk_part.yml
+
+- name: Mount chroot
+  include_tasks:
+    file: chroot_mount.yml
+
+- name: Install system base
+  include_tasks:
+    file: install_system.yml
+
+- name: Install AWS Guest Tools
+  include_tasks:
+    file: aws_guest.yml
+
+- name: Configure bootloader
+  include_tasks:
+    file: bootloader.yml
+
+- name: SELinux - Relabel the filesystem
+  include_tasks:
+    file: selinux.yml
+
+- name: Cleanup system
+  include_tasks:
+    file: cleanup.yml

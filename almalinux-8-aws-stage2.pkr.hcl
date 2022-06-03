@@ -3,13 +3,13 @@
  */
 
 source "amazon-chroot" "almalinux-8-aws-stage2" {
-  ami_name                = var.aws_ami_name_x86_64
-  ami_description         = var.aws_ami_description_x86_64
+  ami_name                = var.aws_ami_name_x86_64_8
+  ami_description         = var.aws_ami_description_x86_64_8
   ami_virtualization_type = "hvm"
   ami_regions             = ["us-east-1"]
   tags = {
-    Name         = "${var.aws_ami_name_x86_64}",
-    Version      = "${var.aws_ami_version}",
+    Name         = "${var.aws_ami_name_x86_64_8}",
+    Version      = "${var.aws_ami_version_8}",
     Architecture = "${var.aws_ami_architecture}"
   }
   ena_support     = true

@@ -32,17 +32,22 @@ variables {
   aws_boot_command_8 = [
     "<tab> inst.text net.ifnames=0 inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.aws.ks<enter><wait>"
   ]
-  aws_disk_size               = 4096
-  aws_ssh_username            = "root"
-  aws_ssh_password            = "almalinux"
-  aws_s3_bucket_name          = ""
-  aws_role_name               = "vmimport"
-  aws_ami_name_x86_64         = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} x86_64"
-  aws_ami_name_aarch64        = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} aarch64"
-  aws_ami_description_x86_64  = "Official AlmaLinux OS 8.6 x86_64 image"
-  aws_ami_description_aarch64 = "Official AlmaLinux OS 8.6 aarch64 image"
-  aws_ami_version             = "8.6.{{isotime \"20060102\"}}"
-  aws_ami_architecture        = "x86_64"
+  aws_disk_size                 = 4096
+  aws_ssh_username              = "root"
+  aws_ssh_password              = "almalinux"
+  aws_s3_bucket_name            = ""
+  aws_role_name                 = "vmimport"
+  aws_ami_name_x86_64_8         = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} x86_64"
+  aws_ami_name_aarch64_8        = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} aarch64"
+  aws_ami_description_x86_64_8  = "Official AlmaLinux OS 8.6 x86_64 image"
+  aws_ami_description_aarch64_8 = "Official AlmaLinux OS 8.6 aarch64 image"
+  aws_ami_version_8             = "8.6.{{isotime \"20060102\"}}"
+  aws_ami_name_x86_64_9         = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} x86_64"
+  aws_ami_name_aarch64_9        = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} aarch64"
+  aws_ami_description_x86_64_9  = "Official AlmaLinux OS 9.0 x86_64 image"
+  aws_ami_description_aarch64_9 = "Official AlmaLinux OS 9.0 aarch64 image"
+  aws_ami_version_9             = "9.0.{{isotime \"20060102\"}}"
+  aws_ami_architecture          = "x86_64"
   //
   // DigitalOcean variables
   //

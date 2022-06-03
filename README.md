@@ -80,7 +80,9 @@ Build a Hyper-V box:
 ```
 
 
-### Build an Amazon AMI
+### Build an Amazon Machine Images (AMI)
+
+#### AlmaLinux OS 8
 
 `x86_64`
 
@@ -194,6 +196,34 @@ Start the Build:
 packer build -only=amazon-ebssurrogate.almalinux-8-aws-aarch64 .
 ```
 
+#### AlmaLinux OS 9
+
+Use one of these methods to set up your AWS credentials:
+
+- Static credentials
+- Environment variables
+- Shared credentials file
+- EC2 Role
+
+See https://www.packer.io/plugins/builders/amazon#authentication for instructions.
+
+Install required Packer plugins:
+```sh
+packer init .
+```
+Start the Build:
+
+`x86_64`
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux-9-ami-x86_64 .
+```
+
+`AArch64`
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux-9-ami-aarch64 .
+```
 
 ### Build a DigitalOcean image
 

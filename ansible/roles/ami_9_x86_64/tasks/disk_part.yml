@@ -1,0 +1,36 @@
+---
+# tasks file for crearting partition table, partitions and format community.general.filesystem
+- name: Gather disk information
+  command: parted /dev/nvme1n1 unit MiB print
+  register: parted_output
+
+- name: Show disk information before the operations
+  debug:
+    var: parted_output.stdout_lines
+
+- name: Create GPT Partition Table
+  shell: parted -s -a optimal /dev/nvme1n1 -- mklabel gpt
+
+- name: Create BIOS boot partition
+  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart biosboot 0% 2MiB set 1 bios_grub on
+
+- name: Create Root Partition
+  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart root xfs 2MiB 100%
+
+- name: Format Root partition as XFS
+  community.general.filesystem:
+    dev: "/dev/nvme1n1p2"
+    fstype: xfs
+    state: present
+
+- name: Gather disk information
+  command: parted /dev/nvme1n1 unit MiB print
+  register: parted_output
+
+- name: Show disk information after the operations
+  debug:
+    var: parted_output.stdout_lines
+
+- name: Get UUID of Root
+  command: blkid /dev/nvme1n1p2 -s UUID -o value
+  register: root_uuid
