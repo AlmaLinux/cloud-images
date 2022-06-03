@@ -1,0 +1,8 @@
+---
+- name: AlmaLinux OS 9 AMI x86_64
+  hosts: 127.0.0.1
+  connection: local
+  become: true
+
+  roles:
+    - ami_9_x86_64

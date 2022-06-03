@@ -1,0 +1,55 @@
+---
+# tasks file for mounting chroot
+- name: Create chroot directory
+  file:
+    path: /rootfs
+    state: directory
+
+- name: Mount chroot root partition
+  command: mount /dev/nvme1n1p3 /rootfs
+
+- name: Create chroot boot directory
+  file:
+    path: /rootfs/boot
+    state: directory
+
+- name: Mount chroot boot partition
+  command: mount /dev/nvme1n1p2 /rootfs/boot
+
+- name: Create chroot device directory
+  file:
+    path: /rootfs/dev
+    state: directory
+
+- name: Mount chroot device files
+  command: mount -o bind /dev /rootfs/dev
+
+- name: Create chroot sys directory
+  file:
+    path: /rootfs/sys
+    state: directory
+
+- name: Mount chroot sysfs
+  command: mount -t sysfs sysfs /rootfs/sys
+
+- name: Creating the rootfs directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - /rootfs/boot/efi
+    - /rootfs/dev/pts
+    - /rootfs/dev/shm
+    - /rootfs/proc
+    - /rootfs/sys/fs/selinux
+
+- name: Mount chroot ESP
+  command: mount /dev/nvme1n1p1 /rootfs/boot/efi
+
+- name: Mount chroot pseudo filesystems
+  command: mount -t {{ item.type }} {{ item.src }} {{ item.dest }}
+  loop:
+    - { type: 'devpts', src: 'devpts', dest: '/rootfs/dev/pts' }
+    - { type: 'tmpfs', src: 'tmpfs', dest: '/rootfs/dev/shm' }
+    - { type: 'proc', src: 'proc', dest: '/rootfs/proc' }
+    - { type: 'selinuxfs', src: 'selinuxfs', dest: '/rootfs/sys/fs/selinux' }

@@ -78,7 +78,7 @@ build {
   // comment this out if you don't want to import AMI to Amazon EC2 automatically
   post-processor "amazon-import" {
     ami_name        = "Alma 8.6 internal use only {{isotime \"20060102\"}} x86_64"
-    ami_description = var.aws_ami_description_x86_64
+    ami_description = var.aws_ami_description_x86_64_8
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
@@ -95,7 +95,7 @@ build {
   post-processor "amazon-import" {
     ami_name        = "Alma 8.6 internal use only {{isotime \"20060102\"}} x86_64"
     format          = "raw"
-    ami_description = var.aws_ami_description_x86_64
+    ami_description = var.aws_ami_description_x86_64_8
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"

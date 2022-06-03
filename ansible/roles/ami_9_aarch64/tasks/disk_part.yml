@@ -1,0 +1,60 @@
+---
+# tasks file for crearting partition table, partitions and format filesystem
+- name: Gather disk information
+  command: parted /dev/nvme1n1 unit MiB print
+  register: parted_output
+
+- name: Show disk information before the operations
+  debug:
+    var: parted_output.stdout_lines
+
+- name: Create GPT Partition Table
+  shell: parted -s -a optimal /dev/nvme1n1 -- mklabel gpt
+
+- name: Create EFI System Partition
+  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart '"EFI System Partition"' fat32 0% 201MiB set 1 esp on set 1 boot on
+
+- name: Create Boot Partition
+  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart boot xfs 201MiB 713MiB
+
+- name: Create Root Partition
+  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart root xfs 713MiB 100%
+
+- name: Format ESP as FAT32
+  filesystem:
+    dev: "/dev/nvme1n1p1"
+    fstype: vfat
+    opts: "-F 32"
+    state: present
+
+- name: Format Boot partition as XFS
+  filesystem:
+    dev: "/dev/nvme1n1p2"
+    fstype: xfs
+    state: present
+
+- name: Format Root partition as XFS
+  filesystem:
+    dev: "/dev/nvme1n1p3"
+    fstype: xfs
+    state: present
+
+- name: Gather disk information
+  command: parted /dev/nvme1n1 unit MiB print
+  register: parted_output
+
+- name: Show disk information after the operations
+  debug:
+    var: parted_output.stdout_lines
+
+- name: Get UUID of EFI System Partition
+  command: blkid /dev/nvme1n1p1 -s UUID -o value
+  register: esp_uuid
+
+- name: Get UUID of Boot partition
+  command: blkid /dev/nvme1n1p2 -s UUID -o value
+  register: boot_uuid
+
+- name: Get UUID of Root
+  command: blkid /dev/nvme1n1p3 -s UUID -o value
+  register: root_uuid

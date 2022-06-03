@@ -6,15 +6,15 @@ source "amazon-ebssurrogate" "almalinux-8-aws-aarch64" {
   region                  = "us-east-1"
   ssh_username            = "ec2-user"
   instance_type           = "t4g.micro"
-  source_ami              = "ami-070a38d61ee1ea697"
-  ami_name                = var.aws_ami_name_aarch64
-  ami_description         = var.aws_ami_description_aarch64
+  source_ami              = "ami-0543832c8973af485"
+  ami_name                = var.aws_ami_name_aarch64_8
+  ami_description         = var.aws_ami_description_aarch64_8
   ami_architecture        = "arm64"
   ami_virtualization_type = "hvm"
   ami_regions             = ["us-east-1"]
   tags = {
-    Name         = "${var.aws_ami_name_aarch64}",
-    Version      = "${var.aws_ami_version}",
+    Name         = "${var.aws_ami_name_aarch64_8}",
+    Version      = "${var.aws_ami_version_8}",
     Architecture = "aarch64"
   }
   ena_support   = true
