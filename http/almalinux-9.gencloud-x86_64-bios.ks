@@ -31,13 +31,18 @@ reboot --eject
 
 %packages --inst-langs=en
 @core
+dracut-config-generic
+usermode
 -biosdevname
--open-vm-tools
--plymouth
 -dnf-plugin-spacewalk
--rhn*
+-dracut-config-rescue
 -iprutils
 -iwl*-firmware
+-langpacks-*
+-mdadm
+-open-vm-tools
+-plymouth
+-rhn*
 %end
 
 

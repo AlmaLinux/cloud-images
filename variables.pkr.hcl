@@ -141,7 +141,7 @@ variables {
   ]
   vagrant_efi_boot_command_9_x86_64 = [
     "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-beta-1-x86_64-dvd ro ",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant.ks<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
@@ -159,7 +159,7 @@ variables {
   ]
   opennebula_boot_command_8_aarch64 = [
     "c<wait>",
-    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-6-aarch64-dvd ro",
+    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-6-aarch64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.opennebula-aarch64.ks<enter>",
     "initrd /images/pxeboot/initrd.img<enter>",

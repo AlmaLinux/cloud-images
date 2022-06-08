@@ -9,13 +9,20 @@
     name: one-context
     state: present
 
-- name: Enable one-context and network services
+- name: Enable one-context and network services for 8
   service:
     name: "{{ item }}"
     enabled: true
   loop:
     - one-context
     - network
+  when: ansible_facts['distribution_major_version'] == '8'
+
+- name: Enable one-context services for 9
+  service:
+    name: one-context
+    enabled: true
+  when: ansible_facts['distribution_major_version'] == '9'
 
 - name: Install disk resize dependencies
   package:
@@ -24,5 +31,5 @@
       - parted
     state: latest
 
-- name: Update initramfs
-  command: dracut -f
+- name: Regenerate the initramfs
+  command: dracut -f --regenerate-all
