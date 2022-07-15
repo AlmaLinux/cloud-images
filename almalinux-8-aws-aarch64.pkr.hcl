@@ -42,13 +42,12 @@ build {
     "sources.amazon-ebssurrogate.almalinux-8-aws-aarch64"
   ]
   provisioner "shell" {
-    inline = ["sudo dnf -y install python39 python39-pip python39-{wheel,setuptools} && sudo python3 -m pip install ansible"]
+    inline = ["sudo dnf -y install ansible-core"]
   }
   provisioner "ansible-local" {
-    playbook_dir   = "./ansible"
-    playbook_file  = "./ansible/aws-ami-aarch64.yml"
-    galaxy_file    = "./ansible/requirements.yml"
-    galaxy_command = "ansible-galaxy collection install -r"
+    playbook_dir  = "./ansible"
+    playbook_file = "./ansible/aws-ami-aarch64.yml"
+    galaxy_file   = "./ansible/requirements.yml"
   }
 
 }
