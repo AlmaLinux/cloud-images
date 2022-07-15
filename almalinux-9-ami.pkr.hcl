@@ -78,22 +78,20 @@ build {
     "sources.amazon-ebssurrogate.almalinux-9-ami-aarch64"
   ]
   provisioner "shell" {
-    inline = ["sudo dnf config-manager --set-enabled crb && sudo dnf -y install dosfstools python3-wheel python3-pip && sudo python3 -m pip install ansible"]
+    inline = ["sudo dnf -y install ansible-core dosfstools"]
   }
   provisioner "ansible-local" {
-    playbook_dir   = "./ansible"
-    playbook_file  = "./ansible/ami-9-x86_64.yaml"
-    galaxy_file    = "./ansible/requirements.yml"
-    galaxy_command = "ansible-galaxy collection install -r"
+    playbook_dir  = "./ansible"
+    playbook_file = "./ansible/ami-9-x86_64.yaml"
+    galaxy_file   = "./ansible/requirements.yml"
     only = [
       "amazon-ebssurrogate.almalinux-9-ami-x86_64"
     ]
   }
   provisioner "ansible-local" {
-    playbook_dir   = "./ansible"
-    playbook_file  = "./ansible/ami-9-aarch64.yaml"
-    galaxy_file    = "./ansible/requirements.yml"
-    galaxy_command = "ansible-galaxy collection install -r"
+    playbook_dir  = "./ansible"
+    playbook_file = "./ansible/ami-9-aarch64.yaml"
+    galaxy_file   = "./ansible/requirements.yml"
     only = [
       "amazon-ebssurrogate.almalinux-9-ami-aarch64"
     ]
