@@ -67,6 +67,9 @@
     - /var/log/qemu-ga
     - /var/log/tuned
     - /var/lib/cloud
+    - /etc/hostname
+    - /etc/machine-info
+    - /var/lib/systemd/credential.secret
 
 - name: Find log files.
   find:

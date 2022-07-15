@@ -17,12 +17,11 @@ yum_repos:
     # any repository configuration options (see man yum.conf)
 
 packages:
-  - epel-release
+  - ansible-core
   - packer
   - tmux
   - git-core
 
 runcmd:
-  - [ dnf, -y, install, ansible ]
   - [ ln, -s, "/usr/bin/packer", "/usr/bin/packer.io" ]
   - [ sudo, -u, ec2-user, git, clone, "https://github.com/AlmaLinux/cloud-images.git", "/home/ec2-user/cloud-images" ]

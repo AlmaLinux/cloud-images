@@ -42,6 +42,7 @@ build {
     "sources.amazon-chroot.almalinux-8-aws-stage2"
   ]
   provisioner "ansible" {
+    galaxy_file    = "./ansible/requirements.yml"
     inventory_file = "./ansible/aws-ami-stage2.inventory"
     playbook_file  = "./ansible/aws-ami-stage2.yml"
     extra_arguments = [
