@@ -1,0 +1,7 @@
+---
+dependencies:
+  - role: almalinux.ci.disable_firstboot
+  - role: "setup_cloud_init"
+    vars:
+      cloud_init_user: "opc"
+  - role: qemu_guest
