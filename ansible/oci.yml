@@ -1,0 +1,9 @@
+# An Ansible playbook that configures a Oracle Cloud Infrastructure image
+---
+- name: AlmaLinux Oracle Cloud Infrastructure
+  hosts: default
+  become: true
+
+  roles:
+    - oci_guest
+    - cleanup_vm
