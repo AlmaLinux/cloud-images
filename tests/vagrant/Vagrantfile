@@ -15,7 +15,13 @@ nodes = [
 
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "almalinux-8-test"
+  if ENV['OS_MAJOR_VER']
+    if ENV['OS_MAJOR_VER'] == '9'
+      config.vm.box = "almalinux-9-test"
+    else
+      config.vm.box = "almalinux-8-test"
+    end
+  end
   config.ssh.insert_key = false
 
 nodes.each do |node|
