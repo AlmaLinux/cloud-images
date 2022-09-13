@@ -16,20 +16,26 @@ This [Testinfra](https://testinfra.readthedocs.io/) test checks the facts below:
 
 ## How to run
 
+Set the major version (8 or 9) of the AlmaLinux OS to the `OS_MAJOR_VER` variable before running the vagrant:
+
 Linux:
 
 ```sh
-$ vagrant up
-$ vagrant ssh-config > .vagrant/ssh-config
-$ py.test -v --hosts=almalinux-test-1,almalinux-test-2 --ssh-config=.vagrant/ssh-config test_vagrant.py 
+export OS_MAJOR_VER=8
+vagrant box add --name almalinux-$OS_MAJOR_VER-test *.box
+vagrant up
+vagrant ssh-config > .vagrant/ssh-config
+py.test -v --hosts=almalinux-test-1,almalinux-test-2 --ssh-config=.vagrant/ssh-config test_vagrant.py
 ```
 Windows:
 
 ```powershell
 # If you don't want to enter username and password on each vagrant up:
-PS> $Env:SMB_USERNAME = 'USER'
-PS> $Env:SMB_PASSWORD = 'PASSWORD'
-PS> vagrant up
-PS> vagrant ssh-config | Out-File -Encoding ascii -FilePath .vagrant/ssh-config
-PS> py.test -v --hosts=almalinux-test-1,almalinux-test-2 --ssh-config=.vagrant/ssh-config test_vagrant.py 
+$Env:SMB_USERNAME = 'USER'
+$Env:SMB_PASSWORD = 'PASSWORD'
+$Env:OS_MAJOR_VER = '8'
+vagrant box add --name almalinux-$OS_MAJOR_VER-test *.box
+vagrant up
+vagrant ssh-config | Out-File -Encoding ascii -FilePath .vagrant/ssh-config
+py.test -v --hosts=almalinux-test-1,almalinux-test-2 --ssh-config=.vagrant/ssh-config test_vagrant.py
 ```

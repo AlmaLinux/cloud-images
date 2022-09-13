@@ -2,6 +2,8 @@
 # vi: set ft=ruby :
 
 
+OS_MAJOR_VER = ENV['OS_MAJOR_VER']
+
 nodes = [
   {
     vm_name: "almalinux-test-1",
@@ -15,7 +17,7 @@ nodes = [
 
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "almalinux-8-test"
+  config.vm.box = "almalinux-#{OS_MAJOR_VER}-test"
   config.ssh.insert_key = false
 
 nodes.each do |node|
