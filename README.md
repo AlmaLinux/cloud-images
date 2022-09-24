@@ -14,6 +14,8 @@ AlmaLinux OS images for various cloud platforms.
 | Azure Marketplace | `x86_64` | https://wiki.almalinux.org/cloud/Azure.html |
 | Docker Hub | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/containers/docker-images.html |
 | Generic Cloud (OpenStack) | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/cloud/Generic-cloud.html |
+| cPanel Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/cPanel-Generic-cloud.html |
+| Plesk Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/Plesk-Generic-cloud.html |
 | Google Cloud | `x86_64` | https://wiki.almalinux.org/cloud/Google.html |
 | LXC/LXD | `x86_64` `AArch64` `ppc64le` | https://images.linuxcontainers.org |
 | OpenNebula | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OpenNebula.html |
@@ -37,6 +39,7 @@ AlmaLinux OS images for various cloud platforms.
 * [x] LXC/LXD support (#8)
 * [x] OpenNebula `x86_64` and `aarch64` support
 * [x] Oracle Cloud Infrastructure `x86_64` and `aarch64` support
+* [x] cPanel and Plesk support
 
 
 ## Usage
