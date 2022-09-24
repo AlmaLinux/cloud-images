@@ -12,14 +12,14 @@ AlmaLinux OS images for various cloud platforms.
 | AWS Community AMI | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/AWS.html |
 | AWS Marketplace AMI | `x86_64` `AArch64` | https://aws.amazon.com/marketplace/seller-profile?id=529d1014-352c-4bed-8b63-6120e4bd3342 |
 | Azure Marketplace | `x86_64` | https://wiki.almalinux.org/cloud/Azure.html |
+| cPanel Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/cPanel-Generic-cloud.html |
 | Docker Hub | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/containers/docker-images.html |
 | Generic Cloud (OpenStack) | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/cloud/Generic-cloud.html |
-| cPanel Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/cPanel-Generic-cloud.html |
-| Plesk Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/Plesk-Generic-cloud.html |
 | Google Cloud | `x86_64` | https://wiki.almalinux.org/cloud/Google.html |
 | LXC/LXD | `x86_64` `AArch64` `ppc64le` | https://images.linuxcontainers.org |
 | OpenNebula | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OpenNebula.html |
 | Oracle Cloud Infrastructure | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OCI.html |
+| Plesk Generic Cloud (OpenStack) | `x86_64` | https://wiki.almalinux.org/cloud/Plesk-Generic-cloud.html |
 | Quay.io | `x86_64` `AArch64` `ppc64le` `s390x` | https://quay.io/repository/almalinux/almalinux |
 | Vagrant | `virtualbox`(`x86_64`), `libvirt`(`x86_64`), `vmware_desktop`(`x86_64`), `hyperv`(`x86_64`), `parallels`(`x86_64, AArch64`) | https://app.vagrantup.com/almalinux |
 
