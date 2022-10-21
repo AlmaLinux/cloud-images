@@ -56,6 +56,14 @@ variables {
   //
   // NOTE: 30 Gb disk size is recommended by Microsoft for official Azure images
   azure_disk_size = 30720
+  azure_boot_command_8_x86_64 = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-6-x86_64-dvd ro ",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.azure-x86_64.ks<enter>",
+    "initrdefi /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
+  ]
   azure_boot_command_9_x86_64 = [
     "c<wait>",
     "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
