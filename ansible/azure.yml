@@ -1,0 +1,9 @@
+# An Ansible playbook that configures an AlmaLinux OS Azure image
+---
+- name: AlmaLinux Azure
+  hosts: default
+  become: true
+
+  roles:
+    - azure_guest
+    - cleanup_vm

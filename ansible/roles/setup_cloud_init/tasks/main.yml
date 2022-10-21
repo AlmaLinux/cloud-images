@@ -1,10 +1,3 @@
----
-- name: Checking that required variable is defined
-  fail: msg="{{ item }} is not defined or empty"
-  when: (item is undefined) or (item is none) or (item | trim | length == 0)
-  with_items:
-    - cloud_init_user
-
 - name: Install cloud-init
   dnf:
     name:
@@ -27,3 +20,8 @@
     dest: /etc/cloud/cloud.cfg
     regexp: '^(\s+name:).*$'
     replace: "\\1 {{ cloud_init_user }}"
+  when: cloud_init_user | length > 0
+
+
+- include_tasks: azure.yml
+  when: cloud_platform == 'azure'
