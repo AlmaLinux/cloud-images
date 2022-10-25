@@ -24,6 +24,8 @@
       - nfs-utils
       - rsync
       - tar
+      - tuned
+      - tcpdump
 
 - name: Find persistent-net.rules
   find:
@@ -67,25 +69,47 @@
     regexp: '^#?NAutoVTs=\d+'
     replace: 'NAutoVTs=0'
 
-- name: Configure dhclient
-  lineinfile:
-    path: /etc/dhcp/dhclient.conf
-    line: "{{ item }}"
-  with_items:
-    - 'timeout 300;'
-    - 'retry 60;'
+- name: Configure NetworkManager default DHCP timeout
+  community.general.ini_file:
+    path: /etc/NetworkManager/conf.d/dhcp.conf
+    section: connection
+    option: ipv4.dhcp-timeout
+    value: 300
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
+
 
 - name: Set infra yum variable to 'genclo'
   replace:
     path: /etc/yum/vars/infra
     regexp: '^(.*?)$'
     replace: 'genclo'
+  when: ansible_facts['distribution_major_version'] == '8'
 
 - name: Set default kernel package type to kernel
   replace:
     path: /etc/sysconfig/kernel
     regexp: '^(DEFAULTKERNEL=).*$'
     replace: '\1kernel'
+
+# TODO: Delete it after this patch backported or upstream cloud-init rebased on 22.2: https://github.com/canonical/cloud-init/pull/1355
+- name: Workaround for cloud-init locale bug
+  lineinfile:
+    path: /etc/cloud/cloud.cfg
+    line: 'locale: C.UTF-8'
+    state: present
+  when: ansible_facts['distribution_major_version'] == '9'
+
+- name: Set virtual-guest as default profile for tuned
+  lineinfile:
+    path: /etc/tuned/active_profile
+    line: virtual-guest
+    create: yes
+
+- name: Regenerate the initramfs
+  command: dracut -f --regenerate-all
 
 - name: Add almalinux user to /etc/sudoers
   lineinfile:
