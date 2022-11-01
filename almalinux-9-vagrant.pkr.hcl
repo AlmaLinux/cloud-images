@@ -64,6 +64,28 @@ source "virtualbox-iso" "almalinux-9" {
   ]
 }
 
+source "virtualbox-iso" "almalinux-9-aarch64" {
+  iso_url              = var.iso_url_9_aarch64
+  iso_checksum         = var.iso_checksum_9_aarch64
+  boot_command         = var.vagrant_boot_command_9_aarch64
+  boot_wait            = var.boot_wait
+  cpus                 = var.cpus
+  memory               = var.memory
+  disk_size            = var.vagrant_disk_size
+  headless             = var.headless
+  http_directory       = var.http_directory
+  guest_os_type        = "RedHat_64"
+  shutdown_command     = var.vagrant_shutdown_command
+  ssh_username         = var.vagrant_ssh_username
+  ssh_password         = var.vagrant_ssh_password
+  ssh_timeout          = var.ssh_timeout
+  hard_drive_interface = "sata"
+  vboxmanage_post = [
+    ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+  ]
+}
+
 
 source "vmware-iso" "almalinux-9" {
   iso_url          = var.iso_url_9_x86_64
@@ -128,6 +150,7 @@ build {
     "sources.hyperv-iso.almalinux-9",
     "sources.parallels-iso.almalinux-9",
     "sources.virtualbox-iso.almalinux-9",
+    "sources.virtualbox-iso.almalinux-9-aarch64",
     "sources.vmware-iso.almalinux-9",
     "sources.qemu.almalinux-9"
   ]
