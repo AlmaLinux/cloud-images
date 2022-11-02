@@ -137,7 +137,7 @@ variables {
     "<tab> inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant.ks<enter><wait>"
   ]
   vagrant_boot_command_9_aarch64 = [
-    "<tab> inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks<enter><wait>"
+    "e<down><down><end><bs><bs><bs><bs><bs>inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks<leftCtrlOn>x<leftCtrlOff>"
   ]
   vagrant_efi_boot_command_8_x86_64 = [
     "e<down><down><end><bs><bs><bs><bs><bs>inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks<leftCtrlOn>x<leftCtrlOff>"
@@ -172,4 +172,5 @@ variables {
   // Parallels variables
   //
   parallels_tools_flavor_x86_64 = "lin"
+  parallels_tools_flavor_aarch64 = "lin-arm"
 }
