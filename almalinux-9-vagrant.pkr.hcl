@@ -41,6 +41,23 @@ source "parallels-iso" "almalinux-9" {
   ssh_username           = var.vagrant_ssh_username
 }
 
+source "parallels-iso" "almalinux-9-aarch64" {
+  boot_command           = var.vagrant_boot_command_9_aarch64
+  boot_wait              = var.boot_wait
+  cpus                   = var.cpus
+  disk_size              = var.vagrant_disk_size
+  guest_os_type          = "centos"
+  http_directory         = var.http_directory
+  iso_checksum           = var.iso_checksum_9_aarch64
+  iso_url                = var.iso_url_9_aarch64
+  memory                 = var.memory
+  parallels_tools_flavor = var.parallels_tools_flavor_aarch64
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
+  ssh_username           = var.vagrant_ssh_username
+}
+
 
 source "virtualbox-iso" "almalinux-9" {
   iso_url              = var.iso_url_9_x86_64
@@ -149,6 +166,7 @@ build {
   sources = [
     "sources.hyperv-iso.almalinux-9",
     "sources.parallels-iso.almalinux-9",
+    "sources.parallels-iso.almalinux-9-aarch64",
     "sources.virtualbox-iso.almalinux-9",
     "sources.virtualbox-iso.almalinux-9-aarch64",
     "sources.vmware-iso.almalinux-9",
