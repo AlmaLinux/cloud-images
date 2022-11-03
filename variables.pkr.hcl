@@ -56,7 +56,8 @@ variables {
   do_spaces_secret      = env("DIGITALOCEAN_SPACES_SECRET_KEY")
   do_spaces_region      = "nyc3"
   do_space_name         = env("DIGITALOCEAN_SPACE_NAME")
-  do_image_name         = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} x86_64"
+  do_image_name_8       = "AlmaLinux OS 8.6.{{isotime \"20060102\"}} x86_64"
+  do_image_name_9       = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} x86_64"
   do_image_regions      = ["nyc3"]
   do_image_description  = "Official AlmaLinux OS Image"
   do_image_distribution = "AlmaLinux OS"
