@@ -26,6 +26,9 @@ variables {
   qemu_binary            = ""
   firmware_x86_64        = "/usr/share/OVMF/OVMF_CODE.fd"
   firmware_aarch64       = "/usr/share/AAVMF/AAVMF_CODE.fd"
+  vnc_bind_address       = "127.0.0.1"
+  vnc_port_min           = 5900
+  vnc_port_max           = 6000
   //
   // AWS specific variables
   //
@@ -48,6 +51,27 @@ variables {
   aws_ami_description_aarch64_9 = "Official AlmaLinux OS 9.0 aarch64 image"
   aws_ami_version_9             = "9.0.{{isotime \"20060102\"}}"
   aws_ami_architecture          = "x86_64"
+  //
+  // Azure variables
+  //
+  // NOTE: 30 Gb disk size is recommended by Microsoft for official Azure images
+  azure_disk_size = 30720
+  azure_boot_command_8_x86_64 = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-8-6-x86_64-dvd ro ",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.azure-x86_64.ks<enter>",
+    "initrdefi /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
+  ]
+  azure_boot_command_9_x86_64 = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
+    "inst.text biosdevname=0 net.ifnames=0 ",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-x86_64.ks<enter>",
+    "initrdefi /images/pxeboot/initrd.img<enter>",
+    "boot<enter><wait>"
+  ]
   //
   // DigitalOcean variables
   //

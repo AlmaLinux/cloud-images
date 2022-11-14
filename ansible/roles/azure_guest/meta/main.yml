@@ -1,0 +1,5 @@
+---
+dependencies:
+  - role: setup_cloud_init
+    vars:
+      cloud_platform: 'azure'

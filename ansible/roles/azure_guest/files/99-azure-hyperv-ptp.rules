@@ -1,0 +1,3 @@
+# Mellanox VFs also produce a /dev/ptp device. To avoid the conflict,
+# we will rename the hyperv ptp interface "ptp_hyperv"
+SUBSYSTEM=="ptp", ATTR{clock_name}=="hyperv", SYMLINK += "ptp_hyperv"

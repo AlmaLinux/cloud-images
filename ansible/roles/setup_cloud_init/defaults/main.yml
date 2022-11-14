@@ -1,2 +1,3 @@
 ---
 cloud_init_user: ''
+cloud_platform: ''
