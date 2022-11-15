@@ -1,0 +1,162 @@
+---
+- name: Install Hyper-V support and common utils
+  dnf:
+    name:
+      - hyperv-daemons
+      - gdisk
+      - tar
+      - yum-utils
+    state: present
+
+- name: Blacklist unnecessary kernel modules
+  lineinfile:
+    path: /etc/modprobe.d/blacklist.conf
+    line: "{{ item }}"
+    create: true
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - blacklist nouveau
+    - options nouveau modeset=0
+    - blacklist lbm-nouveau
+    - blacklist floppy
+
+- name: Set infra yum variable to 'azure'
+  copy:
+    content: 'azure'
+    dest: /etc/yum/vars/infra
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Enable NetworkManager service
+  service:
+    name: NetworkManager
+    enabled: yes
+
+- name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
+  copy:
+    src: ifcfg-eth0
+    dest: /etc/sysconfig/network-scripts/ifcfg-eth0
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Configure dhclient
+  lineinfile:
+    path: /etc/dhcp/dhclient.conf
+    line: "{{ item }}"
+  with_items:
+    - 'timeout 300;'
+    - 'retry 60;'
+  when: ansible_facts['distribution_major_version'] == '8'
+
+- name: Configure NetworkManager default DHCP timeout
+  community.general.ini_file:
+    path: /etc/NetworkManager/conf.d/dhcp.conf
+    section: connection
+    option: ipv4.dhcp-timeout
+    value: 300
+    owner: root
+    group: root
+    mode: 0644
+    seuser: system_u
+
+- name: Install WALinuxAgent
+  dnf:
+    name: WALinuxAgent
+    state: present
+
+- name: Enable swap on resource disk
+  lineinfile:
+    path: /etc/waagent.conf
+    regexp: '^ResourceDisk\.EnableSwap='
+    line: 'ResourceDisk.EnableSwap=y'
+    state: present
+
+- name: Set resource disk swap size to 2048
+  lineinfile:
+    path: /etc/waagent.conf
+    regexp: '^ResourceDisk.SwapSizeMB='
+    line: 'ResourceDisk.SwapSizeMB=2048'
+    state: present
+
+- name: Enable waagent service
+  service:
+    name: waagent
+    enabled: true
+
+- name: Set sshd ClientAliveInterval to 180
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#ClientAliveInterval'
+    line: 'ClientAliveInterval 180'
+    state: present
+
+- name: Disable root login via SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+
+- name: Switch http_caching to 'packages' in /etc/dnf/dnf.conf
+  lineinfile:
+    path: /etc/dnf/dnf.conf
+    regexp: '^http_caching='
+    line: 'http_caching=packages'
+    state: present
+
+- name: Generate udev rules for SRIOV interface
+  lineinfile:
+    path: /etc/udev/rules.d/68-azure-sriov-nm-unmanaged.rules
+    line: 'SUBSYSTEM=="net", DRIVERS=="hv_pci", ACTION=="add", ENV{NM_UNMANAGED}="1"'
+    create: true
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Generate udev rules for PTP clock source
+  copy:
+    src: 99-azure-hyperv-ptp.rules
+    dest: /etc/udev/rules.d/99-azure-hyperv-ptp.rules
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Configure chronyd PTP clock source
+  lineinfile:
+    path: /etc/chrony.conf
+    line: 'refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0'
+    state: present
+
+- name: Configure chronyd makestep parameter
+  lineinfile:
+    path: /etc/chrony.conf
+    regexp: '^makestep'
+    line: 'makestep 1.0 -1'
+    state: present
+
+- name: Disable remote NTP servers
+  replace:
+    dest: /etc/chrony.conf
+    regexp: '^(server\s+.*?)$'
+    replace: '#\1'
+
+- name: Disable remote NTP pools
+  replace:
+    dest: /etc/chrony.conf
+    regexp: '^(pool\s+.*?)$'
+    replace: '#\1'
+
+- name: Generate Azure dracut config
+  copy:
+    src: azure.dracut.conf
+    dest: /etc/dracut.conf.d/azure.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Update initramfs
+  command: dracut -f -v

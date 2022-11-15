@@ -1,0 +1,15 @@
+- name: Configure cloud-init Azure datasource
+  copy:
+    src: 91-azure_datasource.cfg
+    dest: /etc/cloud/cloud.cfg.d/91-azure_datasource.cfg
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Enable Hyper-V telemetry logging
+  copy:
+    src: 10-azure-kvp.cfg
+    dest: /etc/cloud/cloud.cfg.d/10-azure-kvp.cfg
+    owner: root
+    group: root
+    mode: 0644

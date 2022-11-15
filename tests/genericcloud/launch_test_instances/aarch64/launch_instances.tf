@@ -20,7 +20,7 @@ provider "openstack" {
 
 resource "openstack_compute_instance_v2" "gc_test-1" {
   name            = "GenericCloud Test 1"
-  image_name      = "AlmaLinux OS 8.6.${formatdate("YYYYMMDD", timestamp())}"
+  image_name      = "AlmaLinux OS 8.7.${formatdate("YYYYMMDD", timestamp())}"
   flavor_name     = "m1.small"
   security_groups = ["SSH"]
   key_pair        = "alcib"
@@ -34,7 +34,7 @@ resource "openstack_compute_instance_v2" "gc_test-1" {
 
 resource "openstack_compute_instance_v2" "gc_test-2" {
   name            = "GenericCloud Test 2"
-  image_name      = "AlmaLinux OS 8.6.${formatdate("YYYYMMDD", timestamp())}"
+  image_name      = "AlmaLinux OS 8.7.${formatdate("YYYYMMDD", timestamp())}"
   flavor_name     = "m1.small"
   security_groups = ["SSH"]
   key_pair        = "alcib"
