@@ -1,8 +1,8 @@
 /*
- * AlmaLinux OS 8 Packer template for building DigitalOcean images.
+ * AlmaLinux OS 8 Packer template for building an Azure image.
  */
 
-source "qemu" "almalinux-8-digitalocean-x86_64" {
+source "qemu" "almalinux-8-azure-x86_64" {
   iso_url            = var.iso_url_8_x86_64
   iso_checksum       = var.iso_checksum_8_x86_64
   shutdown_command   = var.root_shutdown_command
@@ -12,28 +12,35 @@ source "qemu" "almalinux-8-digitalocean-x86_64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
+  firmware           = var.firmware_x86_64
+  use_pflash         = true
   disk_interface     = "virtio-scsi"
-  disk_size          = var.gencloud_disk_size
+  disk_size          = var.azure_disk_size
   disk_cache         = "unsafe"
   disk_discard       = "unmap"
   disk_detect_zeroes = "unmap"
-  disk_compression   = true
-  format             = "qcow2"
+  format             = "raw"
   headless           = var.headless
+  machine_type       = "q35"
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-8-DigitalOcean-8.7.x86_64.qcow2"
+  vnc_bind_address   = var.vnc_bind_address
+  vnc_port_min       = var.vnc_port_min
+  vnc_port_max       = var.vnc_port_max
+  vm_name            = "AlmaLinux-8-Azure-8.6-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_8_x86_64
+  boot_command       = var.azure_boot_command_8_x86_64
+  qemuargs = [
+    ["-cpu", "host"]
+  ]
 }
 
-
 build {
-  sources = ["qemu.almalinux-8-digitalocean-x86_64"]
+  sources = ["qemu.almalinux-8-azure-x86_64"]
 
   provisioner "ansible" {
-    playbook_file    = "./ansible/digitalocean.yml"
+    playbook_file    = "./ansible/azure.yml"
     galaxy_file      = "./ansible/requirements.yml"
     roles_path       = "./ansible/roles"
     collections_path = "./ansible/collections"
@@ -42,24 +49,5 @@ build {
       "ANSIBLE_REMOTE_TEMP=/tmp",
       "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
-  }
-
-  provisioner "shell" {
-    scripts = [
-      "vm-scripts/digitalocean/99-img-check.sh"
-    ]
-  }
-
-  post-processor "digitalocean-import" {
-    api_token          = var.do_api_token
-    spaces_key         = var.do_spaces_key
-    spaces_secret      = var.do_spaces_secret
-    spaces_region      = var.do_spaces_region
-    space_name         = var.do_space_name
-    image_name         = var.do_image_name_8
-    image_regions      = var.do_image_regions
-    image_description  = var.do_image_description
-    image_distribution = var.do_image_distribution
-    image_tags         = var.do_image_tags
   }
 }

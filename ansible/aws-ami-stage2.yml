@@ -107,6 +107,22 @@
       loop: "{{ log_files.files }}"
 
 
+    - name: Find sudoers files created by AWS VM Import/Export
+      find:
+        file_type: file
+        paths:
+          - /etc/sudoers.d/
+        patterns: '*'
+      register: sudoers_files
+
+
+    - name: Remove found sudoers files
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ sudoers_files.files }}"
+
+
     - name: Truncate files
       command: "truncate -s 0 {{ item }}"
       loop:

@@ -19,7 +19,7 @@ resource "opennebula_image" "opennebula-amd64" {
   description  = "This image will be tested as a part of AlmalInux Cloud Image Builder"
   datastore_id = var.datastore_id
   persistent   = false
-  path         = "AlmaLinux-8-OpenNebula-8.6-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  path         = "AlmaLinux-8-OpenNebula-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   type         = "OS"
   dev_prefix   = "vd"
   format       = "qcow2"

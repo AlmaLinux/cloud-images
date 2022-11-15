@@ -128,3 +128,12 @@
 
 - name: Clear shell history
   shell: history -c
+
+- name: Check if WALinuxAgent is installed
+  stat:
+    path: /usr/sbin/waagent
+  register: cleanup_vm_waagent
+
+- name: Deprovision WALinuxAgent
+  command: waagent -deprovision+user -force
+  when: cleanup_vm_waagent.stat.exists
