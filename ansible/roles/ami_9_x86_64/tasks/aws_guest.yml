@@ -183,13 +183,6 @@
     regexp: '^(\s+name:).*$'
     replace: '\1 ec2-user'
 
-# TODO: Delete it after this patch backported or upstream cloud-init rebased on 22.2: https://github.com/canonical/cloud-init/pull/1355
-- name: Workaround for cloud-init locale bug
-  lineinfile:
-    path: /rootfs/etc/cloud/cloud.cfg
-    line: 'locale: C.UTF-8'
-    state: present
-
 - name: Set virtual-guest as default profile for tuned
   lineinfile:
     path: /rootfs/etc/tuned/active_profile
