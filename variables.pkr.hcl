@@ -8,12 +8,12 @@ variables {
   iso_checksum_8_aarch64 = "file:https://repo.almalinux.org/almalinux/8.7/isos/aarch64/CHECKSUM"
   iso_url_8_ppc64le      = "https://repo.almalinux.org/almalinux/8.7/isos/ppc64le/AlmaLinux-8.7-ppc64le-boot.iso"
   iso_checksum_8_ppc64le = "file:https://repo.almalinux.org/almalinux/8.7/isos/ppc64le/CHECKSUM"
-  iso_url_9_x86_64       = "https://repo.almalinux.org/almalinux/9.0/isos/x86_64/AlmaLinux-9.0-x86_64-boot.iso"
-  iso_checksum_9_x86_64  = "file:https://repo.almalinux.org/almalinux/9.0/isos/x86_64/CHECKSUM"
-  iso_url_9_aarch64      = "https://repo.almalinux.org/almalinux/9.0/isos/aarch64/AlmaLinux-9.0-aarch64-boot.iso"
-  iso_checksum_9_aarch64 = "file:https://repo.almalinux.org/almalinux/9.0/isos/aarch64/CHECKSUM"
-  iso_url_9_ppc64le      = "https://repo.almalinux.org/almalinux/9.0/isos/ppc64le/AlmaLinux-9.0-ppc64le-boot.iso"
-  iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/9.0/isos/ppc64le/CHECKSUM"
+  iso_url_9_x86_64       = "https://repo.almalinux.org/almalinux/9.1/isos/x86_64/AlmaLinux-9.1-x86_64-boot.iso"
+  iso_checksum_9_x86_64  = "file:https://repo.almalinux.org/almalinux/9.1/isos/x86_64/CHECKSUM"
+  iso_url_9_aarch64      = "https://repo.almalinux.org/almalinux/9.1/isos/aarch64/AlmaLinux-9.1-aarch64-boot.iso"
+  iso_checksum_9_aarch64 = "file:https://repo.almalinux.org/almalinux/9.1/isos/aarch64/CHECKSUM"
+  iso_url_9_ppc64le      = "https://repo.almalinux.org/almalinux/9.1/isos/ppc64le/AlmaLinux-9.1-ppc64le-boot.iso"
+  iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/9.1/isos/ppc64le/CHECKSUM"
   headless               = true
   boot_wait              = "10s"
   cpus                   = 2
@@ -45,11 +45,11 @@ variables {
   aws_ami_description_x86_64_8  = "Official AlmaLinux OS 8.7 x86_64 image"
   aws_ami_description_aarch64_8 = "Official AlmaLinux OS 8.7 aarch64 image"
   aws_ami_version_8             = "8.7.{{isotime \"20060102\"}}"
-  aws_ami_name_x86_64_9         = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} x86_64"
-  aws_ami_name_aarch64_9        = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} aarch64"
-  aws_ami_description_x86_64_9  = "Official AlmaLinux OS 9.0 x86_64 image"
-  aws_ami_description_aarch64_9 = "Official AlmaLinux OS 9.0 aarch64 image"
-  aws_ami_version_9             = "9.0.{{isotime \"20060102\"}}"
+  aws_ami_name_x86_64_9         = "AlmaLinux OS 9.1.{{isotime \"20060102\"}} x86_64"
+  aws_ami_name_aarch64_9        = "AlmaLinux OS 9.1.{{isotime \"20060102\"}} aarch64"
+  aws_ami_description_x86_64_9  = "Official AlmaLinux OS 9.1 x86_64 image"
+  aws_ami_description_aarch64_9 = "Official AlmaLinux OS 9.1 aarch64 image"
+  aws_ami_version_9             = "9.1.{{isotime \"20060102\"}}"
   aws_ami_architecture          = "x86_64"
   //
   // Azure variables
@@ -66,7 +66,7 @@ variables {
   ]
   azure_boot_command_9_x86_64 = [
     "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-1-x86_64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-x86_64.ks<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
@@ -81,7 +81,7 @@ variables {
   do_spaces_region      = "nyc3"
   do_space_name         = env("DIGITALOCEAN_SPACE_NAME")
   do_image_name_8       = "AlmaLinux OS 8.7.{{isotime \"20060102\"}} x86_64"
-  do_image_name_9       = "AlmaLinux OS 9.0.{{isotime \"20060102\"}} x86_64"
+  do_image_name_9       = "AlmaLinux OS 9.1.{{isotime \"20060102\"}} x86_64"
   do_image_regions      = ["nyc3"]
   do_image_description  = "Official AlmaLinux OS Image"
   do_image_distribution = "AlmaLinux OS"
@@ -121,7 +121,7 @@ variables {
   ]
   gencloud_boot_command_9_x86_64 = [
     "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-1-x86_64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64.ks<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
@@ -129,7 +129,7 @@ variables {
   ]
   gencloud_boot_command_9_aarch64 = [
     "c<wait>",
-    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-aarch64-dvd ro ",
+    "linux /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-1-aarch64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks<enter>",
     "initrd /images/pxeboot/initrd.img<enter>",
@@ -137,7 +137,7 @@ variables {
   ]
   gencloud_boot_command_9_ppc64le = [
     "c<wait>",
-    "linux /ppc/ppc64/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-ppc64le-dvd ro ",
+    "linux /ppc/ppc64/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-1-ppc64le-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks<enter>",
     "initrd /ppc/ppc64/initrd.img<enter>",
@@ -166,7 +166,7 @@ variables {
   ]
   vagrant_efi_boot_command_9_x86_64 = [
     "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-0-x86_64-dvd ro ",
+    "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=AlmaLinux-9-1-x86_64-dvd ro ",
     "inst.text biosdevname=0 net.ifnames=0 ",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant.ks<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",

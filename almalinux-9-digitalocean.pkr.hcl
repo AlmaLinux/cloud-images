@@ -24,7 +24,7 @@ source "qemu" "almalinux-9-digitalocean-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-9-DigitalOcean-9.0.x86_64.qcow2"
+  vm_name            = "almalinux-9-DigitalOcean-9.1.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64_bios
   qemuargs = [

@@ -46,3 +46,8 @@
   loop:
     - { cmd: "set-default", unit: "multi-user.target" }
     - { cmd: "mask", unit: "tmp.mount" }
+
+- name: Set default locale to C.UTF-8
+  copy:
+    content: LANG=C.UTF-8
+    dest: /rootfs/etc/locale.conf

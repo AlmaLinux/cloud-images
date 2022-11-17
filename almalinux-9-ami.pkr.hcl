@@ -6,7 +6,7 @@ source "amazon-ebssurrogate" "almalinux-9-ami-x86_64" {
   region                  = "us-east-1"
   ssh_username            = "ec2-user"
   instance_type           = "t3.small"
-  source_ami              = "ami-0d824d9c499f27c8a"
+  source_ami              = "ami-0daa4c3261da5b1c4"
   ami_name                = var.aws_ami_name_x86_64_9
   ami_description         = var.aws_ami_description_x86_64_9
   ami_architecture        = "x86_64"
@@ -41,7 +41,7 @@ source "amazon-ebssurrogate" "almalinux-9-ami-aarch64" {
   region                  = "us-east-1"
   ssh_username            = "ec2-user"
   instance_type           = "t4g.small"
-  source_ami              = "ami-007e46b7d6360c103"
+  source_ami              = "ami-09d6ea79e7129634e"
   ami_name                = var.aws_ami_name_aarch64_9
   ami_description         = var.aws_ami_description_aarch64_9
   ami_architecture        = "arm64"

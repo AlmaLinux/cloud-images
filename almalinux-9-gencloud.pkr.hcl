@@ -24,7 +24,7 @@ source "qemu" "almalinux-9-gencloud-bios-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-BIOS-9.0-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-BIOS-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64_bios
   qemuargs = [
@@ -56,7 +56,7 @@ source "qemu" "almalinux-9-gencloud-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.0-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64
   qemuargs = [
@@ -89,7 +89,7 @@ source "qemu" "almalinux-9-gencloud-aarch64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.0-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_aarch64
   qemuargs = [
@@ -120,7 +120,7 @@ source "qemu" "almalinux-9-gencloud-ppc64le" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.0-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
   boot_wait          = var.gencloud_boot_wait_ppc64le
   boot_command       = var.gencloud_boot_command_9_ppc64le
   qemuargs = [
