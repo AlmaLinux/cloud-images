@@ -6,7 +6,7 @@ source "amazon-ebssurrogate" "almalinux-8-aws-aarch64" {
   region                  = "us-east-1"
   ssh_username            = "ec2-user"
   instance_type           = "t4g.micro"
-  source_ami              = "ami-0543832c8973af485"
+  source_ami              = "ami-02c9a8bba92028114"
   ami_name                = var.aws_ami_name_aarch64_8
   ami_description         = var.aws_ami_description_aarch64_8
   ami_architecture        = "arm64"
