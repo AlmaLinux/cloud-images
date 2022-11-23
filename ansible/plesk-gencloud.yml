@@ -1,0 +1,10 @@
+# An Ansible playbook that configures a Plesk Generic Cloud (OpenStack) image
+---
+- name: AlmaLinux Plesk Generic Cloud
+  hosts: default
+  become: true
+  ansible.builtin.shell: yum update -y && csf -x && systemctl stop firewalld.service && systemctl disable firewalld.service && setenforce 0 && yum install perl curl wget -y && hostnamectl set-hostname plesk-build.almalinux.org && service NetworkManager start && chkconfig NetworkManager on && wget https://autoinstall.plesk.com/plesk-installer && sudo chmod +x plesk-installer && sudo ./plesk-installer
+
+  roles:
+    - gencloud_guest
+    - cleanup_vm

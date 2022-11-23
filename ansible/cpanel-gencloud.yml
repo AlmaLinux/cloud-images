@@ -1,0 +1,10 @@
+# An Ansible playbook that configures a cPanel Generic Cloud (OpenStack) image
+---
+- name: AlmaLinux cPanel Generic Cloud
+  hosts: default
+  become: true
+  ansible.builtin.shell: yum update -y && csf -x && systemctl stop firewalld.service && systemctl disable firewalld.service && setenforce 0 && yum install perl curl wget -y && hostnamectl set-hostname cpanel-build.almalinux.org && service NetworkManager start && chkconfig NetworkManager on && cd /home && curl -o latest -L https://securedownloads.cpanel.net/latest && sh latest
+
+  roles:
+    - gencloud_guest
+    - cleanup_vm
