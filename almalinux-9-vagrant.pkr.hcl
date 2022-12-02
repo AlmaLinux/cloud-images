@@ -230,7 +230,7 @@ build {
       output            = "almalinux-9-x86_64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
       except = [
         "qemu.almalinux-9",
-        "parallels.almalinux-9-aarch64"
+        "parallels-iso.almalinux-9-aarch64"
       ]
     }
 
@@ -238,7 +238,7 @@ build {
       compression_level = "9"
       output            = "almalinux-9-aarch64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
       only = [
-        "parallels.almalinux-9-aarch64"
+        "parallels-iso.almalinux-9-aarch64"
       ]
     }
 
