@@ -24,8 +24,9 @@ variables {
   ssh_timeout            = "3600s"
   root_shutdown_command  = "/sbin/shutdown -hP now"
   qemu_binary            = ""
-  firmware_x86_64        = "/usr/share/OVMF/OVMF_CODE.fd"
-  firmware_aarch64       = "/usr/share/AAVMF/AAVMF_CODE.fd"
+  ovmf_code              = "/usr/share/OVMF/OVMF_CODE.secboot.fd"
+  ovmf_vars              = "/usr/share/OVMF/OVMF_VARS.secboot.fd"
+  aavmf_code             = "/usr/share/AAVMF/AAVMF_CODE.fd"
   vnc_bind_address       = "127.0.0.1"
   vnc_port_min           = 5900
   vnc_port_max           = 6000
