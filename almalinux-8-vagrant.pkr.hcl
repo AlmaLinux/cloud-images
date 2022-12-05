@@ -5,7 +5,7 @@
 source "hyperv-iso" "almalinux-8" {
   iso_url               = var.iso_url_8_x86_64
   iso_checksum          = var.iso_checksum_8_x86_64
-  boot_command          = var.vagrant_efi_boot_command_8_x86_64
+  boot_command          = var.vagrant_boot_command_8_x86_64_uefi
   boot_wait             = var.boot_wait
   generation            = 2
   switch_name           = var.hyperv_switch_name
@@ -119,13 +119,44 @@ source "qemu" "almalinux-8" {
 }
 
 
+source "qemu" "almalinux-8-uefi" {
+  iso_checksum       = var.iso_checksum_8_x86_64
+  iso_url            = var.iso_url_8_x86_64
+  shutdown_command   = var.vagrant_shutdown_command
+  accelerator        = "kvm"
+  http_directory     = var.http_directory
+  ssh_username       = var.vagrant_ssh_username
+  ssh_password       = var.vagrant_ssh_password
+  ssh_timeout        = var.ssh_timeout
+  cpus               = var.cpus
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.vagrant_disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  disk_compression   = true
+  format             = "qcow2"
+  headless           = var.headless
+  machine_type       = "q35"
+  memory             = var.memory
+  net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
+  vm_name            = "almalinux-8"
+  boot_wait          = var.boot_wait
+  boot_command       = var.vagrant_boot_command_8_x86_64_uefi
+}
+
+
 build {
   sources = [
     "sources.hyperv-iso.almalinux-8",
     "sources.parallels-iso.almalinux-8",
     "sources.virtualbox-iso.almalinux-8",
     "sources.vmware-iso.almalinux-8",
-    "sources.qemu.almalinux-8"
+    "sources.qemu.almalinux-8",
+    "sources.qemu.almalinux-8-uefi"
   ]
 
   provisioner "ansible" {
@@ -184,7 +215,8 @@ build {
       compression_level = "9"
       output            = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
       except = [
-        "qemu.almalinux-8"
+        "qemu.almalinux-8",
+        "qemu.almalinux-8-uefi"
       ]
     }
 
@@ -194,6 +226,15 @@ build {
       output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8"
+      ]
+    }
+
+    post-processor "vagrant" {
+      compression_level    = "9"
+      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt-uefi.tpl"
+      output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      only = [
+        "qemu.almalinux-8-uefi"
       ]
     }
   }

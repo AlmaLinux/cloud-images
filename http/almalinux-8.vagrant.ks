@@ -7,6 +7,7 @@ repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/8/AppStream
 
 text
 skipx
+eula --agreed
 firstboot --disabled
 
 lang en_US.UTF-8
@@ -21,7 +22,7 @@ selinux --enforcing
 bootloader --location=mbr
 zerombr
 clearpart --all --initlabel
-autopart --type=plain --nohome --noboot
+autopart --type=plain --nohome --noboot --noswap
 
 rootpw vagrant
 user --name=vagrant --plaintext --password vagrant
