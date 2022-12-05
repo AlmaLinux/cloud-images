@@ -5,203 +5,125 @@ AlmaLinux OS Cloud Images is a project that contains
 AlmaLinux OS images for various cloud platforms.
 
 
-## Download official images
+## Available Official Images
 
 | Name | Architecture | Download URL |
 | :---: | :---: | :---: |
+| Generic Cloud (OpenStack) | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/cloud/Generic-cloud.html |
+| Azure Community Gallery | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/Azure.html |
+| Azure Marketplace | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/Azure.html |
 | AWS Community AMI | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/AWS.html |
 | AWS Marketplace AMI | `x86_64` `AArch64` | https://aws.amazon.com/marketplace/seller-profile?id=529d1014-352c-4bed-8b63-6120e4bd3342 |
-| Azure Marketplace | `x86_64` | https://wiki.almalinux.org/cloud/Azure.html |
 | Docker Hub | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/containers/docker-images.html |
-| Generic Cloud (OpenStack) | `x86_64` `AArch64` `ppc64le` `s390x` | https://wiki.almalinux.org/cloud/Generic-cloud.html |
-| Google Cloud | `x86_64` | https://wiki.almalinux.org/cloud/Google.html |
+| Quay.io | `x86_64` `AArch64` `ppc64le` `s390x` | https://quay.io/organization/almalinuxorg |
 | LXC/LXD | `x86_64` `AArch64` `ppc64le` | https://images.linuxcontainers.org |
-| OpenNebula | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OpenNebula.html |
+| Google Cloud | `x86_64` | https://wiki.almalinux.org/cloud/Google.html |
 | Oracle Cloud Infrastructure | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OCI.html |
-| Quay.io | `x86_64` `AArch64` `ppc64le` `s390x` | https://quay.io/repository/almalinux/almalinux |
-| Vagrant | `virtualbox`(`x86_64`), `libvirt`(`x86_64`), `vmware_desktop`(`x86_64`), `hyperv`(`x86_64`), `parallels`(`x86_64, AArch64`) | https://app.vagrantup.com/almalinux |
-
-## Roadmap
-
-* [ ] Add aarch64 architecture support
-* [x] Vagrant + VirtualBox support
-* [x] Vagrant + VMWare support
-* [x] Vagrant + Parallels support (#3)
-* [x] Vagrant + Microsoft Hyper-V support (#4)
-* [x] Vagrant + Libvirt support
-* [x] AWS AMI `x86_64` and `aarch64` support
-* [x] Google Cloud support
-* [x] Microsoft Azure support (#14)
-* [x] DigitalOcean support
-* [x] Generic Cloud / OpenStack `x86_64`, `x86_64 UEFI`, `aarch64`, `ppc64le` and `s390x` support
-* [x] LXC/LXD support (#8)
-* [x] OpenNebula `x86_64` and `aarch64` support
-* [x] Oracle Cloud Infrastructure `x86_64` and `aarch64` support
+| OpenNebula | `x86_64` `AArch64` | https://wiki.almalinux.org/cloud/OpenNebula.html |
+| Vagrant | `virtualbox`(`x86_64`), `libvirt`(`x86_64`, `x86_64 UEFI`), `vmware_desktop`(`x86_64`), `hyperv`(`x86_64`), `parallels`(`x86_64, AArch64`) | https://app.vagrantup.com/almalinux |
 
 
 ## Usage
 
-Initialize Packer plugins:
+Install or Update installed Packer plugins:
 
 ```sh
-packer init .
+packer init -upgrade .
 ```
 
-### Build a Generic Cloud (OpenStack compatible) image
 
-`x86_64` BIOS:
+### Generic Cloud (OpenStack compatible) images
+
+
+#### AlmaLinux OS 8
+
+`x86_64` BIOS only (Default):
 
 ```sh
 packer build -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
-```sh
-packer build -only=qemu.almalinux-9-gencloud-bios-x86_64 .
-```
+`x86_64` UEFI only:
 
-`x86_64` UEFI(AlmaLinux OS 8) and BIOS+UEFI(AlmaLinux OS 9):
-
-You need the `>=1.0.3` version of the [QEMU packer plugin](https://github.com/hashicorp/packer-plugin-qemu) and `edk2-ovmf`(RPM and ArchLinux)/`ovmf`(DEB) packages for the needed OVMF firmware files.
+See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
 ```sh
 packer build -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
 ```
 
+`AArch64`:
+
+```sh
+packer build -only=qemu.almalinux-8-gencloud-aarch64 .
+```
+
+`ppc64le`:
+
+```sh
+packer build -only=qemu.almalinux-8-gencloud-ppc64le .
+```
+
+
+#### AlmaLinux OS 9
+
+`x86_64` BIOS+UEFI (Default):
+
+See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
 ```sh
 packer build -only=qemu.almalinux-9-gencloud-x86_64 .
 ```
 
-**How to build UEFI images on EL8-9:**
-
-By default the `firmware_x86_64` packer variable set to use `/usr/share/OVMF/OVMF_CODE.fd`.
-The `OVMF_CODE.fd` is not present on the EL8 systems and the packer qemu plugin's VM doesn't boot with the `OVMF_CODE.secboot.fd`.
-Thanks to the Fedora edk2 package maintainer [kraxel](https://www.kraxel.org) for his [Qemu firmware repo](https://www.kraxel.org/repos/),
-You can use the latest build of the OVMF from the repo without overwriting the system's package manager provided firmware files.
-
-Add the repository:
+`x86_64` BIOS only:
 
 ```sh
-dnf config-manager --add-repo=https://www.kraxel.org/repos/firmware.repo
+packer build -only=qemu.almalinux-9-gencloud-bios-x86_64 .
 ```
 
-Recreate the DNF cache and install UEFI firmware for x64 qemu guests (OVMF):
-
-```sh
-dnf makecache && dnf -y install edk2.git-ovmf-x64
-```
-
-Set full path of `OVMF_CODE-pure-efi.fd` firmware file from the `edk2.git-ovmf-x64` package to `firmware_x86_64` Packer variable:
-
-```sh
-packer build -var qemu_binary="/usr/libexec/qemu-kvm" -var firmware_x86_64="/usr/share/edk2.git/ovmf-x64/OVMF_CODE-pure-efi.fd" -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
-```
-
-```sh
-packer build -var qemu_binary="/usr/libexec/qemu-kvm" -var firmware_x86_64="/usr/share/edk2.git/ovmf-x64/OVMF_CODE-pure-efi.fd" -only=qemu.almalinux-9-gencloud-x86_64 .
-```
-
-`aarch64`
-```sh
-packer build -only=qemu.almalinux-8-gencloud-aarch64 .
-```
+`AArch64`:
 
 ```sh
 packer build -only=qemu.almalinux-9-gencloud-aarch64 .
 ```
 
-`ppc64le`
-
-Load the KVM-HV kernel module
-
-```sh
-modprobe kvm_hv
-```
-
-Verify that the KVM kernel module is loaded
-
-```sh
-lsmod | grep kvm
-```
-If KVM loaded successfully, the output of this command includes `kvm_hv`.
-
-The external packer plugins don't have the `ppc64le` builds yet, So use internal packer plugins.
-
-```sh
-mv versions.pkr.hcl versions.pkr.hcl.ignore
-```
-
-```sh
-packer build -only=qemu.almalinux-8-gencloud-ppc64le .
-```
+`ppc64le`:
 
 ```sh
 packer build -only=qemu.almalinux-9-gencloud-ppc64le .
 ```
 
 
-### Build a Vagrant Box
+### Azure VM Images
 
+Both AlmaLinux OS 8 and 9 cloud images supports Generation 1 and Generation 2 VMs.
 
-Build a VirtualBox box:
-
-```sh
-packer build -only=virtualbox-iso.almalinux-8 .
-```
-
-```sh
-packer build -only=virtualbox-iso.almalinux-9 .
-```
-
-Build a VMWare box:
-
-```sh
-packer build -only=vmware-iso.almalinux-8 .
-```
-
-```sh
-packer build -only=vmware-iso.almalinux-9 .
-```
-
-Build a Parallels box:
-
-```sh
-packer build -only=parallels-iso.almalinux-8 .
-```
-
-```sh
-packer build -only=parallels-iso.almalinux-9 .
-```
-
-Build a Libvirt box:
-
-```sh
-packer build -only=qemu.almalinux-8 .
-```
-
-```sh
-packer build -only=qemu.almalinux-9 .
-```
-
-Build a Hyper-V box:
-
-```powershell
-packer build -only="hyperv-iso.almalinux-8" .
-```
-
-```powershell
-packer build -only="hyperv-iso.almalinux-9" .
-```
-With custom Virtual Switch:
-
-```sh
-packer build -var hyperv_switch_name="HyperV-vSwitch" -only="hyperv-iso.almalinux-8" .
-```
-
-### Build an Amazon Machine Images (AMI)
 
 #### AlmaLinux OS 8
 
-`x86_64`
+See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
+`x86_64` BIOS + UEFI:
+
+```bash
+packer build -only=qemu.almalinux-8-azure-x86_64 .
+```
+#### AlmaLinux OS 9
+
+`x86_64` BIOS + UEFI:
+
+See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
+```bash
+packer build -only=qemu.almalinux-9-azure-x86_64 .
+```
+
+
+### Amazon Machine Images (AMI)
+
+
+#### AlmaLinux OS 8
+
+`x86_64` BIOS only:
 
 Before building AMI's you need to configure AWS credentials as described in
 the Packer [documentation](https://www.packer.io/docs/builders/amazon#environment-variables).
@@ -224,7 +146,7 @@ following command to build an AMI and import it to EC2:
 
 The Build process has two stages:
 
-* Stage 1: Build the first stage's AMI on your system and import it to the AWS. 
+* Stage 1: Build the first stage's AMI on your system and import it to the AWS.
 
 * Stage 2: Build the second stage's AMI on the EC2 Instance.
 
@@ -274,7 +196,7 @@ Switch to the `root` user:
 sudo su
 ```
 
-Confugire the AWS credentials:
+Configure the AWS credentials:
 
 ```sh
 export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
@@ -282,9 +204,9 @@ export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
 export AWS_DEFAULT_REGION='us-east-1'
 ```
 
-Install required Packer plugins:
+Install or Update installed plugins:
 ```sh
-packer.io init .
+packer.io init -upgrade .
 ```
 
 Start the Build:
@@ -293,9 +215,9 @@ packer.io build -only=amazon-chroot.almalinux-8-aws-stage2 .
 ```
 You can remove the first stage's AMI after the build complete
 
-`aarch64`
+`AArch64`
 
-Confugire the AWS credentials:
+Configure the AWS credentials:
 
 ```sh
 export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
@@ -303,9 +225,9 @@ export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
 export AWS_DEFAULT_REGION='us-east-1'
 ```
 
-Install required Packer plugins:
+Install or Update installed plugins:
 ```sh
-packer init .
+packer init -upgrade .
 ```
 
 Start the Build:
@@ -324,13 +246,13 @@ Use one of these methods to set up your AWS credentials:
 
 See https://www.packer.io/plugins/builders/amazon#authentication for instructions.
 
-Install required Packer plugins:
+Install or Update installed plugins:
 ```sh
-packer init .
+packer init -upgrade .
 ```
 Start the Build:
 
-`x86_64`
+`x86_64` BIOS only:
 
 ```sh
 packer build -only=amazon-ebssurrogate.almalinux-9-ami-x86_64 .
@@ -342,59 +264,193 @@ packer build -only=amazon-ebssurrogate.almalinux-9-ami-x86_64 .
 packer build -only=amazon-ebssurrogate.almalinux-9-ami-aarch64 .
 ```
 
-### Build a OpenNebula image
 
-`x86_64`
+### Vagrant Boxes
+
+
+#### AlmaLinux OS 8
+
+Libvirt `x86_64` BIOS only:
+
+```sh
+packer build -only=qemu.almalinux-8 .
+```
+
+Libvirt `x86_64` UEFI only:
+
+See:
+
+* [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
+* [How to use UEFI supported Vagrant boxes](https://github.com/AlmaLinux/cloud-images#how-to-use-uefi-supported-vagrant-boxes)
+
+```sh
+packer build -only=qemu.almalinux-8-uefi .
+```
+
+VirtualBox `x86_64`:
+
+```sh
+packer build -only=virtualbox-iso.almalinux-8 .
+```
+
+VMware Desktop `x86_64`:
+
+```sh
+packer build -only=vmware-iso.almalinux-8 .
+```
+
+Parallels `x86_64`:
+
+```sh
+packer build -only=parallels-iso.almalinux-8 .
+```
+
+Hyper-V `x86_64`:
+
+```powershell
+packer build -only="hyperv-iso.almalinux-8" .
+```
+
+With custom Virtual Switch:
+
+```sh
+packer build -var hyperv_switch_name="HyperV-vSwitch" -only="hyperv-iso.almalinux-8" .
+```
+
+#### AlmaLinux OS 9
+
+
+Libvirt `x86_64` BIOS + UEFI:
+
+See:
+
+* [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
+* [How to use UEFI supported Vagrant boxes](https://github.com/AlmaLinux/cloud-images#how-to-use-uefi-supported-vagrant-boxes)
+
+
+```sh
+packer build -only=qemu.almalinux-9 .
+```
+
+VirtualBox `x86_64`:
+
+```sh
+packer build -only=virtualbox-iso.almalinux-9 .
+```
+
+ VMware Desktop `x86_64`:
+
+```sh
+packer build -only=vmware-iso.almalinux-9 .
+```
+
+Parallels `x86_64`:
+
+```sh
+packer build -only=parallels-iso.almalinux-9 .
+```
+
+Hyper-V `x86_64`:
+
+```powershell
+packer build -only="hyperv-iso.almalinux-9" .
+```
+
+With custom Virtual Switch:
+
+```sh
+packer build -var hyperv_switch_name="HyperV-vSwitch" -only="hyperv-iso.almalinux-9" .
+```
+
+### OpenNebula images
+
+
+#### AlmaLinux OS 8
+
+`x86_64` BIOS only:
+
 ```sh
 packer build -only=qemu.almalinux-8-opennebula-x86_64 .
 ```
 
-```sh
-packer build -only=qemu.almalinux-9-opennebula-x86_64 .
-packer build -var qemu_binary="/usr/libexec/qemu-kvm" -var firmware_x86_64="/usr/share/edk2.git/ovmf-x64/OVMF_CODE-pure-efi.fd" -only=qemu.almalinux-9-opennebula-x86_64
-```
+`AArch64`:
 
-`aarch64`
 ```sh
 packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 ```
+
+#### AlmaLinux OS 9
+
+
+`x86_64` BIOS + UEFI (Default)
+
+```sh
+packer build -only=qemu.almalinux-9-opennebula-x86_64 .
+```
+
+`x86_64` BIOS only:
+
+```sh
+packer builder -only=qemu.almalinux-9-opennebula-bios-x86_64 .
+```
+
+`AArch64`:
 
 ```sh
 packer build -only=qemu.almalinux-9-opennebula-aarch64 .
 ```
 
 
-### Build a Oracle Cloud Infrastructure Image
+### Oracle Cloud Infrastructure Images
+
+#### AlmaLinux OS 8
 
 Update the Oracle Cloud Agent RPM link if a newer version is available
 
 `ansible/roles/oci_guest/defaults/main.yml`
 
-`x86_64`
-```sh
-packer build -only=qemu.almalinux-8-oci-x86_64 .
-```
+`x86_64` UEFI only (Default):
+
 ```sh
 packer build -only=qemu.almalinux-8-oci-uefi-x86_64 .
 ```
+
+`x86_64` BIOS only:
+
+```sh
+packer build -only=qemu.almalinux-8-oci-x86_64 .
+```
+
+`AArch64`:
+
+```sh
+packer build -only=qemu.almalinux-8-oci-aarch64 .
+```
+
+#### AlmaLinux OS 9
+
+
+`x86_64` BIOS + UEFI (Default):
+```sh
+packer build -only=qemu.almalinux-9-oci-x86_64 .
+```
+
+`x86_64` BIOS only:
 
 ```sh
 packer build -only=qemu.almalinux-9-oci-bios-x86_64 .
 ```
 
-```sh
-packer build -only=qemu.almalinux-9-oci-x86_64 .
-```
-
-`aarch64`
-```sh
-packer build -only=qemu.almalinux-8-opennebula-aarch64 .
-```
+`AArch64`
 
 ```sh
 packer build -only=qemu.almalinux-9-opennebula-aarch64 .
 ```
-### Build a DigitalOcean image
+
+
+### DigitalOcean images
 
 You need to setup a key for packer to use. This is done by going to DigitalOcean's [cloud
 console](https://cloud.digitalocean.com/account/api/tokens).
@@ -402,14 +458,14 @@ console](https://cloud.digitalocean.com/account/api/tokens).
 Make it available through an environment variable:
 
 ```sh
-$ export DIGITALOCEAN_API_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
+export DIGITALOCEAN_API_TOKEN="ENTER_YOUR_ACCESS_TOKEN_HERE"
 ```
 
 A space needs to be created in order to import the image through it. Please, read the [relevant
 documentation](https://docs.digitalocean.com/products/spaces/how-to/create/). Take note of the access and secret keys in order to
 use them later on.
 
-There are a few environemnt variables you will need to make available.
+There are a few environment variables you will need to make available.
 
 * The spaces bucket name through `DIGITALOCEAN_SPACE_NAME`.
 * The bucket's access key through `DIGITALOCEAN_SPACES_ACCESS_KEY`.
@@ -418,21 +474,130 @@ There are a few environemnt variables you will need to make available.
 You can do this by exporting them as well:
 
 ```sh
-$ export DIGITALOCEAN_SPACE_NAME='YOUR_SPACES_BUCKET_NAME'
-$ export DIGITALOCEAN_SPACES_ACCESS_KEY='YOUR_BUCKET_ACCESS_KEY'
-$ export DIGITALOCEAN_SPACES_SECRET_KEY='YOUR_BUCKET_SECRET_KEY'
+export DIGITALOCEAN_SPACE_NAME='YOUR_SPACES_BUCKET_NAME'
+export DIGITALOCEAN_SPACES_ACCESS_KEY='YOUR_BUCKET_ACCESS_KEY'
+export DIGITALOCEAN_SPACES_SECRET_KEY='YOUR_BUCKET_SECRET_KEY'
 ```
 
 Now, you're all setup. You can try building the image with:
 
+
+#### AlmaLinux OS 8
+
+`x86_64` BIOS only:
+
 ```sh
-$ packer build -only qemu.almalinux-8-digitalocean-x86_64 .
+packer build -only qemu.almalinux-8-digitalocean-x86_64 .
 ```
-### Import the image to DigitalOcean
+
+#### AlmaLinux OS 9
+
+`x86_64` BIOS only:
+
+```sh
+packer build -only qemu.almalinux-9-digitalocean-x86_64 .
+```
+Import the image to DigitalOcean:
 
 You can upload your image or Import it via URL from the [GitHub release](https://github.com/AlmaLinux/cloud-images/releases) section.
 
 In [Images >> Custom Images](https://cloud.digitalocean.com/images/custom_images) section, click on `Import via URL` and enter the URL of image file :  https://github.com/AlmaLinux/cloud-images/releases/download/digitalocean-20210810/almalinux-8-DigitalOcean-8.4.20210810.x86_64.qcow2
+
+## HOW TOs
+
+#### How to build UEFI and Secure Boot supported Images
+
+You need a `1.0.7` or newer version of the [QEMU packer plugin](https://github.com/hashicorp/packer-plugin-qemu) and [OVMF](https://github.com/tianocore/tianocore.github.io/wiki/OVMF) to build UEFI images.
+
+The `ovmf_code` and `ovmf_vars` Packer variables are set to default OVMF Secure Boot paths for the EL and Fedora. Use the table below for the OVMF package name and the firmware paths for your distro.
+
+| Distro | Package |`ovmf_code` | `ovmf_code` |
+| :---:  | :---: | :---: | :--: |
+| Arch Linux | `edk2-ovmf` |`/usr/share/OVMF/OVMF_CODE.secboot.fd` | `/usr/share/OVMF/OVMF_VARS.fd` |
+| Debian and derivatives | `ovmf` | `/usr/share/OVMF/OVMF_CODE.secboot.fd` | `/usr/share/OVMF/OVMF_VARS.ms.fd` |
+| Gentoo | `edk2-ovmf` | `/usr/share/edk2-ovmf/OVMF_CODE.secboot.fd` | `/usr/share/edk2-ovmf/OVMF_VARS.secboot.fd` |
+| OpenSUSE | `qemu-ovmf-x86_64` | `/usr/share/qemu/ovmf-x86_64-smm-ms-code.bin` | `/usr/share/qemu/ovmf-x86_64-smm-ms-vars.bin` |
+
+If your distro is not present in the table above or you want to build in different combinations like without Secure Boot, with AMD SEV or Intel TDX, check QEMU firmware metadata files in `/usr/share/qemu/firmware` for the correct paths and combinations.
+
+EL:
+
+```sh
+packer build -var qemu_binary="/usr/libexec/qemu-kvm" -only=qemu.almalinux-9-gencloud-x86_64 .
+```
+
+Fedora:
+
+```sh
+packer build -only=qemu.almalinux-8-azure-x86_64 .
+```
+
+Debian and derivatives:
+
+```sh
+packer build -var ovmf_code="/usr/share/OVMF/OVMF_CODE.secboot.fd" -var ovmf_vars="/usr/share/OVMF/OVMF_VARS.ms.fd" -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
+```
+
+#### How to use UEFI supported Vagrant boxes
+
+**Libvirt**:
+
+AlmaLinux OS 8 - [almalinux/8.uefi](https://app.vagrantup.com/almalinux/boxes/8.uefi) UEFI only
+
+AlmaLinux OS 9 [almalinux/9](https://app.vagrantup.com/almalinux/boxes/9) BIOS + UEFI
+
+Copy the OVMF NVRAM file:
+
+```sh
+cp /usr/share/OVMF/OVMF_VARS.secboot.fd OVMF_VARS.secboot_almalinux-uefi.fd
+```
+
+Set these values:
+
+* `libvirt.loader` - Location of OVMF_CODE
+* `libvirt.nvram` - Copied OVMF_VARS file
+* `libvirt.machine_type = "q35"`
+
+Example Vagrantfile:
+
+```ruby
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+    config.vm.box = "almalinux/8.uefi"
+    config.vm.hostname = "almalinux8-uefi.test"
+
+    config.vm.provider "libvirt" do |libvirt|
+        libvirt.qemu_use_session = false
+        libvirt.memory = 2048
+        libvirt.loader = "/usr/share/OVMF/OVMF_CODE.secboot.fd"
+        libvirt.nvram = "OVMF_VARS.secboot_almalinux-uefi.fd"
+        libvirt.machine_type = "q35"
+    end
+end
+```
+
+#### How to build Generic Cloud images on ppc64le
+
+Load the KVM-HV kernel module
+
+```sh
+modprobe kvm_hv
+```
+
+Verify that the KVM kernel module is loaded
+
+```sh
+lsmod | grep kvm
+```
+If KVM loaded successfully, the output of this command includes `kvm_hv`.
+
+The external packer plugins don't have the `ppc64le` builds yet, So use internal packer plugins.
+
+```sh
+mv versions.pkr.hcl versions.pkr.hcl.ignore
+```
 
 ## Requirements
 
@@ -442,51 +607,36 @@ In [Images >> Custom Images](https://cloud.digitalocean.com/images/custom_images
 * [Parallels](https://www.parallels.com/) (for Parallels images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images and Amazon AMI's only)
 * [QEMU](https://www.qemu.org/) (for Generic Cloud, Vagrant Libvirt, AWS AMI, OpenNebula and DigitalOcean images only)
-* [EDK II](https://github.com/tianocore/tianocore.github.io/wiki/OVMF) (for only UEFI supported `x86_64` ones and all `aarch64` images)
+* [EDK II](https://github.com/tianocore/tianocore.github.io/wiki/OVMF) (for only UEFI supported `x86_64` ones and all `AArch64` images)
 
-
-## References
-
-* AWS
-  * [EC2 documentation: Guidelines for shared Linux AMIs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/building-shared-amis.html)
-  * [EC2 documentation: VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
-  * [Marketplace documentation: Submitting your product for publication](https://docs.aws.amazon.com/marketplace/latest/userguide/product-submission.html)
-* [RHEL® 8 documentation: Kickstart installation basics](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/performing_an_advanced_rhel_installation/kickstart-installation-basics_installing-rhel-as-an-experienced-user)
-* [CentOS kickstart files](https://git.centos.org/centos/kickstarts)
 
 ## FAQ:
 
 
-### 1. Issue:
-
-Nothing happens after invoking the packer command.
-
-**Solution:**
+### Nothing happens after invoking the packer command
 
 The [cracklib-dicts's](https://sourceforge.net/projects/cracklib/) `/usr/sbin/packer` takes precedence over Hashicorp's `/usr/bin/packer` in the `$PATH`.
 Use `packer.io` instead of the `packer`. See: https://learn.hashicorp.com/tutorials/packer/get-started-install-cli#troubleshooting
-
-example:
 
 ```sh
 ln -s /usr/bin/packer /usr/bin/packer.io
 ```
 
-### 2. Issue:
+### "qemu-system-x86_64": executable file not found in $PATH
+
+Output:
 
 `Failed creating Qemu driver: exec: "qemu-system-x86_64": executable file not found in $PATH`
 
-**Solution:** 
+By default, Packer looks for QEMU binary as `qemu-system-x86_64`. If it is different in your system, You can set your qemu binary with the `qemu_binary` Packer variable.
 
-By default, Packer looks for QEMU binary as `qemu-system-x86_64`. If it is different in your system, You can set your qemu binary with the `qemu_binary` variable. i.e. on EL, it's `qemu-kvm`. :
-
-example:
+on EL - `/usr/libexec/qemu-kvm`
 
 ```sh
 packer build -var qemu_binary="/usr/libexec/qemu-kvm" -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
-### 3. Issue:
+### Failed to connect to the host via scp
 
 The Ansible's `ansible.builtin.template` module gives error on EL9 and >= OpenSSH 9.0/9.0p1 (2022-04-08) Host OS.
 
@@ -495,8 +645,6 @@ Error output:
 ```sh
 fatal: [default]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via scp: bash: line 1: /usr/lib/sftp-server: No such file or directory\nConnection closed\r\n", "unreachable": true}
 ```
-
-**Solution:**
 
 EL9 and OpenSSH >=9.0 deprecated the SCP protocol. Use the new `-O` flag until Ansible starts to use SFTP directly.
 
@@ -524,17 +672,13 @@ Add `extra_arguments  = [ "--scp-extra-args", "'-O'" ]` to the Packer's Ansible 
   }
 ```
 
-### 4. Issue: 
-
-Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system:
+### Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system
 
 Error output:
 
 ```sh
 fatal: [default]: UNREACHABLE! => {"changed": false, "msg": "Data could not be sent to remote host \"127.0.0.1\". Make sure this host can be reached over ssh: ssh_dispatch_run_fatal: Connection to 127.0.0.1 port 43729: error in libcrypto\r\n", "unreachable": true}
 ```
-
-**Solution:** 
 
 Enable the `SHA1` on the system's default crypto policy until Packer's Ansible Plugin use a stronger key types and signature algorithms(`rsa-sha2-256`,` rsa-sha2-512`, `ecdsa-sha2-nistp256`, `ssh-ed25519`) than `ssh-rsa`.
 
@@ -543,13 +687,30 @@ Fedora and EL:
 ```sh
 update-crypto-policies --set DEFAULT:SHA1
 ```
-### 5. Issue:
+### How to build AlmaLinux OS cloud images on EL
 
-How to build AlmaLinux OS cloud images on EL9
+**EL8**:
 
-**Solution:** 
+See:
+* ["qemu-system-x86_64": executable file not found in $PATH](https://github.com/AlmaLinux/cloud-images#qemu-system-x86_64-executable-file-not-found-in-path)
 
-Please use the 3th and 4th solutions.
+**EL9**:
+
+See:
+* ["qemu-system-x86_64": executable file not found in $PATH](https://github.com/AlmaLinux/cloud-images#qemu-system-x86_64-executable-file-not-found-in-path)
+* [Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system](https://github.com/AlmaLinux/cloud-images#packers-ansible-plugin-cant-connect-via-ssh-on-sha1-disabled-system)
+
+
+## References
+
+* AWS
+  * [EC2 documentation: Guidelines for shared Linux AMIs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/building-shared-amis.html)
+  * [EC2 documentation: VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
+  * [Marketplace documentation: Submitting your product for publication](https://docs.aws.amazon.com/marketplace/latest/userguide/product-submission.html)
+* [RHEL® 8 documentation: Kickstart installation basics](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/performing_an_advanced_rhel_installation/kickstart-installation-basics_installing-rhel-as-an-experienced-user)
+* [CentOS kickstart files](https://git.centos.org/centos/kickstarts)
+* [CentOS Stream kickstart files](https://gitlab.com/redhat/centos-stream/release-engineering/kickstarts)
+
 
 ## License
 

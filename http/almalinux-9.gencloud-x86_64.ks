@@ -25,8 +25,8 @@ bootloader --timeout=1 --location=mbr --append="console=tty0 console=ttyS0,11520
 parted -s -a optimal /dev/sda -- mklabel gpt
 parted -s -a optimal /dev/sda -- mkpart biosboot 1MiB 2MiB set 1 bios_grub on
 parted -s -a optimal /dev/sda -- mkpart '"EFI System Partition"' fat32 2MiB 202MiB set 2 esp on
-parted -s -a optimal /dev/sda -- mkpart boot xfs 202MiB 702MiB
-parted -s -a optimal /dev/sda -- mkpart root xfs 702MiB 100%
+parted -s -a optimal /dev/sda -- mkpart boot xfs 202MiB 714MiB
+parted -s -a optimal /dev/sda -- mkpart root xfs 714MiB 100%
 
 %end
 

@@ -12,8 +12,8 @@ source "qemu" "almalinux-8-azure-x86_64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_x86_64
-  use_pflash         = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
   disk_interface     = "virtio-scsi"
   disk_size          = var.azure_disk_size
   disk_cache         = "unsafe"
@@ -28,7 +28,7 @@ source "qemu" "almalinux-8-azure-x86_64" {
   vnc_bind_address   = var.vnc_bind_address
   vnc_port_min       = var.vnc_port_min
   vnc_port_max       = var.vnc_port_max
-  vm_name            = "AlmaLinux-8-Azure-8.6-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
+  vm_name            = "AlmaLinux-8-Azure-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
   boot_wait          = var.boot_wait
   boot_command       = var.azure_boot_command_8_x86_64
   qemuargs = [

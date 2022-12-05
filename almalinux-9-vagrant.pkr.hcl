@@ -5,7 +5,7 @@
 source "hyperv-iso" "almalinux-9" {
   iso_url               = var.iso_url_9_x86_64
   iso_checksum          = var.iso_checksum_9_x86_64
-  boot_command          = var.vagrant_efi_boot_command_9_x86_64
+  boot_command          = var.vagrant_boot_command_9_x86_64_uefi
   boot_wait             = var.boot_wait
   generation            = 2
   switch_name           = var.hyperv_switch_name
@@ -141,6 +141,8 @@ source "qemu" "almalinux-9" {
   ssh_password       = var.vagrant_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
   disk_interface     = "virtio-scsi"
   disk_size          = var.vagrant_disk_size
   disk_cache         = "unsafe"
@@ -155,7 +157,7 @@ source "qemu" "almalinux-9" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-9"
   boot_wait          = var.boot_wait
-  boot_command       = var.vagrant_boot_command_9_x86_64
+  boot_command       = var.vagrant_boot_command_9_x86_64_uefi
   qemuargs = [
     ["-cpu", "host"]
   ]

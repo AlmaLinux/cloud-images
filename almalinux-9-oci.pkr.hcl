@@ -24,7 +24,7 @@ source "qemu" "almalinux-9-oci-bios-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-OCI-BIOS-9.0-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-OCI-BIOS-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64_bios
   qemuargs = [
@@ -43,8 +43,8 @@ source "qemu" "almalinux-9-oci-x86_64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_x86_64
-  use_pflash         = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -57,7 +57,7 @@ source "qemu" "almalinux-9-oci-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-OCI-9.0-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-OCI-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64
   qemuargs = [
@@ -76,7 +76,7 @@ source "qemu" "almalinux-9-oci-aarch64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_aarch64
+  firmware           = var.aavmf_code
   use_pflash         = false
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
@@ -90,7 +90,7 @@ source "qemu" "almalinux-9-oci-aarch64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-OCI-9.0-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
+  vm_name            = "AlmaLinux-9-OCI-9.1-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_aarch64
   qemuargs = [

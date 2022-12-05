@@ -39,7 +39,8 @@ source "qemu" "almalinux-8-oci-uefi-x86_64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_x86_64
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -48,6 +49,7 @@ source "qemu" "almalinux-8-oci-uefi-x86_64" {
   disk_compression   = true
   format             = "qcow2"
   headless           = var.headless
+  machine_type       = "q35"
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
@@ -67,7 +69,8 @@ source "qemu" "almalinux-8-oci-aarch64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_aarch64
+  firmware           = var.aavmf_code
+  use_pflash         = false
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"

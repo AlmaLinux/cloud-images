@@ -138,7 +138,7 @@
           - librepo
           - python3-librepo
         state: present
-      when: 
+      when:
         - ansible_facts['architecture'] == 'x86_64'
         - ansible_facts['distribution_major_version'] == '8'
 
@@ -161,13 +161,6 @@
   loop:
     - cockpit
     - dhcpv6-client
-
-# TODO: Delete it after this patch backported or cloud-init rebased on 22.2: https://github.com/canonical/cloud-init/pull/1355
-- name: Workaround for cloud-init locale bug
-  lineinfile:
-    path: /etc/cloud/cloud.cfg
-    line: 'locale: C.UTF-8'
-    state: present
 
 - name: Set virtual-guest as default profile for tuned
   lineinfile:
