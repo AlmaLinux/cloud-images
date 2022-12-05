@@ -43,8 +43,8 @@ source "qemu" "almalinux-9-oci-x86_64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_x86_64
-  use_pflash         = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -76,7 +76,7 @@ source "qemu" "almalinux-9-oci-aarch64" {
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
   cpus               = var.cpus
-  firmware           = var.firmware_aarch64
+  firmware           = var.aavmf_code
   use_pflash         = false
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
