@@ -174,7 +174,9 @@ build {
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type}"
+      "packer_provider=${source.type}",
+      "--scp-extra-args",
+      "'-O'"
     ]
     except = [
       "hyperv-iso.almalinux-8"

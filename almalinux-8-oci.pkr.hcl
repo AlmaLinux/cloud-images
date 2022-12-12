@@ -106,6 +106,7 @@ build {
     galaxy_file      = "./ansible/requirements.yml"
     roles_path       = "./ansible/roles"
     collections_path = "./ansible/collections"
+    extra_arguments  = [ "--scp-extra-args", "'-O'" ]
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
