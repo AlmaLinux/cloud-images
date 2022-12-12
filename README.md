@@ -104,7 +104,7 @@ See: [How to build UEFI and Secure Boot supported Images](https://github.com/Alm
 
 `x86_64` BIOS + UEFI:
 
-```bash
+```sh
 packer build -only=qemu.almalinux-8-azure-x86_64 .
 ```
 #### AlmaLinux OS 9
@@ -113,7 +113,7 @@ packer build -only=qemu.almalinux-8-azure-x86_64 .
 
 See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
-```bash
+```sh
 packer build -only=qemu.almalinux-9-azure-x86_64 .
 ```
 
@@ -446,7 +446,7 @@ packer build -only=qemu.almalinux-9-oci-bios-x86_64 .
 `AArch64`
 
 ```sh
-packer build -only=qemu.almalinux-9-opennebula-aarch64 .
+packer build -only=qemu.almalinux-9-oci-aarch64 .
 ```
 
 
@@ -537,6 +537,16 @@ Debian and derivatives:
 ```sh
 packer build -var ovmf_code="/usr/share/OVMF/OVMF_CODE.secboot.fd" -var ovmf_vars="/usr/share/OVMF/OVMF_VARS.ms.fd" -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
 ```
+
+or set the `ovmf_code` and  `ovmf_vars` Packer variables in `.auto.pkrvars.hcl` file:
+
+`uefi.auto.pkrvars.hcl` in OpenSUSE:
+
+```hcl
+ovmf_code = "/usr/share/qemu/ovmf-x86_64-smm-ms-code.bin"
+ovmf_vars = "/usr/share/qemu/ovmf-x86_64-smm-ms-vars.bin"
+```
+
 
 #### How to use UEFI supported Vagrant boxes
 
@@ -636,7 +646,17 @@ on EL - `/usr/libexec/qemu-kvm`
 packer build -var qemu_binary="/usr/libexec/qemu-kvm" -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
-### Failed to connect to the host via scp
+or set the `qemu_binary` Packer variable in `.auto.pkrvars.hcl` file:
+
+`qemu_on_el.auto.pkrvars.hcl`
+
+```hcl
+qemu_binary = "/usr/libexec/qemu-kvm"
+```
+
+### Failed to connect to the host via scp with OpenSSH >= 9.0/9.0p1 and EL9
+
+OpenSSH `>= 9.0/9.0p1` and EL9 support was added in [scp_90](https://github.com/AlmaLinux/cloud-images/tree/scp_90) branch instead of the `main` for backward compatibility. Please switch to this branch with `git checkout scp_90`
 
 The Ansible's `ansible.builtin.template` module gives error on EL9 and >= OpenSSH 9.0/9.0p1 (2022-04-08) Host OS.
 
@@ -687,6 +707,7 @@ Fedora and EL:
 ```sh
 update-crypto-policies --set DEFAULT:SHA1
 ```
+
 ### How to build AlmaLinux OS cloud images on EL
 
 **EL8**:
@@ -699,7 +720,7 @@ See:
 See:
 * ["qemu-system-x86_64": executable file not found in $PATH](https://github.com/AlmaLinux/cloud-images#qemu-system-x86_64-executable-file-not-found-in-path)
 * [Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system](https://github.com/AlmaLinux/cloud-images#packers-ansible-plugin-cant-connect-via-ssh-on-sha1-disabled-system)
-
+* [Failed to connect to the host via scp with OpenSSH >= 9.0/9.0p1 and EL9](https://github.com/AlmaLinux/cloud-images#failed-to-connect-to-the-host-via-scp-with-openssh--9090p1-and-el9)
 
 ## References
 
