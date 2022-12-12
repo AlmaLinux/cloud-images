@@ -188,7 +188,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "almalinux-9-x86_64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
+      output            = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
         "qemu.almalinux-9"
       ]
@@ -197,7 +197,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
-      output               = "almalinux-9-x86_64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
+      output               = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-9"
       ]

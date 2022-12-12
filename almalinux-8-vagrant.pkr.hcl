@@ -213,7 +213,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      output            = "AlmaLinux-8-Vagrant-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
         "qemu.almalinux-8",
         "qemu.almalinux-8-uefi"
@@ -223,7 +223,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
-      output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      output               = "AlmaLinux-8-Vagrant-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8"
       ]
@@ -232,7 +232,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt-uefi.tpl"
-      output               = "almalinux-8-x86_64.{{isotime \"20060102\"}}.{{.Provider}}.box"
+      output               = "AlmaLinux-8-Vagrant-UEFI-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8-uefi"
       ]
