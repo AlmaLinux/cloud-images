@@ -80,14 +80,6 @@
     mode: 0644
     seuser: system_u
 
-
-- name: Set infra yum variable to 'genclo'
-  replace:
-    path: /etc/yum/vars/infra
-    regexp: '^(.*?)$'
-    replace: 'genclo'
-  when: ansible_facts['distribution_major_version'] == '8'
-
 - name: Set default kernel package type to kernel
   replace:
     path: /etc/sysconfig/kernel
