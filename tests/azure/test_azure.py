@@ -78,14 +78,6 @@ def test_kmod_blacklist(host, kmod):
         assert blacklist.contains('options nouveau modeset=0')
 
 
-def test_infra_yum_variable(host):
-    """'infra' yum variable should be set to 'azure'."""
-    file_path = '/etc/yum/vars/infra'
-    assert host.file(file_path).content_string.strip() == 'azure'
-    context = host.run(f'ls -Z {file_path} | cut -d " " -f 1').stdout.strip()
-    assert context == 'system_u:object_r:etc_t:s0'
-
-
 def test_network_manager_enabled(host):
     """NetworkManager should be running."""
     nm = host.service('NetworkManager')

@@ -22,14 +22,6 @@
     - blacklist lbm-nouveau
     - blacklist floppy
 
-- name: Set infra yum variable to 'azure'
-  copy:
-    content: 'azure'
-    dest: /etc/yum/vars/infra
-    owner: root
-    group: root
-    mode: 0644
-
 - name: Enable NetworkManager service
   service:
     name: NetworkManager
