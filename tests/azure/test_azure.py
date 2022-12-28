@@ -85,19 +85,9 @@ def test_network_manager_enabled(host):
     assert nm.is_enabled
 
 
-def test_dhclient_timeout(host):
-    """dhclient timeout should be 300 seconds."""
-    if int(host.system_info.release[0]) > 8:
-        pytest.skip('deprecated on EL>=9')
-    with host.sudo():
-        content = host.file('/etc/dhcp/dhclient.conf').content_string
-        re_rslt = re.search(r'^timeout\s+(\d+);', content, flags=re.MULTILINE)
-        assert re_rslt.group(1) == '300'
-
-
 def test_network_manager_default_dhcp_timeout(host):
     """NetworkManager default DHCP timeout should be 300 seconds."""
-    file_path = '/etc/NetworkManager/conf.d/dhcp.conf'
+    file_path = '/etc/NetworkManager/conf.d/99-dhcp-timeout.conf'
     dhcp_conf = host.file(file_path)
     assert dhcp_conf.user == 'root'
     assert dhcp_conf.group == 'root'
