@@ -60,24 +60,10 @@
     name: WALinuxAgent
     state: present
 
-- name: Enable swap on resource disk
-  lineinfile:
-    path: /etc/waagent.conf
-    regexp: '^ResourceDisk\.EnableSwap='
-    line: 'ResourceDisk.EnableSwap=y'
-    state: present
-
-- name: Set resource disk swap size to 2048
-  lineinfile:
-    path: /etc/waagent.conf
-    regexp: '^ResourceDisk.SwapSizeMB='
-    line: 'ResourceDisk.SwapSizeMB=2048'
-    state: present
-
 - name: Enable waagent service
-  service:
-    name: waagent
-    enabled: true
+  ansible.builtin.systemd:
+    name: waagent.service
+    enabled: yes
 
 - name: Set sshd ClientAliveInterval to 180
   lineinfile:
@@ -151,4 +137,4 @@
     mode: 0644
 
 - name: Update initramfs
-  command: dracut -f -v
+  command: dracut -f --regenerate-all

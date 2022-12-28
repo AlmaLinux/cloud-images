@@ -161,9 +161,6 @@ def test_walinuxagent_config(host):
     # resource disk formatting should be enabled
     assert re.search(r'^ResourceDisk\.Format=y$', content,
                      flags=re.MULTILINE) is not None
-    # resource disk swap size should be 2048
-    assert re.search(r'^ResourceDisk\.SwapSizeMB=2048$', content,
-                     flags=re.MULTILINE) is not None
 
 
 def test_sshd_config(host):
