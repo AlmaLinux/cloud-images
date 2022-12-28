@@ -35,18 +35,9 @@
     group: root
     mode: 0644
 
-- name: Configure dhclient
-  lineinfile:
-    path: /etc/dhcp/dhclient.conf
-    line: "{{ item }}"
-  with_items:
-    - 'timeout 300;'
-    - 'retry 60;'
-  when: ansible_facts['distribution_major_version'] == '8'
-
 - name: Configure NetworkManager default DHCP timeout
   community.general.ini_file:
-    path: /etc/NetworkManager/conf.d/dhcp.conf
+    path: /etc/NetworkManager/conf.d/99-dhcp-timeout.conf
     section: connection
     option: ipv4.dhcp-timeout
     value: 300
