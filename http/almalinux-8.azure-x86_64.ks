@@ -38,7 +38,7 @@ reboot --eject
 %packages
 @core
 @standard
-grub2-pc-modules
+grub2-pc
 
 -biosdevname
 -open-vm-tools
