@@ -22,10 +22,32 @@
     - blacklist lbm-nouveau
     - blacklist floppy
 
-- name: Enable NetworkManager service
-  service:
-    name: NetworkManager
+- name: Install NetworkManager Cloud Setup
+  ansible.builtin.dnf:
+    name: NetworkManager-cloud-setup
+    state: present
+
+- name: Configure NetworkManager Cloud Setup
+  file:
+    path: /etc/systemd/system/nm-cloud-setup.service.d
+    state: directory
+
+- name: Set Azure as Cloud provder for NetworkManager Cloud Setup
+  lineinfile:
+    path: /etc/systemd/system/nm-cloud-setup.service.d/10-enable-azure.conf
+    line: "{{ item }}"
+    create: yes
+  with_items:
+    - '[Service]'
+    - Environment=NM_CLOUD_SETUP_AZURE=yes
+
+- name: Enable NetworkManager Cloud Setup service and timer
+  ansible.builtin.systemd:
+    name: "{{ item }}"
     enabled: yes
+  loop:
+    - nm-cloud-setup.service
+    - nm-cloud-setup.timer
 
 - name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
   copy:
