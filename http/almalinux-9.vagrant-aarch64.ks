@@ -1,5 +1,9 @@
 # AlmaLinux 9 aarch64 kickstart file for Vagrant boxes
-cdrom
+
+url --url https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/kickstart/
+repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/os/
+repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/9/AppStream/aarch64/os/
+
 text
 skipx
 eula --agreed
