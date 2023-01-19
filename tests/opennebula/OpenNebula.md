@@ -32,7 +32,7 @@ one_password = "passwordofexampleuser"
 datastore_id = "1234"
 network_id   = "1234"
 group        = "groupname"
-ssh_pub_key  = "ssh-rsa ..." 
+ssh_pub_key  = "ssh-rsa ..."
 ```
 Create two virtual machines with Terraform:
 
