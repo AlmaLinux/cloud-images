@@ -1,3 +1,4 @@
+---
 - name: Install cloud-init
   ansible.builtin.dnf:
     name:

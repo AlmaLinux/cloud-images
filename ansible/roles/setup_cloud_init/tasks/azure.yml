@@ -1,3 +1,4 @@
+---
 - name: Configure cloud-init Azure datasource
   ansible.builtin.copy:
     src: 91-azure_datasource.cfg
