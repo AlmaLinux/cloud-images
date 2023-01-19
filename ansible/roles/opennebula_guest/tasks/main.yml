@@ -1,16 +1,16 @@
 ---
 - name: Enable opennebula-addons repositroy
-  dnf:
+  ansible.builtin.dnf:
     name: almalinux-release-opennebula-addons
     state: present
 
 - name: Install OpenNebula Linux VM Contextualization
-  dnf:
+  ansible.builtin.dnf:
     name: one-context
     state: present
 
 - name: Enable one-context and network services for 8
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     enabled: true
   loop:
@@ -19,17 +19,18 @@
   when: ansible_facts['distribution_major_version'] == '8'
 
 - name: Enable one-context services for 9
-  service:
+  ansible.builtin.service:
     name: one-context
     enabled: true
   when: ansible_facts['distribution_major_version'] == '9'
 
 - name: Install disk resize dependencies
-  package:
+  ansible.builtin.package:
     name:
       - cloud-utils-growpart
       - parted
-    state: latest
+    state: present
 
 - name: Regenerate the initramfs
-  command: dracut -f --regenerate-all
+  ansible.builtin.command: dracut -f --regenerate-all
+  changed_when: true

@@ -17,6 +17,6 @@
     - role: hyperv_guest
       when: packer_provider == 'hyperv-iso'
     - install_vagrant_key
-    - nfs-client
+    - nfs_client
     - role: cleanup_vm
       cleanup_ssh_host_keys: "{{ packer_provider != 'hyperv-iso' }}"

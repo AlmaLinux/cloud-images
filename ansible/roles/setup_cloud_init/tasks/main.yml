@@ -1,12 +1,12 @@
 - name: Install cloud-init
-  dnf:
+  ansible.builtin.dnf:
     name:
       - cloud-init
       - cloud-utils-growpart
       - dracut-config-generic
 
 - name: Enable cloud-init services
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     enabled: true
   with_items:
@@ -16,7 +16,7 @@
     - cloud-final
 
 - name: Configure cloud-init user name
-  replace:
+  ansible.builtin.replace:
     dest: /etc/cloud/cloud.cfg
     regexp: '^(\s+name:).*$'
     replace: "\\1 {{ cloud_init_user }}"

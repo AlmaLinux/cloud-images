@@ -1,25 +1,26 @@
 ---
 # tasks file for cleanup system files and logs
 - name: Delete DNF cache
-  command: dnf -y --installroot=/rootfs --nogpgcheck clean all
+  ansible.builtin.command: dnf -y --installroot=/rootfs --nogpgcheck clean all
+  changed_when: true
 
 - name: Find DNF leftovers
-  find:
+  ansible.builtin.find:
     paths: /rootfs/var/cache/dnf
     file_type: any
     patterns: "*"
-    hidden: yes
-    recurse: yes
+    hidden: true
+    recurse: true
   register: dnf_cache
 
 - name: Delete DNF leftovers
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ dnf_cache.files }}"
 
 - name: Find temporary files
-  find:
+  ansible.builtin.find:
     file_type: any
     paths:
       - /rootfs/tmp
@@ -28,13 +29,14 @@
   register: tmp_files
 
 - name: Remove temporary files
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ tmp_files.files }}"
 
 - name: Truncate files
-  command: "truncate -s 0 {{ item }}"
+  ansible.builtin.command: "truncate -s 0 {{ item }}"
+  changed_when: true
   loop:
     - /rootfs/etc/machine-id
     - /rootfs/etc/hostname
@@ -50,7 +52,7 @@
     - /rootfs/var/log/spooler
 
 - name: Remove log folders.
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
@@ -62,21 +64,22 @@
     - /rootfs/var/lib/systemd/credential.secret
 
 - name: Find log files.
-  find:
+  ansible.builtin.find:
     paths: /rootfs/var/log
     patterns: '*log,*.old,*.log.gz,*.[0-9],*.gz,*-????????'
   register: log_files
 
 - name: Remove log files
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ log_files.files }}"
 
 - name: Remove random-seed
-  file:
+  ansible.builtin.file:
     path: /rootfs/var/lib/systemd/random-seed
     state: absent
 
 - name: Sync disc
-  command: sync
+  ansible.builtin.command: sync
+  changed_when: true

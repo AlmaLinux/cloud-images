@@ -2,5 +2,6 @@
 # https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/manage-plugins.htm#install-agent__manual-linux
 # Click on "Oracle Linux" >> "Oracle Linux 8.x, Oracle Linux Cloud Developer 8.x"
 ol8_gpg_key_url: "https://yum.oracle.com/RPM-GPG-KEY-oracle-ol8"
+# yamllint disable rule:line-length
 oracle_cloud_agent_url_x86_64: "https://objectstorage.us-phoenix-1.oraclecloud.com/p/fBz9tPaD_wjqB8E_w3bUQUKSayY9TziAnVRWrhvLGBiWmuEn8QnvHpZxqq6NpnRH/n/imagegen/b/agents/o/oracle-cloud-agent-1.24.0-7254.el8.x86_64.rpm"
 oracle_cloud_agent_url_aarch64: "https://objectstorage.us-phoenix-1.oraclecloud.com/p/KSx-PVVSqGVkawlHVcFxGR3ZWAfdNz3-lTB84LwFiw72lMUWzpfrByT_VbjqrtCI/n/imagegen/b/agents/o/oracle-cloud-agent-1.24.0-1.el8.aarch64.rpm"

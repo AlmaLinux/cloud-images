@@ -1,16 +1,18 @@
 ---
 # tasks file for configuring bootloader
 - name: Configuring GRUB default settings
-  copy:
+  ansible.builtin.copy:
     src: grub
     dest: /rootfs/etc/default/grub
     mode: 0644
 
 - name: Install GRUB for BIOS
-  command: chroot /rootfs grub2-install --target=i386-pc /dev/nvme1n1
+  ansible.builtin.command: chroot /rootfs grub2-install --target=i386-pc /dev/nvme1n1
+  changed_when: true
 
 - name: Generate the GRUB configuration file
-  command: chroot /rootfs grub2-mkconfig -o /boot/grub2/grub.cfg
+  ansible.builtin.command: chroot /rootfs grub2-mkconfig -o /boot/grub2/grub.cfg
+  changed_when: true
 
 - name: Enable OS Probe again
   ansible.builtin.lineinfile:

@@ -1,24 +1,29 @@
 ---
 # tasks file for crearting partition table, partitions and format filesystem
 - name: Gather disk information
-  command: parted /dev/nvme1n1 unit MiB print
+  ansible.builtin.command: parted /dev/nvme1n1 unit MiB print
+  changed_when: false
   register: parted_output
 
 - name: Show disk information before the operations
-  debug:
+  ansible.builtin.debug:
     var: parted_output.stdout_lines
 
 - name: Create GPT Partition Table
-  shell: parted -s -a optimal /dev/nvme1n1 -- mklabel gpt
+  ansible.builtin.command: parted -s -a optimal /dev/nvme1n1 -- mklabel gpt
+  changed_when: true
 
 - name: Create EFI System Partition
-  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart '"EFI System Partition"' fat32 0% 201MiB set 1 esp on set 1 boot on
+  ansible.builtin.command: parted -s -a optimal /dev/nvme1n1 -- mkpart '"EFI System Partition"' fat32 0% 201MiB set 1 esp on set 1 boot on
+  changed_when: true
 
 - name: Create Boot Partition
-  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart boot xfs 201MiB 713MiB
+  ansible.builtin.command: parted -s -a optimal /dev/nvme1n1 -- mkpart boot xfs 201MiB 713MiB
+  changed_when: true
 
 - name: Create Root Partition
-  shell: parted -s -a optimal /dev/nvme1n1 -- mkpart root xfs 713MiB 100%
+  ansible.builtin.command: parted -s -a optimal /dev/nvme1n1 -- mkpart root xfs 713MiB 100%
+  changed_when: true
 
 - name: Format ESP as FAT32
   filesystem:
@@ -40,21 +45,25 @@
     state: present
 
 - name: Gather disk information
-  command: parted /dev/nvme1n1 unit MiB print
+  ansible.builtin.command: parted /dev/nvme1n1 unit MiB print
+  changed_when: false
   register: parted_output
 
 - name: Show disk information after the operations
-  debug:
+  ansible.builtin.debug:
     var: parted_output.stdout_lines
 
 - name: Get UUID of EFI System Partition
-  command: blkid /dev/nvme1n1p1 -s UUID -o value
+  ansible.builtin.command: blkid /dev/nvme1n1p1 -s UUID -o value
+  changed_when: false
   register: esp_uuid
 
 - name: Get UUID of Boot partition
-  command: blkid /dev/nvme1n1p2 -s UUID -o value
+  ansible.builtin.command: blkid /dev/nvme1n1p2 -s UUID -o value
+  changed_when: false
   register: boot_uuid
 
 - name: Get UUID of Root
-  command: blkid /dev/nvme1n1p3 -s UUID -o value
+  ansible.builtin.command: blkid /dev/nvme1n1p3 -s UUID -o value
+  changed_when: false
   register: root_uuid

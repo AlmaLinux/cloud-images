@@ -1,39 +1,51 @@
 ---
 # tasks file for mounting chroot
 - name: Create chroot directory
-  file:
+  ansible.builtin.file:
     path: /rootfs
     state: directory
 
 - name: Mount chroot root partition
-  command: mount /dev/nvme1n1p3 /rootfs
+  ansible.builtin.command: mount /dev/nvme1n1p3 /rootfs
+  args:
+    warn: false
+  changed_when: true
 
 - name: Create chroot boot directory
-  file:
+  ansible.builtin.file:
     path: /rootfs/boot
     state: directory
 
 - name: Mount chroot boot partition
-  command: mount /dev/nvme1n1p2 /rootfs/boot
+  ansible.builtin.command: mount /dev/nvme1n1p2 /rootfs/boot
+  args:
+    warn: false
+  changed_when: true
 
 - name: Create chroot device directory
-  file:
+  ansible.builtin.file:
     path: /rootfs/dev
     state: directory
 
 - name: Mount chroot device files
-  command: mount -o bind /dev /rootfs/dev
+  ansible.builtin.command: mount -o bind /dev /rootfs/dev
+  args:
+    warn: false
+  changed_when: true
 
 - name: Create chroot sys directory
-  file:
+  ansible.builtin.file:
     path: /rootfs/sys
     state: directory
 
 - name: Mount chroot sysfs
-  command: mount -t sysfs sysfs /rootfs/sys
+  ansible.builtin.command: mount -t sysfs sysfs /rootfs/sys
+  args:
+    warn: false
+  changed_when: true
 
 - name: Creating the rootfs directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
   loop:
@@ -44,10 +56,16 @@
     - /rootfs/sys/fs/selinux
 
 - name: Mount chroot ESP
-  command: mount /dev/nvme1n1p1 /rootfs/boot/efi
+  ansible.builtin.command: mount /dev/nvme1n1p1 /rootfs/boot/efi
+  args:
+    warn: false
+  changed_when: true
 
 - name: Mount chroot pseudo filesystems
-  command: mount -t {{ item.type }} {{ item.src }} {{ item.dest }}
+  ansible.builtin.command: mount -t {{ item.type }} {{ item.src }} {{ item.dest }}
+  args:
+    warn: false
+  changed_when: true
   loop:
     - { type: 'devpts', src: 'devpts', dest: '/rootfs/dev/pts' }
     - { type: 'tmpfs', src: 'tmpfs', dest: '/rootfs/dev/shm' }

@@ -1,15 +1,15 @@
 ---
 - name: Install Hyper-V dependencies
-  dnf:
+  ansible.builtin.dnf:
     name:
       - cifs-utils
       - hyperv-daemons
     state: installed
 
 - name: Enable Hyper-V services
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
   with_items:
     - hypervvssd
     - hypervkvpd

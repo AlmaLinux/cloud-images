@@ -1,4 +1,16 @@
 ---
+galaxy_info:
+  role_name: opennebula_guest
+  author: Elkhan Mammadli
+  description: OpenNebula x86_64 and aarch64 image support
+  license: MIT
+  min_ansible_version: '2.5'
+  platforms:
+    - name: EL
+      versions:
+        - '8'
+  galaxy_tags:
+    - system
 dependencies:
   - role: almalinux.ci.disable_firstboot
   - role: pvgrub_config

@@ -1,24 +1,36 @@
 ---
 - name: Installing the system release files
-  command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-9.x86_64.rpm
+  ansible.builtin.command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-9.x86_64.rpm
+  args:
+    warn: false
+  changed_when: true
 
 - name: Installing the system GPG keys
-  command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-gpg-keys-latest-9.x86_64.rpm
+  ansible.builtin.command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-gpg-keys-latest-9.x86_64.rpm
+  args:
+    warn: false
+  changed_when: true
 
 - name: Installing the system repos
-  command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-repos-latest-9.x86_64.rpm
+  ansible.builtin.command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-repos-latest-9.x86_64.rpm
+  args:
+    warn: false
+  changed_when: true
 
 - name: Update the system
-  command: dnf -y --installroot=/rootfs --nogpgcheck upgrade
+  ansible.builtin.command: dnf -y --installroot=/rootfs --nogpgcheck upgrade
+  args:
+    warn: false
+  changed_when: true
 
 - name: Creating fstab
-  template:
+  ansible.builtin.template:
     src: templates/fstab.j2
     dest: /rootfs/etc/fstab
     mode: 0644
 
 - name: Install Base System on chroot
-  shell: >
+  ansible.builtin.shell: >
     dnf -y --installroot=/rootfs --nogpgcheck install
     kernel-core dracut-config-generic grub2-pc chrony dhcp-client
     rng-tools NetworkManager-cloud-setup
@@ -34,19 +46,25 @@
     --exclude="dracut-config-rescue"
     --exclude="mdadm"
     --exclude="langpacks-*"
+  changed_when: true
 
 - name: Make sure RPM using SQLite backend
   ansible.builtin.command: rpm --root=/rootfs -E "%{_db_backend}"
   register: rpm_db_backend
   failed_when: "rpm_db_backend.stdout != 'sqlite'"
+  args:
+    warn: false
+  changed_when: true
 
 - name: Set default target/runlevel and disable tmp.mount
-  command: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  ansible.builtin.command: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  changed_when: true
   loop:
     - { cmd: "set-default", unit: "multi-user.target" }
     - { cmd: "mask", unit: "tmp.mount" }
 
 - name: Set default locale to C.UTF-8
-  copy:
+  ansible.builtin.copy:
     content: LANG=C.UTF-8
     dest: /rootfs/etc/locale.conf
+    mode: 0644

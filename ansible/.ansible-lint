@@ -1,0 +1,3 @@
+# ansible-lint config
+skip_list:
+  - experimental

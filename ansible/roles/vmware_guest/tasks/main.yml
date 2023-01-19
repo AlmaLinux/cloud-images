@@ -1,5 +1,5 @@
 ---
 - name: Install open-vm-tools
-  dnf:
+  ansible.builtin.dnf:
     name: open-vm-tools
-    state: latest
+    state: present

@@ -1,6 +1,6 @@
 ---
 - name: Install Hyper-V support and common utils
-  dnf:
+  ansible.builtin.dnf:
     name:
       - hyperv-daemons
       - gdisk
@@ -9,7 +9,7 @@
     state: present
 
 - name: Blacklist unnecessary kernel modules
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/modprobe.d/blacklist.conf
     line: "{{ item }}"
     create: true
@@ -28,15 +28,15 @@
     state: present
 
 - name: Configure NetworkManager Cloud Setup
-  file:
+  ansible.builtin.file:
     path: /etc/systemd/system/nm-cloud-setup.service.d
     state: directory
 
 - name: Set Azure as Cloud provder for NetworkManager Cloud Setup
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/systemd/system/nm-cloud-setup.service.d/10-enable-azure.conf
     line: "{{ item }}"
-    create: yes
+    create: true
   with_items:
     - '[Service]'
     - Environment=NM_CLOUD_SETUP_AZURE=yes
@@ -44,13 +44,13 @@
 - name: Enable NetworkManager Cloud Setup service and timer
   ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: yes
+    enabled: true
   loop:
     - nm-cloud-setup.service
     - nm-cloud-setup.timer
 
 - name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
-  copy:
+  ansible.builtin.copy:
     src: ifcfg-eth0
     dest: /etc/sysconfig/network-scripts/ifcfg-eth0
     owner: root
@@ -69,38 +69,38 @@
     seuser: system_u
 
 - name: Install WALinuxAgent
-  dnf:
+  ansible.builtin.dnf:
     name: WALinuxAgent
     state: present
 
 - name: Enable waagent service
   ansible.builtin.systemd:
     name: waagent.service
-    enabled: yes
+    enabled: true
 
 - name: Set sshd ClientAliveInterval to 180
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^#ClientAliveInterval'
     line: 'ClientAliveInterval 180'
     state: present
 
 - name: Disable root login via SSH
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config
     regexp: '^PermitRootLogin'
     line: 'PermitRootLogin no'
     state: present
 
 - name: Switch http_caching to 'packages' in /etc/dnf/dnf.conf
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/dnf/dnf.conf
     regexp: '^http_caching='
     line: 'http_caching=packages'
     state: present
 
 - name: Generate udev rules for SRIOV interface
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/udev/rules.d/68-azure-sriov-nm-unmanaged.rules
     line: 'SUBSYSTEM=="net", DRIVERS=="hv_pci", ACTION=="add", ENV{NM_UNMANAGED}="1"'
     create: true
@@ -109,7 +109,7 @@
     mode: 0644
 
 - name: Generate udev rules for PTP clock source
-  copy:
+  ansible.builtin.copy:
     src: 99-azure-hyperv-ptp.rules
     dest: /etc/udev/rules.d/99-azure-hyperv-ptp.rules
     owner: root
@@ -117,32 +117,32 @@
     mode: 0644
 
 - name: Configure chronyd PTP clock source
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/chrony.conf
     line: 'refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0'
     state: present
 
 - name: Configure chronyd makestep parameter
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/chrony.conf
     regexp: '^makestep'
     line: 'makestep 1.0 -1'
     state: present
 
 - name: Disable remote NTP servers
-  replace:
+  ansible.builtin.replace:
     dest: /etc/chrony.conf
     regexp: '^(server\s+.*?)$'
     replace: '#\1'
 
 - name: Disable remote NTP pools
-  replace:
+  ansible.builtin.replace:
     dest: /etc/chrony.conf
     regexp: '^(pool\s+.*?)$'
     replace: '#\1'
 
 - name: Generate Azure dracut config
-  copy:
+  ansible.builtin.copy:
     src: azure.dracut.conf
     dest: /etc/dracut.conf.d/azure.conf
     owner: root
@@ -150,4 +150,5 @@
     mode: 0644
 
 - name: Update initramfs
-  command: dracut -f --regenerate-all
+  ansible.builtin.command: dracut -f --regenerate-all
+  changed_when: true

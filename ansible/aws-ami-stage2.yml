@@ -5,17 +5,17 @@
 
   tasks:
     - name: Install AWS Systems Manager Agent (SSM Agent)
-      dnf:
+      ansible.builtin.dnf:
         name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
         state: present
 
 
     - name: Delete DNF cache
-      command: dnf clean all
-
+      ansible.builtin.command: dnf clean all
+      changed_when: true
 
     - name: Add IPv6 Support
-      lineinfile:
+      ansible.builtin.lineinfile:
         path: /etc/sysconfig/network-scripts/ifcfg-eth0
         insertafter: '^IPV6INIT'
         line: 'IPV6_FAILURE_FATAL=no'
@@ -23,7 +23,8 @@
 
 
     - name: Fix SELinux contexts
-      shell: chcon -t {{ item.setype }} {{ item.target }}
+      ansible.builtin.command: chcon -t {{ item.setype }} {{ item.target }}
+      changed_when: true
       loop:
         - { setype: 'etc_t', target: '/etc/sysconfig/network' }
         - { setype: 'net_conf_t', target: '/etc/sysconfig/network-scripts/ifcfg*' }
@@ -35,47 +36,47 @@
 
 
     - name: Remove ec2-user Cloud user
-      user:
+      ansible.builtin.user:
         name: ec2-user
         state: absent
-        force: yes
+        force: true
 
 
     - name: Find vmimport lefovers
-      find:
+      ansible.builtin.find:
         paths:
           - /etc/sysconfig/network-scripts
         patterns: 'vmimport*'
         file_type: any
-        hidden: yes
+        hidden: true
       register: vmimport_leftover
 
 
     - name: Find Cloud-init leftovers
-      find:
+      ansible.builtin.find:
         paths:
           - /var/lib/cloud/instances
         patterns: '*'
         file_type: any
-        hidden: yes
+        hidden: true
       register: cloudinit_leftover
 
     - name: Remove vmimport leftovers
-      file:
+      ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       loop: "{{ vmimport_leftover.files }}"
 
 
     - name: Remove Cloud-init leftovers
-      file:
+      ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       loop: "{{ cloudinit_leftover.files }}"
 
 
     - name: Remove leftovers from the system
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: absent
       loop:
@@ -91,7 +92,7 @@
 
 
     - name: Find log files
-      find:
+      ansible.builtin.find:
         file_type: file
         paths:
           - /var/log
@@ -101,14 +102,14 @@
 
 
     - name: Remove log files
-      file:
+      ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       loop: "{{ log_files.files }}"
 
 
     - name: Find sudoers files created by AWS VM Import/Export
-      find:
+      ansible.builtin.find:
         file_type: file
         paths:
           - /etc/sudoers.d/
@@ -117,14 +118,15 @@
 
 
     - name: Remove found sudoers files
-      file:
+      ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       loop: "{{ sudoers_files.files }}"
 
 
     - name: Truncate files
-      command: "truncate -s 0 {{ item }}"
+      ansible.builtin.command: "truncate -s 0 {{ item }}"
+      changed_when: true
       loop:
         - /etc/machine-id
         - /etc/hostname

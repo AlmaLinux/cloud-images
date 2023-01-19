@@ -1,6 +1,6 @@
 ---
 - name: Install python3-libselinux
-  dnf:
+  ansible.builtin.dnf:
     name: python3-libselinux
     state: present
 

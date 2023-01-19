@@ -1,12 +1,14 @@
 ---
 - name: Remove old kernels
-  shell: dnf remove -y $(dnf repoquery --installonly --latest-limit=-1 -q)
+  ansible.builtin.shell: dnf remove -y $(dnf repoquery --installonly --latest-limit=-1 -q)
+  changed_when: true
 
 - name: Delete DNF cache
-  command: dnf clean all
+  ansible.builtin.command: dnf clean all
+  changed_when: true
 
 - name: Find temporary files
-  find:
+  ansible.builtin.find:
     file_type: any
     paths:
       - /tmp
@@ -15,7 +17,7 @@
   register: tmp_files
 
 - name: Remove temporary files
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ tmp_files.files }}"
@@ -23,20 +25,20 @@
 - name: Remove SSH host keys
   block:
     - name: Find SSH host keys
-      find:
+      ansible.builtin.find:
         paths: /etc/ssh
         patterns: '*host*key*'
       register: host_keys
 
     - name: Remove SSH host keys
-      file:
+      ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
       loop: "{{ host_keys.files }}"
   when: cleanup_ssh_host_keys | bool
 
 - name: Remove kickstart files
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
@@ -44,7 +46,7 @@
     - /root/original-ks.cfg
 
 - name: Truncate files
-  command: "truncate -s 0 {{ item }}"
+  ansible.builtin.command: "truncate -s 0 {{ item }}"
   loop:
     - /etc/machine-id
     - /etc/resolv.conf
@@ -57,9 +59,10 @@
     - /var/log/messages
     - /var/log/secure
     - /var/log/spooler
+  changed_when: true
 
 - name: Remove log folders.
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
@@ -72,7 +75,7 @@
     - /var/lib/systemd/credential.secret
 
 - name: Find log files.
-  find:
+  ansible.builtin.find:
     paths:
       - /var/log
       - /var/log/sssd
@@ -80,60 +83,70 @@
   register: log_files
 
 - name: Remove log files
-  file:
+  ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
   loop: "{{ log_files.files }}"
 
 - name: Remove random-seed
-  file:
+  ansible.builtin.file:
     path: /var/lib/systemd/random-seed
     state: absent
 
 - name: Disable root SSH login via password
-  file:
+  ansible.builtin.file:
     path: /etc/ssh/sshd_config.d/01-permitrootlogin.conf
     state: absent
   when: ansible_facts['distribution_major_version'] == '9'
 
 - name: Fill free space with zeroes
-  shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || rm -f /zeroed_file
+  ansible.builtin.shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || rm -f /zeroed_file
+  changed_when: true
 
 - name: Detect swap partition
-  command: grep -oP '^/dev/[\w-]+' /proc/swaps
+  ansible.builtin.command: grep -oP '^/dev/[\w-]+' /proc/swaps
   register: swaps
   ignore_errors: true
+  changed_when: false
 
 - name: Wipe out swap data
   block:
     - name: Get swap partition UUID
-      command: "blkid {{ swaps.stdout }} -s UUID -o value"
+      ansible.builtin.command: "blkid {{ swaps.stdout }} -s UUID -o value"  # noqa var-spacing
       register: swap_blkid
+      changed_when: true
 
     - name: Unmount swap partition
-      command: "swapoff {{ swaps.stdout }}"
+      ansible.builtin.command: "swapoff {{ swaps.stdout }}"
+      changed_when: true
 
     - name: Fill swap partition with zeroes
-      shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
+      ansible.builtin.shell: "dd if=/dev/zero of={{ swaps.stdout }} bs=1M oflag=direct || /bin/true"
+      changed_when: true
 
     - name: Format swap partition
-      command: "mkswap -U {{ swap_blkid.stdout }} -f {{ swaps.stdout }}"
+      ansible.builtin.command: "mkswap -U {{ swap_blkid.stdout }} -f {{ swaps.stdout }}"
+      changed_when: true
 
     - name: Mount swap partition
-      command: "swapon {{ swaps.stdout }}"
+      ansible.builtin.command: "swapon {{ swaps.stdout }}"
+      changed_when: true
   when: swaps.rc == 0
 
 - name: Sync disc
-  command: sync
+  ansible.builtin.command: sync
+  changed_when: true
 
 - name: Clear shell history
-  shell: history -c
+  ansible.builtin.command: history -c
+  changed_when: true
 
 - name: Check if WALinuxAgent is installed
-  stat:
+  ansible.builtin.stat:
     path: /usr/sbin/waagent
   register: cleanup_vm_waagent
 
 - name: Deprovision WALinuxAgent
-  command: waagent -deprovision+user -force
+  ansible.builtin.command: waagent -deprovision+user -force
+  changed_when: true
   when: cleanup_vm_waagent.stat.exists

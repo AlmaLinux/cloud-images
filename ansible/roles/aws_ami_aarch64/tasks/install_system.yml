@@ -1,22 +1,31 @@
 ---
 # tasks file for installing base system
 - name: Creating a new RPM database
-  command: rpm --root=/rootfs --initdb
+  ansible.builtin.command: rpm --root=/rootfs --initdb
+  args:
+    warn: false
+  changed_when: true
 
 - name: Installing the system release files
-  command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-8.aarch64.rpm
+  ansible.builtin.command: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-8.aarch64.rpm
+  args:
+    warn: false
+  changed_when: true
 
 - name: Update the system
-  command: dnf -y --installroot=/rootfs --nogpgcheck upgrade
+  ansible.builtin.command: dnf -y --installroot=/rootfs --nogpgcheck upgrade
+  args:
+    warn: false
+  changed_when: true
 
 - name: Creating fstab
-  template:
+  ansible.builtin.template:
     src: templates/fstab.j2
     dest: /rootfs/etc/fstab
     mode: '0644'
 
 - name: Install Base System on chroot
-  shell: >
+  ansible.builtin.shell: >
     dnf -y --installroot=/rootfs --nogpgcheck install
     kernel chrony dhcp-client rng-tools
     grub2-efi-aa64 efibootmgr shim-aa64
@@ -30,9 +39,11 @@
     --exclude="iwl*-firmware"
     --exclude="dnf-plugin-spacewalk"
     --exclude="plymouth*"
+  changed_when: true
 
 - name: Set default target/runlevel and disable tmp.mount
-  command: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  ansible.builtin.command: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  changed_when: true
   loop:
     - { cmd: 'set-default', unit: 'multi-user.target' }
     - { cmd: 'mask', unit: 'tmp.mount' }

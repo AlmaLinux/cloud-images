@@ -1,4 +1,16 @@
 ---
+galaxy_info:
+  role_name: gencloud_guest
+  author: Elkhan Mammadli
+  description: Azure Images
+  license: MIT
+  min_ansible_version: '2.5'
+  platforms:
+    - name: EL
+      versions:
+        - '8'
+  galaxy_tags:
+    - system
 dependencies:
   - role: setup_cloud_init
     vars:
