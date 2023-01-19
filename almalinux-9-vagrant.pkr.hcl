@@ -41,11 +41,50 @@ source "parallels-iso" "almalinux-9" {
   ssh_username           = var.vagrant_ssh_username
 }
 
+source "parallels-iso" "almalinux-9-aarch64" {
+  boot_command           = var.vagrant_boot_command_9_aarch64
+  boot_wait              = var.boot_wait
+  cpus                   = var.cpus
+  disk_size              = var.vagrant_disk_size
+  guest_os_type          = "centos"
+  http_directory         = var.http_directory
+  iso_checksum           = var.iso_checksum_9_aarch64
+  iso_url                = var.iso_url_9_aarch64
+  memory                 = var.memory
+  parallels_tools_flavor = var.parallels_tools_flavor_aarch64
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
+  ssh_username           = var.vagrant_ssh_username
+}
+
 
 source "virtualbox-iso" "almalinux-9" {
   iso_url              = var.iso_url_9_x86_64
   iso_checksum         = var.iso_checksum_9_x86_64
   boot_command         = var.vagrant_boot_command_9_x86_64
+  boot_wait            = var.boot_wait
+  cpus                 = var.cpus
+  memory               = var.memory
+  disk_size            = var.vagrant_disk_size
+  headless             = var.headless
+  http_directory       = var.http_directory
+  guest_os_type        = "RedHat_64"
+  shutdown_command     = var.vagrant_shutdown_command
+  ssh_username         = var.vagrant_ssh_username
+  ssh_password         = var.vagrant_ssh_password
+  ssh_timeout          = var.ssh_timeout
+  hard_drive_interface = "sata"
+  vboxmanage_post = [
+    ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+  ]
+}
+
+source "virtualbox-iso" "almalinux-9-aarch64" {
+  iso_url              = var.iso_url_9_aarch64
+  iso_checksum         = var.iso_checksum_9_aarch64
+  boot_command         = var.vagrant_boot_command_9_aarch64
   boot_wait            = var.boot_wait
   cpus                 = var.cpus
   memory               = var.memory
@@ -129,7 +168,9 @@ build {
   sources = [
     "sources.hyperv-iso.almalinux-9",
     "sources.parallels-iso.almalinux-9",
+    "sources.parallels-iso.almalinux-9-aarch64",
     "sources.virtualbox-iso.almalinux-9",
+    "sources.virtualbox-iso.almalinux-9-aarch64",
     "sources.vmware-iso.almalinux-9",
     "sources.qemu.almalinux-9"
   ]
@@ -142,7 +183,7 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
+      "ANSIBLE_SSH_ARGS='-o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
     ]
     extra_arguments = [
       "--extra-vars",
@@ -190,7 +231,16 @@ build {
       compression_level = "9"
       output            = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
-        "qemu.almalinux-9"
+        "qemu.almalinux-9",
+        "parallels-iso.almalinux-9-aarch64"
+      ]
+    }
+
+    post-processor "vagrant" {
+      compression_level = "9"
+      output            = "almalinux-9-aarch64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
+      only = [
+        "parallels-iso.almalinux-9-aarch64"
       ]
     }
 
