@@ -268,7 +268,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "almalinux-9-aarch64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
+      output            = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.aarch64.{{.Provider}}.box"
       only = [
         "vmware-iso.almalinux-9-aarch64",
         "parallels-iso.almalinux-9-aarch64"
