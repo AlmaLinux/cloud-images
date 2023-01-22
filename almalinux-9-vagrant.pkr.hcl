@@ -163,6 +163,34 @@ source "qemu" "almalinux-9" {
   ]
 }
 
+source "vmware-iso" "almalinux-9-aarch64" {
+  iso_url          = var.iso_url_9_aarch64
+  iso_checksum     = var.iso_checksum_9_aarch64
+  boot_command     = var.vagrant_boot_command_9_aarch64
+  boot_wait        = var.boot_wait
+  cpus             = var.cpus
+  memory           = var.memory
+  disk_size        = var.vagrant_disk_size
+  headless         = "false"
+  http_directory   = var.http_directory
+  guest_os_type    = "arm-rhel9-64"
+  shutdown_command = var.vagrant_shutdown_command
+  ssh_username     = var.vagrant_ssh_username
+  ssh_password     = var.vagrant_ssh_password
+  ssh_timeout      = var.ssh_timeout
+  vmx_data = {
+    ".encoding" = "UTF-8",
+    "config.version" = "8",
+    "virtualHW.version" = "20",
+    "usb_xhci.present" = "true",
+    "ethernet0.virtualdev" = "e1000e",
+    "firmware" = "efi"
+  }
+  vmx_remove_ethernet_interfaces = true
+  vm_name          = "almalinux-9"
+  usb  =  true
+  disk_adapter_type = "nvme"
+}
 
 build {
   sources = [
@@ -172,6 +200,7 @@ build {
     "sources.virtualbox-iso.almalinux-9",
     "sources.virtualbox-iso.almalinux-9-aarch64",
     "sources.vmware-iso.almalinux-9",
+    "sources.vmware-iso.almalinux-9-aarch64",
     "sources.qemu.almalinux-9"
   ]
 
@@ -232,6 +261,7 @@ build {
       output            = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
         "qemu.almalinux-9",
+        "vmware-iso.almalinux-9-aarch64",
         "parallels-iso.almalinux-9-aarch64"
       ]
     }
@@ -240,6 +270,7 @@ build {
       compression_level = "9"
       output            = "almalinux-9-aarch64.${formatdate("YYYYMMDD", timestamp())}.{{.Provider}}.box"
       only = [
+        "vmware-iso.almalinux-9-aarch64",
         "parallels-iso.almalinux-9-aarch64"
       ]
     }
