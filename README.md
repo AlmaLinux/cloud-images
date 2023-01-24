@@ -340,10 +340,29 @@ VirtualBox `x86_64`:
 packer build -only=virtualbox-iso.almalinux-9 .
 ```
 
- VMware Desktop `x86_64`:
+VMware Desktop `x86_64`:
 
 ```sh
 packer build -only=vmware-iso.almalinux-9 .
+```
+
+VMware Desktop `aarch64`:
+
+```sh
+packer build -only=vmware-iso.almalinux-9-aarch64 .
+```
+
+Note: At this time, VMWare Fusion desktop, Apple M1 processer expects additional config settings to `run` vagrant box built for aarch64. It's behaviour of VMWare Fusion, not an issue of AlmaLinux.
+
+```log
+Vagrant.configure("2") do |config|
+    config.vm.box = "almalinux/9.aarch64"
+    config.vm.box_version = "9.1.20230122"
+    config.vm.provider "vmware_desktop" do |v|
+        v.gui = true
+        v.vmx["ethernet0.virtualdev"] = "vmxnet3"
+    end
+end
 ```
 
 Parallels `x86_64`:
@@ -351,6 +370,13 @@ Parallels `x86_64`:
 ```sh
 packer build -only=parallels-iso.almalinux-9 .
 ```
+
+Parallels `aarch64`:
+
+```sh
+packer build -only=parallels-iso.almalinux-9-aarch64 .
+```
+
 
 Hyper-V `x86_64`:
 
