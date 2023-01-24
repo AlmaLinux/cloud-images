@@ -23,7 +23,6 @@ source "hyperv-iso" "almalinux-9" {
   ssh_timeout           = var.ssh_timeout
 }
 
-
 source "parallels-iso" "almalinux-9" {
   boot_command           = var.vagrant_boot_command_9_x86_64
   boot_wait              = var.boot_wait
@@ -57,7 +56,6 @@ source "parallels-iso" "almalinux-9-aarch64" {
   ssh_timeout            = var.ssh_timeout
   ssh_username           = var.vagrant_ssh_username
 }
-
 
 source "virtualbox-iso" "almalinux-9" {
   iso_url              = var.iso_url_9_x86_64
@@ -103,7 +101,6 @@ source "virtualbox-iso" "almalinux-9-aarch64" {
   ]
 }
 
-
 source "vmware-iso" "almalinux-9" {
   iso_url          = var.iso_url_9_x86_64
   iso_checksum     = var.iso_checksum_9_x86_64
@@ -129,7 +126,6 @@ source "vmware-iso" "almalinux-9" {
 
   vmx_remove_ethernet_interfaces = true
 }
-
 
 source "qemu" "almalinux-9" {
   iso_checksum       = var.iso_checksum_9_x86_64
@@ -171,7 +167,7 @@ source "vmware-iso" "almalinux-9-aarch64" {
   cpus             = var.cpus
   memory           = var.memory
   disk_size        = var.vagrant_disk_size
-  headless         = "false"
+  headless         = var.headless
   http_directory   = var.http_directory
   guest_os_type    = "arm-rhel9-64"
   shutdown_command = var.vagrant_shutdown_command
