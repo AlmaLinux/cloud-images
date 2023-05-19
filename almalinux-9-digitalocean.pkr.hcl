@@ -3,8 +3,8 @@
  */
 
 source "qemu" "almalinux-9-digitalocean-x86_64" {
-  iso_url            = var.iso_url_9_x86_64
-  iso_checksum       = var.iso_checksum_9_x86_64
+  iso_url            = local.iso_url_9_x86_64
+  iso_checksum       = local.iso_checksum_9_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -24,7 +24,7 @@ source "qemu" "almalinux-9-digitalocean-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-9-DigitalOcean-9.1.x86_64.qcow2"
+  vm_name            = "almalinux-9-DigitalOcean-${var.os_ver_9}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64_bios
   qemuargs = [
@@ -64,6 +64,6 @@ build {
     image_regions      = var.do_image_regions
     image_description  = var.do_image_description
     image_distribution = var.do_image_distribution
-    image_tags         = var.do_image_tags
+    image_tags         = local.do_image_tags
   }
 }

@@ -7,14 +7,14 @@ source "amazon-ebssurrogate" "almalinux-9-ami-x86_64" {
   ssh_username            = "ec2-user"
   instance_type           = "t3.small"
   source_ami              = "ami-0845395779540e3cb"
-  ami_name                = var.aws_ami_name_x86_64_9
-  ami_description         = var.aws_ami_description_x86_64_9
+  ami_name                = local.aws_ami_name_x86_64_9
+  ami_description         = local.aws_ami_description_x86_64_9
   ami_architecture        = "x86_64"
   ami_virtualization_type = "hvm"
   ami_regions             = ["us-east-1"]
   tags = {
-    Name         = "${var.aws_ami_name_x86_64_9}",
-    Version      = "${var.aws_ami_version_9}",
+    Name         = "${local.aws_ami_name_x86_64_9}",
+    Version      = "${local.aws_ami_version_9}",
     Architecture = "x86_64"
   }
   ena_support   = true
@@ -42,14 +42,14 @@ source "amazon-ebssurrogate" "almalinux-9-ami-aarch64" {
   ssh_username            = "ec2-user"
   instance_type           = "t4g.small"
   source_ami              = "ami-02e3ce0ad12576169"
-  ami_name                = var.aws_ami_name_aarch64_9
-  ami_description         = var.aws_ami_description_aarch64_9
+  ami_name                = local.aws_ami_name_aarch64_9
+  ami_description         = local.aws_ami_description_aarch64_9
   ami_architecture        = "arm64"
   ami_virtualization_type = "hvm"
   ami_regions             = ["us-east-1"]
   tags = {
-    Name         = "${var.aws_ami_name_aarch64_9}",
-    Version      = "${var.aws_ami_version_9}",
+    Name         = "${local.aws_ami_name_aarch64_9}",
+    Version      = "${local.aws_ami_version_9}",
     Architecture = "aarch64"
   }
   ena_support   = true

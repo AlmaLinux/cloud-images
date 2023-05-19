@@ -3,8 +3,8 @@
  */
 
 source "qemu" "almalinux-8-azure-x86_64" {
-  iso_url            = var.iso_url_8_x86_64
-  iso_checksum       = var.iso_checksum_8_x86_64
+  iso_url            = local.iso_url_8_x86_64
+  iso_checksum       = local.iso_checksum_8_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -25,12 +25,9 @@ source "qemu" "almalinux-8-azure-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vnc_bind_address   = var.vnc_bind_address
-  vnc_port_min       = var.vnc_port_min
-  vnc_port_max       = var.vnc_port_max
-  vm_name            = "AlmaLinux-8-Azure-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
+  vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
   boot_wait          = var.boot_wait
-  boot_command       = var.azure_boot_command_8_x86_64
+  boot_command       = local.azure_boot_command_8_x86_64
   qemuargs = [
     ["-cpu", "host"]
   ]
