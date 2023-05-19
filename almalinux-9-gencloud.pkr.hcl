@@ -3,8 +3,8 @@
  */
 
 source "qemu" "almalinux-9-gencloud-bios-x86_64" {
-  iso_url            = var.iso_url_9_x86_64
-  iso_checksum       = var.iso_checksum_9_x86_64
+  iso_url            = local.iso_url_9_x86_64
+  iso_checksum       = local.iso_checksum_9_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -24,7 +24,7 @@ source "qemu" "almalinux-9-gencloud-bios-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-BIOS-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-BIOS-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
   boot_command       = var.gencloud_boot_command_9_x86_64_bios
   qemuargs = [
@@ -33,8 +33,8 @@ source "qemu" "almalinux-9-gencloud-bios-x86_64" {
 }
 
 source "qemu" "almalinux-9-gencloud-x86_64" {
-  iso_url            = var.iso_url_9_x86_64
-  iso_checksum       = var.iso_checksum_9_x86_64
+  iso_url            = local.iso_url_9_x86_64
+  iso_checksum       = local.iso_checksum_9_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -56,9 +56,9 @@ source "qemu" "almalinux-9-gencloud-x86_64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_9_x86_64
+  boot_command       = local.gencloud_boot_command_9_x86_64
   qemuargs = [
     ["-cpu", "host"]
   ]
@@ -66,8 +66,8 @@ source "qemu" "almalinux-9-gencloud-x86_64" {
 
 
 source "qemu" "almalinux-9-gencloud-aarch64" {
-  iso_url            = var.iso_url_9_aarch64
-  iso_checksum       = var.iso_checksum_9_aarch64
+  iso_url            = local.iso_url_9_aarch64
+  iso_checksum       = local.iso_checksum_9_aarch64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -89,9 +89,9 @@ source "qemu" "almalinux-9-gencloud-aarch64" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
   boot_wait          = var.boot_wait
-  boot_command       = var.gencloud_boot_command_9_aarch64
+  boot_command       = local.gencloud_boot_command_9_aarch64
   qemuargs = [
     ["-cpu", "max"],
     ["-boot", "strict=on"],
@@ -101,8 +101,8 @@ source "qemu" "almalinux-9-gencloud-aarch64" {
 
 
 source "qemu" "almalinux-9-gencloud-ppc64le" {
-  iso_url            = var.iso_url_9_ppc64le
-  iso_checksum       = var.iso_checksum_9_ppc64le
+  iso_url            = local.iso_url_9_ppc64le
+  iso_checksum       = local.iso_checksum_9_ppc64le
   shutdown_command   = var.root_shutdown_command
   http_directory     = var.http_directory
   ssh_username       = var.gencloud_ssh_username
@@ -120,9 +120,9 @@ source "qemu" "almalinux-9-gencloud-ppc64le" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-9-GenericCloud-9.1-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
+  vm_name            = "AlmaLinux-9-GenericCloud-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
   boot_wait          = var.gencloud_boot_wait_ppc64le
-  boot_command       = var.gencloud_boot_command_9_ppc64le
+  boot_command       = local.gencloud_boot_command_9_ppc64le
   qemuargs = [
     ["-machine", "pseries,accel=kvm,kvm-type=HV"]
   ]
