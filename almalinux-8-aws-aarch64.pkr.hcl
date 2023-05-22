@@ -2,6 +2,9 @@
  * AlmaLinux OS 8 Packer template for building aarch64 AWS images.
  */
 
+
+# TODO: Enable when https://github.com/hashicorp/packer/issues/12434 is resolved
+/*
 data "amazon-ami" "almalinux-8-aarch64" {
   filters = {
     name         = "AlmaLinux OS 8.*"
@@ -11,13 +14,14 @@ data "amazon-ami" "almalinux-8-aarch64" {
   owners      = ["764336703387"]
   most_recent = true
 }
+*/
 
 
 source "amazon-ebssurrogate" "almalinux-8-aws-aarch64" {
   region                  = var.aws_ami_region
   ssh_username            = "ec2-user"
   instance_type           = "t4g.small"
-  source_ami              = data.amazon-ami.almalinux-8-aarch64.id
+  source_ami              = var.aws_source_ami_8_aarch64
   ami_name                = local.aws_ami_name_aarch64_8
   ami_description         = local.aws_ami_description_aarch64_8
   ami_architecture        = "arm64"
