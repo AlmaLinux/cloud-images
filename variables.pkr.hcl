@@ -414,6 +414,27 @@ variable "aws_volume_type" {
   default = "gp3"
 }
 
+variable "aws_source_ami_8_aarch64" {
+  description = "AlmaLinux OS 8 AArch64 AMI as source"
+
+  type    = string
+  default = "ami-02c9a8bba92028114"
+}
+
+variable "aws_source_ami_9_x86_64" {
+  description = "AlmaLinux OS 9 x86_64 AMI as source"
+
+  type    = string
+  default = "ami-06bc84fafec254e1d"
+}
+
+variable "aws_source_ami_9_aarch64" {
+  description = "AlmaLinux OS 9 AArch64 AMI as source"
+
+  type    = string
+  default = "ami-00a3e427999640fad"
+}
+
 variable "aws_boot_command_8" {
   description = "Boot command for x86_64 BIOS"
 

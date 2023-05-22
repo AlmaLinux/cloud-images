@@ -2,6 +2,9 @@
  * AlmaLinux OS 9 Packer template for building Amazon Machine Images (AMI).
  */
 
+
+# TODO: Enable when https://github.com/hashicorp/packer/issues/12434 is resolved
+/*
 data "amazon-ami" "almalinux-9-x86_64" {
   filters = {
     name         = "AlmaLinux OS 9.*"
@@ -21,13 +24,13 @@ data "amazon-ami" "almalinux-9-aarch64" {
   owners      = ["764336703387"]
   most_recent = true
 }
-
+*/
 
 source "amazon-ebssurrogate" "almalinux-9-ami-x86_64" {
   region                  = var.aws_ami_region
   ssh_username            = "ec2-user"
   instance_type           = "t3.small"
-  source_ami              = data.amazon-ami.almalinux-9-x86_64.id
+  source_ami              = var.aws_source_ami_9_x86_64
   ami_name                = local.aws_ami_name_x86_64_9
   ami_description         = local.aws_ami_description_x86_64_9
   ami_architecture        = "x86_64"
@@ -62,7 +65,7 @@ source "amazon-ebssurrogate" "almalinux-9-ami-aarch64" {
   region                  = var.aws_ami_region
   ssh_username            = "ec2-user"
   instance_type           = "t4g.small"
-  source_ami              = data.amazon-ami.almalinux-9-aarch64.id
+  source_ami              = var.aws_source_ami_9_aarch64
   ami_name                = local.aws_ami_name_aarch64_9
   ami_description         = local.aws_ami_description_aarch64_9
   ami_architecture        = "arm64"

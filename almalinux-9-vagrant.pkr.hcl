@@ -60,7 +60,7 @@ source "parallels-iso" "almalinux-9-aarch64" {
 source "virtualbox-iso" "almalinux-9" {
   iso_url              = local.iso_url_9_x86_64
   iso_checksum         = local.iso_checksum_9_x86_64
-  boot_command         = var.vagrant_boot_command_9_x86_64
+  boot_command         = local.vagrant_boot_command_9_x86_64
   boot_wait            = var.boot_wait
   cpus                 = var.cpus
   memory               = var.memory
@@ -74,6 +74,7 @@ source "virtualbox-iso" "almalinux-9" {
   ssh_timeout          = var.ssh_timeout
   hard_drive_interface = "sata"
   iso_interface        = "sata"
+  firmware             = "efi"
   vboxmanage = [
     ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
   ]
