@@ -58,6 +58,9 @@ source "virtualbox-iso" "almalinux-8" {
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
   hard_drive_interface = "sata"
+  vboxmanage = [
+    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
+  ]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
     ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
