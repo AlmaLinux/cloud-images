@@ -393,6 +393,27 @@ variable "aws_ami_architecture" {
   default = "x86_64"
 }
 
+variable "aws_ami_region" {
+  description = "The region to create the AMI"
+
+  type    = string
+  default = "us-east-1"
+}
+
+variable "aws_ami_regions" {
+  description = "The list of regions to copy the AMI to"
+
+  type    = list(string)
+  default = ["us-east-1"]
+}
+
+variable "aws_volume_type" {
+  description = "Volume type for AMI"
+
+  type    = string
+  default = "gp3"
+}
+
 variable "aws_boot_command_8" {
   description = "Boot command for x86_64 BIOS"
 

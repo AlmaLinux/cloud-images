@@ -6,7 +6,7 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
   ami_name                = local.aws_ami_name_x86_64_8
   ami_description         = local.aws_ami_description_x86_64_8
   ami_virtualization_type = "hvm"
-  ami_regions             = ["us-east-1"]
+  ami_regions             = var.aws_ami_regions
   tags = {
     Name         = "${local.aws_ami_name_x86_64_8}",
     Version      = "${local.aws_ami_version_8}",
@@ -14,7 +14,7 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
   }
   ena_support     = true
   sriov_support   = true
-  region          = "us-east-1"
+  region          = var.aws_ami_region
   device_path     = "/dev/xvdb"
   mount_options   = ["nouuid"]
   mount_partition = "2"
@@ -32,7 +32,7 @@ source "amazon-chroot" "almalinux-8-aws-stage2" {
   ami_block_device_mappings {
     device_name           = "/dev/sda1"
     delete_on_termination = true
-    volume_type           = "gp2"
+    volume_type           = var.aws_volume_type
   }
 }
 
