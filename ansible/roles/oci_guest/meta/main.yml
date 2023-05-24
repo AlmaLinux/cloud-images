@@ -4,4 +4,5 @@ dependencies:
   - role: "setup_cloud_init"
     vars:
       cloud_init_user: "opc"
+      cloud_platform: "oci"
   - role: qemu_guest

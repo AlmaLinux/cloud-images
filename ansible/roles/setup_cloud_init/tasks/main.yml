@@ -25,3 +25,6 @@
 
 - include_tasks: azure.yml
   when: cloud_platform == 'azure'
+
+- ansible.builtin.include_tasks: oci.yaml
+  when: cloud_platform == 'oci'
