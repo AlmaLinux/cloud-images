@@ -123,35 +123,36 @@
     - '# Oracle Cloud Infrastructure NTP Service'
     - 'server 169.254.169.254 prefer iburst'
 
-- name: Set up Oracle Cloud Agent
-  block:
-    - name: Import Oracle Linux 8 GPG Public key
-      rpm_key:
-        state: present
-        key: "{{ ol8_gpg_key_url }}"
-      when: ansible_facts['distribution_major_version'] == '8'
-
-    - name: Install Oracle Cloud Agent
-      dnf:
-        name:
-          - "{{ oracle_cloud_agent_url_x86_64 }}"
-          - librepo
-          - python3-librepo
-        state: present
-      when:
-        - ansible_facts['architecture'] == 'x86_64'
-        - ansible_facts['distribution_major_version'] == '8'
-
-    - name: Install Oracle Cloud Agent
-      dnf:
-        name:
-          - "{{ oracle_cloud_agent_url_aarch64 }}"
-          - librepo
-          - python3-librepo
-        state: present
-      when:
-        - ansible_facts['architecture'] == 'aarch64'
-        - ansible_facts['distribution_major_version'] == '8'
+# The public download links of Oracle Cloud Agent are not available anymore
+# - name: Set up Oracle Cloud Agent
+#   block:
+#     - name: Import Oracle Linux 8 GPG Public key
+#       rpm_key:
+#         state: present
+#         key: "{{ ol8_gpg_key_url }}"
+#       when: ansible_facts['distribution_major_version'] == '8'
+#
+#     - name: Install Oracle Cloud Agent
+#       dnf:
+#         name:
+#           - "{{ oracle_cloud_agent_url_x86_64 }}"
+#           - librepo
+#           - python3-librepo
+#         state: present
+#       when:
+#         - ansible_facts['architecture'] == 'x86_64'
+#         - ansible_facts['distribution_major_version'] == '8'
+#
+#     - name: Install Oracle Cloud Agent
+#       dnf:
+#         name:
+#           - "{{ oracle_cloud_agent_url_aarch64 }}"
+#           - librepo
+#           - python3-librepo
+#         state: present
+#       when:
+#         - ansible_facts['architecture'] == 'aarch64'
+#         - ansible_facts['distribution_major_version'] == '8'
 
 - name: Permit only SSH service on firewalld
   firewalld:

@@ -1,0 +1,8 @@
+---
+- name: Configure Oracle Cloud-init Datasource
+  ansible.builtin.copy:
+    src: 99_oci.cfg
+    dest: /etc/cloud/cloud.cfg.d/99_oci.cfg
+    owner: root
+    group: root
+    mode: "0644"
