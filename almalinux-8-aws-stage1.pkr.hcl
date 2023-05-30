@@ -3,8 +3,8 @@
  */
 
 source "vmware-iso" "almalinux-8-aws-stage1" {
-  iso_url          = var.iso_url_8_x86_64
-  iso_checksum     = var.iso_checksum_8_x86_64
+  iso_url          = local.iso_url_8_x86_64
+  iso_checksum     = local.iso_checksum_8_x86_64
   boot_command     = var.aws_boot_command_8
   boot_wait        = var.boot_wait
   cpus             = var.cpus
@@ -31,8 +31,8 @@ source "vmware-iso" "almalinux-8-aws-stage1" {
 
 
 source "qemu" "almalinux-8-aws-stage1" {
-  iso_url            = var.iso_url_8_x86_64
-  iso_checksum       = var.iso_checksum_8_x86_64
+  iso_url            = local.iso_url_8_x86_64
+  iso_checksum       = local.iso_checksum_8_x86_64
   shutdown_command   = var.root_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -51,7 +51,7 @@ source "qemu" "almalinux-8-aws-stage1" {
   memory             = var.memory
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "almalinux-8-AWS-8.7.x86_64.raw"
+  vm_name            = "AlmaLinux-8-AWS-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
   boot_wait          = var.boot_wait
   boot_command       = var.aws_boot_command_8
 }
@@ -77,14 +77,14 @@ build {
 
   // comment this out if you don't want to import AMI to Amazon EC2 automatically
   post-processor "amazon-import" {
-    ami_name        = "Alma 8.7 internal use only {{isotime \"20060102\"}} x86_64"
-    ami_description = var.aws_ami_description_x86_64_8
+    ami_name        = "Alma ${var.os_ver_8} internal use only ${formatdate("YYYYMMDD", timestamp())} x86_64"
+    ami_description = local.aws_ami_description_x86_64_8
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "Alma 8.7 internal use only {{isotime \"20060102\"}} x86_64"
+      Name = "Alma ${var.os_ver_8} internal use only ${formatdate("YYYYMMDD", timestamp())} x86_64"
     }
     keep_input_artifact = true
     except = [
@@ -93,15 +93,15 @@ build {
   }
 
   post-processor "amazon-import" {
-    ami_name        = "Alma 8.7 internal use only {{isotime \"20060102\"}} x86_64"
+    ami_name        = "Alma ${var.os_ver_8} internal use only ${formatdate("YYYYMMDD", timestamp())} x86_64"
     format          = "raw"
-    ami_description = var.aws_ami_description_x86_64_8
+    ami_description = local.aws_ami_description_x86_64_8
     ami_groups      = ["all"]
     s3_bucket_name  = var.aws_s3_bucket_name
     license_type    = "BYOL"
     role_name       = var.aws_role_name
     tags = {
-      Name = "Alma 8.7 internal use only {{isotime \"20060102\"}} x86_64"
+      Name = "Alma ${var.os_ver_8} internal use only ${formatdate("YYYYMMDD", timestamp())} x86_64"
     }
     keep_input_artifact = true
     only = [

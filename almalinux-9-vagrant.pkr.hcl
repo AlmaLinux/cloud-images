@@ -3,9 +3,9 @@
  */
 
 source "hyperv-iso" "almalinux-9" {
-  iso_url               = var.iso_url_9_x86_64
-  iso_checksum          = var.iso_checksum_9_x86_64
-  boot_command          = var.vagrant_boot_command_9_x86_64_uefi
+  iso_url               = local.iso_url_9_x86_64
+  iso_checksum          = local.iso_checksum_9_x86_64
+  boot_command          = local.vagrant_boot_command_9_x86_64
   boot_wait             = var.boot_wait
   generation            = 2
   switch_name           = var.hyperv_switch_name
@@ -23,16 +23,15 @@ source "hyperv-iso" "almalinux-9" {
   ssh_timeout           = var.ssh_timeout
 }
 
-
 source "parallels-iso" "almalinux-9" {
-  boot_command           = var.vagrant_boot_command_9_x86_64
+  boot_command           = var.vagrant_boot_command_9_x86_64_bios
   boot_wait              = var.boot_wait
   cpus                   = var.cpus
   disk_size              = var.vagrant_disk_size
   guest_os_type          = "centos"
   http_directory         = var.http_directory
-  iso_checksum           = var.iso_checksum_9_x86_64
-  iso_url                = var.iso_url_9_x86_64
+  iso_checksum           = local.iso_checksum_9_x86_64
+  iso_url                = local.iso_url_9_x86_64
   memory                 = var.memory
   parallels_tools_flavor = var.parallels_tools_flavor_x86_64
   shutdown_command       = var.vagrant_shutdown_command
@@ -41,11 +40,27 @@ source "parallels-iso" "almalinux-9" {
   ssh_username           = var.vagrant_ssh_username
 }
 
+source "parallels-iso" "almalinux-9-aarch64" {
+  boot_command           = var.vagrant_boot_command_9_aarch64
+  boot_wait              = var.boot_wait
+  cpus                   = var.cpus
+  disk_size              = var.vagrant_disk_size
+  guest_os_type          = "centos"
+  http_directory         = var.http_directory
+  iso_checksum           = local.iso_checksum_9_aarch64
+  iso_url                = local.iso_url_9_aarch64
+  memory                 = var.memory
+  parallels_tools_flavor = var.parallels_tools_flavor_aarch64
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
+  ssh_username           = var.vagrant_ssh_username
+}
 
 source "virtualbox-iso" "almalinux-9" {
-  iso_url              = var.iso_url_9_x86_64
-  iso_checksum         = var.iso_checksum_9_x86_64
-  boot_command         = var.vagrant_boot_command_9_x86_64
+  iso_url              = local.iso_url_9_x86_64
+  iso_checksum         = local.iso_checksum_9_x86_64
+  boot_command         = local.vagrant_boot_command_9_x86_64
   boot_wait            = var.boot_wait
   cpus                 = var.cpus
   memory               = var.memory
@@ -58,17 +73,46 @@ source "virtualbox-iso" "almalinux-9" {
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
   hard_drive_interface = "sata"
+  iso_interface        = "sata"
+  firmware             = "efi"
+  vboxmanage = [
+    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
+  ]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
     ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
   ]
 }
 
+source "virtualbox-iso" "almalinux-9-aarch64" {
+  iso_url              = local.iso_url_9_aarch64
+  iso_checksum         = local.iso_checksum_9_aarch64
+  boot_command         = var.vagrant_boot_command_9_aarch64
+  boot_wait            = var.boot_wait
+  cpus                 = var.cpus
+  memory               = var.memory
+  disk_size            = var.vagrant_disk_size
+  headless             = var.headless
+  http_directory       = var.http_directory
+  guest_os_type        = "RedHat_64"
+  shutdown_command     = var.vagrant_shutdown_command
+  ssh_username         = var.vagrant_ssh_username
+  ssh_password         = var.vagrant_ssh_password
+  ssh_timeout          = var.ssh_timeout
+  hard_drive_interface = "sata"
+  vboxmanage = [
+    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
+  ]
+  vboxmanage_post = [
+    ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+  ]
+}
 
 source "vmware-iso" "almalinux-9" {
-  iso_url          = var.iso_url_9_x86_64
-  iso_checksum     = var.iso_checksum_9_x86_64
-  boot_command     = var.vagrant_boot_command_9_x86_64
+  iso_url          = local.iso_url_9_x86_64
+  iso_checksum     = local.iso_checksum_9_x86_64
+  boot_command     = var.vagrant_boot_command_9_x86_64_bios
   boot_wait        = var.boot_wait
   cpus             = var.cpus
   memory           = var.memory
@@ -91,10 +135,9 @@ source "vmware-iso" "almalinux-9" {
   vmx_remove_ethernet_interfaces = true
 }
 
-
 source "qemu" "almalinux-9" {
-  iso_checksum       = var.iso_checksum_9_x86_64
-  iso_url            = var.iso_url_9_x86_64
+  iso_checksum       = local.iso_checksum_9_x86_64
+  iso_url            = local.iso_url_9_x86_64
   shutdown_command   = var.vagrant_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -118,19 +161,50 @@ source "qemu" "almalinux-9" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-9"
   boot_wait          = var.boot_wait
-  boot_command       = var.vagrant_boot_command_9_x86_64_uefi
+  boot_command       = local.vagrant_boot_command_9_x86_64
   qemuargs = [
     ["-cpu", "host"]
   ]
 }
 
+source "vmware-iso" "almalinux-9-aarch64" {
+  iso_url          = local.iso_url_9_aarch64
+  iso_checksum     = local.iso_checksum_9_aarch64
+  boot_command     = var.vagrant_boot_command_9_aarch64
+  boot_wait        = var.boot_wait
+  cpus             = var.cpus
+  memory           = var.memory
+  disk_size        = var.vagrant_disk_size
+  headless         = var.headless
+  http_directory   = var.http_directory
+  guest_os_type    = "arm-rhel9-64"
+  shutdown_command = var.vagrant_shutdown_command
+  ssh_username     = var.vagrant_ssh_username
+  ssh_password     = var.vagrant_ssh_password
+  ssh_timeout      = var.ssh_timeout
+  vmx_data = {
+    ".encoding"            = "UTF-8",
+    "config.version"       = "8",
+    "virtualHW.version"    = "20",
+    "usb_xhci.present"     = "true",
+    "ethernet0.virtualdev" = "e1000e",
+    "firmware"             = "efi"
+  }
+  vmx_remove_ethernet_interfaces = true
+  vm_name                        = "almalinux-9"
+  usb                            = true
+  disk_adapter_type              = "nvme"
+}
 
 build {
   sources = [
     "sources.hyperv-iso.almalinux-9",
     "sources.parallels-iso.almalinux-9",
+    "sources.parallels-iso.almalinux-9-aarch64",
     "sources.virtualbox-iso.almalinux-9",
+    "sources.virtualbox-iso.almalinux-9-aarch64",
     "sources.vmware-iso.almalinux-9",
+    "sources.vmware-iso.almalinux-9-aarch64",
     "sources.qemu.almalinux-9"
   ]
 
@@ -188,16 +262,27 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
+      output            = "AlmaLinux-9-Vagrant-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
-        "qemu.almalinux-9"
+        "qemu.almalinux-9",
+        "vmware-iso.almalinux-9-aarch64",
+        "parallels-iso.almalinux-9-aarch64"
+      ]
+    }
+
+    post-processor "vagrant" {
+      compression_level = "9"
+      output            = "AlmaLinux-9-Vagrant-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.{{.Provider}}.box"
+      only = [
+        "vmware-iso.almalinux-9-aarch64",
+        "parallels-iso.almalinux-9-aarch64"
       ]
     }
 
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
-      output               = "AlmaLinux-9-Vagrant-9.1-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
+      output               = "AlmaLinux-9-Vagrant-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-9"
       ]

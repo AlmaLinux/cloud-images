@@ -7,6 +7,18 @@
   ansible.builtin.command: dnf clean all
   changed_when: true
 
+- name: Find DNF history files
+  ansible.builtin.find:
+    paths: /var/lib/dnf
+    patterns: "history*"
+  register: dnf_history
+
+- name: Reset DNF history
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ dnf_history.files }}"
+
 - name: Find temporary files
   ansible.builtin.find:
     file_type: any

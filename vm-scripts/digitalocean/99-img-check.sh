@@ -562,7 +562,7 @@ elif [[ $OS == "AlmaLinux" ]]; then
         ost=1
     if [[ $VER =~ 8.[3-9] ]]; then
         osv=1
-    elif [[ $VER =~ 9.0 ]]; then
+    elif [[ $VER =~ 9.? ]]; then
         osv=1
     else
         osv=2

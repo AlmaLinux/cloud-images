@@ -1,4 +1,4 @@
-# AlmaLinux 9 kickstart file for Generic Cloud (OpenStack) aarch64 image
+# AlmaLinux 9 aarch64 kickstart file for Vagrant boxes
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/os/
@@ -14,26 +14,26 @@ keyboard us
 timezone UTC --utc
 
 network --bootproto=dhcp
-firewall --enabled --service=ssh
-services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
+firewall --disabled
+services --enabled=sshd
 selinux --enforcing
 
-bootloader --timeout=1 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check crashkernel=auto net.ifnames=0"
-
+bootloader --location=mbr
 zerombr
 clearpart --all --initlabel
-part /boot/efi --size=200 --fstype=efi
-part /boot --size=512 --fstype=xfs
-part / --size=8000 --fstype=xfs
+autopart --type=plain --nohome --noboot --noswap
 
-rootpw --plaintext almalinux
+rootpw vagrant
+user --name=vagrant --plaintext --password vagrant
 
 reboot --eject
 
 
 %packages --inst-langs=en
 @core
+bzip2
 dracut-config-generic
+tar
 usermode
 -biosdevname
 -dnf-plugin-spacewalk
@@ -52,7 +52,15 @@ usermode
 %addon com_redhat_kdump --disable
 %end
 
-%post --erroronfail
+
+%post
+# allow vagrant user to run everything without a password
+echo "vagrant     ALL=(ALL)     NOPASSWD: ALL" >> /etc/sudoers.d/vagrant
+
+# see Vagrant documentation (https://docs.vagrantup.com/v2/boxes/base.html)
+# for details about the requiretty.
+sed -i "s/^.*requiretty/# Defaults requiretty/" /etc/sudoers
+yum clean all
 
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf

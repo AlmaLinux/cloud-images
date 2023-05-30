@@ -3,9 +3,9 @@
  */
 
 source "hyperv-iso" "almalinux-8" {
-  iso_url               = var.iso_url_8_x86_64
-  iso_checksum          = var.iso_checksum_8_x86_64
-  boot_command          = var.vagrant_boot_command_8_x86_64_uefi
+  iso_url               = local.iso_url_8_x86_64
+  iso_checksum          = local.iso_checksum_8_x86_64
+  boot_command          = local.vagrant_boot_command_8_x86_64_uefi
   boot_wait             = var.boot_wait
   generation            = 2
   switch_name           = var.hyperv_switch_name
@@ -31,8 +31,8 @@ source "parallels-iso" "almalinux-8" {
   disk_size              = var.vagrant_disk_size
   guest_os_type          = "centos"
   http_directory         = var.http_directory
-  iso_checksum           = var.iso_checksum_8_x86_64
-  iso_url                = var.iso_url_8_x86_64
+  iso_checksum           = local.iso_checksum_8_x86_64
+  iso_url                = local.iso_url_8_x86_64
   memory                 = var.memory
   parallels_tools_flavor = var.parallels_tools_flavor_x86_64
   shutdown_command       = var.vagrant_shutdown_command
@@ -43,8 +43,8 @@ source "parallels-iso" "almalinux-8" {
 
 
 source "virtualbox-iso" "almalinux-8" {
-  iso_url              = var.iso_url_8_x86_64
-  iso_checksum         = var.iso_checksum_8_x86_64
+  iso_url              = local.iso_url_8_x86_64
+  iso_checksum         = local.iso_checksum_8_x86_64
   boot_command         = var.vagrant_boot_command_8_x86_64
   boot_wait            = var.boot_wait
   cpus                 = var.cpus
@@ -58,6 +58,9 @@ source "virtualbox-iso" "almalinux-8" {
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
   hard_drive_interface = "sata"
+  vboxmanage = [
+    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
+  ]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
     ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
@@ -66,8 +69,8 @@ source "virtualbox-iso" "almalinux-8" {
 
 
 source "vmware-iso" "almalinux-8" {
-  iso_url          = var.iso_url_8_x86_64
-  iso_checksum     = var.iso_checksum_8_x86_64
+  iso_url          = local.iso_url_8_x86_64
+  iso_checksum     = local.iso_checksum_8_x86_64
   boot_command     = var.vagrant_boot_command_8_x86_64
   boot_wait        = var.boot_wait
   cpus             = var.cpus
@@ -93,8 +96,8 @@ source "vmware-iso" "almalinux-8" {
 
 
 source "qemu" "almalinux-8" {
-  iso_checksum       = var.iso_checksum_8_x86_64
-  iso_url            = var.iso_url_8_x86_64
+  iso_checksum       = local.iso_checksum_8_x86_64
+  iso_url            = local.iso_url_8_x86_64
   shutdown_command   = var.vagrant_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -120,8 +123,8 @@ source "qemu" "almalinux-8" {
 
 
 source "qemu" "almalinux-8-uefi" {
-  iso_checksum       = var.iso_checksum_8_x86_64
-  iso_url            = var.iso_url_8_x86_64
+  iso_checksum       = local.iso_checksum_8_x86_64
+  iso_url            = local.iso_url_8_x86_64
   shutdown_command   = var.vagrant_shutdown_command
   accelerator        = "kvm"
   http_directory     = var.http_directory
@@ -145,7 +148,7 @@ source "qemu" "almalinux-8-uefi" {
   qemu_binary        = var.qemu_binary
   vm_name            = "almalinux-8"
   boot_wait          = var.boot_wait
-  boot_command       = var.vagrant_boot_command_8_x86_64_uefi
+  boot_command       = local.vagrant_boot_command_8_x86_64_uefi
 }
 
 
@@ -213,7 +216,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "AlmaLinux-8-Vagrant-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
+      output            = "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       except = [
         "qemu.almalinux-8",
         "qemu.almalinux-8-uefi"
@@ -223,7 +226,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
-      output               = "AlmaLinux-8-Vagrant-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
+      output               = "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8"
       ]
@@ -232,7 +235,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt-uefi.tpl"
-      output               = "AlmaLinux-8-Vagrant-UEFI-8.7-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
+      output               = "AlmaLinux-8-Vagrant-UEFI-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8-uefi"
       ]
