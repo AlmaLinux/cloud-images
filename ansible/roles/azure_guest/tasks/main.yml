@@ -6,6 +6,7 @@
       - gdisk
       - tar
       - yum-utils
+      - nvme-cli
     state: present
 
 - name: Blacklist unnecessary kernel modules
