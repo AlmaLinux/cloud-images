@@ -720,6 +720,15 @@ Add `extra_arguments  = [ "--scp-extra-args", "'-O'" ]` to the Packer's Ansible 
 
 ### Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system
 
+**FIXED:** Starting with the `1.1.0` version, `ECDSA` keypair is generated and used by default instead of `RSA`.
+
+To upgrade the plugin and disable SHA1:
+
+```sh
+packer init -upgrade .
+update-crypto-policies --set DEFAULT
+```
+
 Error output:
 
 ```sh
