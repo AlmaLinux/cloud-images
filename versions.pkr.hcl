@@ -6,19 +6,19 @@ packer {
       source  = "github.com/hashicorp/qemu"
     }
     virtualbox = {
-      version = ">= 1.0.0"
+      version = ">= 1.0.3"
       source  = "github.com/hashicorp/virtualbox"
     }
     vmware = {
-      version = ">= 1.0.0"
+      version = ">= 1.0.6"
       source  = "github.com/hashicorp/vmware"
     }
     hyperv = {
-      version = ">= 1.0.0"
+      version = ">= 1.0.3"
       source  = "github.com/hashicorp/hyperv"
     }
     parallels = {
-      version = ">= 1.0.0"
+      version = ">= 1.0.2"
       source  = "github.com/hashicorp/parallels"
     }
     ansible = {
