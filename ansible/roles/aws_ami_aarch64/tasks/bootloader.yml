@@ -1,10 +1,32 @@
 ---
 # tasks file for configuring bootloader
-- name: Configuring GRUB
+- name: Configuring GRUB default settings
   copy:
-    src: /etc/default/grub
+    src: grub
     dest: /rootfs/etc/default/grub
-    mode: '0644'
+    mode: "0644"
+
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
 
 - name: Creating GRUB config
   command: chroot /rootfs grub2-mkconfig -o /etc/grub2-efi.cfg
+
+- name: Enable OS Probe again
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/default/grub
+    regexp: 'GRUB_DISABLE_OS_PROBER.*'
+    state: absent
+
+- name: Delete the GRUB leftover from host system
+  ansible.builtin.file:
+    path: /rootfs/boot/efi/EFI/almalinux/grub.cfg.rpmsave
+    state: absent
