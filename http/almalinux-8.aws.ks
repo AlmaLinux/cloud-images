@@ -18,7 +18,7 @@ firewall --disabled
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
-bootloader --append="console=ttyS0,115200n8 console=tty0 crashkernel=auto net.ifnames=0 no_timer_check nvme_core.io_timeout=4294967295 nvme_core.max_retries=10" --location=mbr --timeout=1
+bootloader --append="console=ttyS0 console=ttyS0,115200n8 crashkernel=auto net.ifnames=0 no_timer_check nvme_core.io_timeout=4294967295 nvme_core.max_retries=10" --location=mbr --timeout=1
 zerombr
 clearpart --all --initlabel --disklabel=gpt
 autopart --type=plain --noboot --nohome --noswap --fstype=xfs
@@ -45,7 +45,14 @@ reboot --eject
 %end
 
 
-%post
+%post --log=/var/log/anaconda/post-install.log --erroronfail
+# enable aws serial output for grub
+echo 'GRUB_TERMINAL="console serial"' >> /etc/default/grub
+echo 'GRUB_SERIAL_COMMAND="serial --speed=115200"' >> /etc/default/grub
+
+# Rebuild grub config
+grub2-mkconfig --output=/boot/grub2/grub.cfg
+
 # allow ec2-user to run everything without a password
 echo -e 'ec2-user\tALL=(ALL)\tNOPASSWD: ALL' >> /etc/sudoers
 

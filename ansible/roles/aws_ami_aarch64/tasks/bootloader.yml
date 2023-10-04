@@ -6,5 +6,13 @@
     dest: /rootfs/etc/default/grub
     mode: '0644'
 
+- name: Add GRUB2 support for EC2 Serial Console
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/default/grub
+    line: "{{ item }}"
+  loop:
+    - 'GRUB_TERMINAL="console serial"'
+    - 'GRUB_SERIAL_COMMAND="serial --speed=115200"'
+
 - name: Creating GRUB config
   command: chroot /rootfs grub2-mkconfig -o /etc/grub2-efi.cfg
