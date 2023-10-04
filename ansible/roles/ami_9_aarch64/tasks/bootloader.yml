@@ -4,7 +4,18 @@
   copy:
     src: grub
     dest: /rootfs/etc/default/grub
-    mode: '0644'
+    mode: "0644"
+
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
 
 - name: Generate the GRUB configuration file
   command: chroot /rootfs grub2-mkconfig -o /boot/grub2/grub.cfg

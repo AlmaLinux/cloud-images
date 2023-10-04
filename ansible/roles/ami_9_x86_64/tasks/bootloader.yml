@@ -6,6 +6,17 @@
     dest: /rootfs/etc/default/grub
     mode: 0644
 
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
+
 - name: Install GRUB for BIOS
   command: chroot /rootfs grub2-install --target=i386-pc /dev/nvme1n1
 
