@@ -1,6 +1,7 @@
-GRUB_CMDLINE_LINUX="console=ttyS0 console=ttyS0,115200n8 net.ifnames=0 rd.blacklist=nouveau nvme_core.io_timeout=4294967295 crashkernel=auto"
+GRUB_CMDLINE_LINUX="console=ttyS0 console=tty0,115200n8 net.ifnames=0 rd.blacklist=nouveau nvme_core.io_timeout=4294967295"
 GRUB_TIMEOUT=0
 GRUB_ENABLE_BLSCFG=true
+GRUB_DEFAULT=saved
 GRUB_DISABLE_OS_PROBER=true
 GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial —speed=115200"

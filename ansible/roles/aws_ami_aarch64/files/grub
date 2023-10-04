@@ -1,0 +1,5 @@
+GRUB_CMDLINE_LINUX="console=ttyS0,115200n8 console=tty0 net.ifnames=0 rd.blacklist=nouveau nvme_core.io_timeout=4294967295 iommu.strict=0"
+GRUB_TIMEOUT=0
+GRUB_ENABLE_BLSCFG=true
+GRUB_DEFAULT=saved
+GRUB_DISABLE_OS_PROBER=true
