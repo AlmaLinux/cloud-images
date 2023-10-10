@@ -18,8 +18,8 @@ packer {
       source  = "github.com/hashicorp/hyperv"
     }
     parallels = {
-      version = ">= 1.0.2"
-      source  = "github.com/hashicorp/parallels"
+      version = ">= 1.1.2"
+      source  = "github.com/Parallels/parallels"
     }
     ansible = {
       version = ">= 1.1.0"
@@ -30,8 +30,8 @@ packer {
       source  = "github.com/hashicorp/amazon"
     }
     digitalocean = {
-      version = ">= 1.0.0"
-      source  = "github.com/hashicorp/digitalocean"
+      version = ">= 1.2.0"
+      source  = "github.com/digitalocean/digitalocean"
     }
   }
 }
