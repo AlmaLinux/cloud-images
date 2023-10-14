@@ -3,7 +3,7 @@
  */
 
 
-# TODO: Enable when https://github.com/hashicorp/packer/issues/12434 is resolved
+# TODO: Enable when https://github.com/hashicorp/packer/issues/11037 is resolved
 /*
 data "amazon-ami" "almalinux-9-x86_64" {
   filters = {
