@@ -225,7 +225,7 @@ build {
 
     post-processor "vagrant" {
       compression_level    = "9"
-      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
+      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
       output               = "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8"
@@ -234,7 +234,7 @@ build {
 
     post-processor "vagrant" {
       compression_level    = "9"
-      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt-uefi.tpl"
+      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt-uefi.rb"
       output               = "AlmaLinux-8-Vagrant-UEFI-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-8-uefi"
