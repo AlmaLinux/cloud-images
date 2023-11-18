@@ -281,7 +281,7 @@ build {
 
     post-processor "vagrant" {
       compression_level    = "9"
-      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.tpl"
+      vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
       output               = "AlmaLinux-9-Vagrant-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
       only = [
         "qemu.almalinux-9"
