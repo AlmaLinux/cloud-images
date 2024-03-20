@@ -1,0 +1,75 @@
+---
+- name: Generate GRUB defaults
+  ansible.builtin.template:
+    src: grub_defaults.j2
+    dest: /rootfs/etc/default/grub
+    mode: "0644"
+
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
+
+- name: Install GRUB for BIOS
+  ansible.builtin.command:
+    cmd: chroot /rootfs grub2-install --target=i386-pc /dev/nvme1n1
+    creates: /rootfs/boot/grub2/i386-pc
+
+- name: Generate GRUB configuration
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: /rootfs/boot/grub2/grub.cfg
+    mode: "0600"
+
+- name: Get kernel version
+  ansible.builtin.command:
+    cmd: chroot /rootfs rpm -qa --queryformat "%{VERSION}-%{RELEASE}.%{ARCH}" kernel
+  register: kernel_ver
+  changed_when: false
+
+- name: Delete old GRUB environment block
+  ansible.builtin.file:
+    path: /rootfs/boot/grub2/grubenv
+    state: absent
+
+- name: Generate new GRUB environment block
+  ansible.builtin.command:
+    cmd: chroot /rootfs grub2-editenv -v - set saved_entry=ffffffffffffffffffffffffffffffff-{{ kernel_ver.stdout }}
+    creates: /rootfs/boot/grub2/grubenv
+
+- name: Set permissions of GRUB environment block
+  ansible.builtin.file:
+    path: /rootfs/boot/grub2/grubenv
+    owner: root
+    group: root
+    mode: "0600"
+
+# Template based approach
+# - name: Generate new GRUB environment block
+#   ansible.builtin.template:
+#     src: grubenv.j2
+#     dest: /rootfs/boot/grub2/grubenv
+#     mode: "0600"
+
+# - name: Remove trailing newline in GRUB environment block
+#   ansible.builtin.command:
+#     cmd: truncate -s -1 /rootfs/boot/grub2/grubenv
+#   changed_when: true
+
+- name: Get size of GRUB environment block
+  ansible.builtin.stat:
+    path: /rootfs/boot/grub2/grubenv
+  register: grubenv
+
+- name: Check if GRUB environment block file size is 1024 bytes
+  ansible.builtin.assert:
+    that:
+      - grubenv.stat.size == 1024
+    fail_msg: The size of GRUB environment block file is not 1024 bytes
+    success_msg: The size of GRUB environment block file is 1024 bytes

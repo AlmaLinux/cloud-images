@@ -1,0 +1,28 @@
+---
+- name: Create partition table, partitions and filesystems
+  ansible.builtin.import_tasks:
+    file: storage.yaml
+
+- name: Create chroot
+  ansible.builtin.import_tasks:
+    file: chroot.yaml
+
+- name: Install OS
+  ansible.builtin.import_tasks:
+    file: os.yaml
+
+- name: Configure guest
+  ansible.builtin.import_tasks:
+    file: guest.yaml
+
+- name: Configure bootloader
+  ansible.builtin.import_tasks:
+    file: bootloader.yaml
+
+- name: Configure SELinux
+  ansible.builtin.import_tasks:
+    file: selinux.yaml
+
+- name: Cleanup
+  ansible.builtin.import_tasks:
+    file: cleanup.yaml

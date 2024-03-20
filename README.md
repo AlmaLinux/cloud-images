@@ -1,7 +1,8 @@
 # AlmaLinux OS Cloud Images
 
+
 AlmaLinux OS Cloud Images is a project that contains
-[Packer](https://www.packer.io/) templates and other tools for building
+[Packer](https://www.packer.io) templates and other tools for building
 AlmaLinux OS images for various cloud platforms.
 
 
@@ -25,7 +26,7 @@ AlmaLinux OS images for various cloud platforms.
 
 ## Usage
 
-Install or Update installed Packer plugins:
+Make sure the required Packer plugins are installed and the latest:
 
 ```sh
 packer init -upgrade .
@@ -120,124 +121,9 @@ packer build -only=qemu.almalinux-9-azure-x86_64 .
 
 ### Amazon Machine Images (AMI)
 
+#### Requirements
 
-#### AlmaLinux OS 8
-
-`x86_64` BIOS only:
-
-Before building AMI's you need to configure AWS credentials as described in
-the Packer [documentation](https://www.packer.io/docs/builders/amazon#environment-variables).
-Basically, you need to define the following environment variables:
-
-```sh
-export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
-export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
-export AWS_DEFAULT_REGION='us-east-1'
-```
-
-Also, you need to create an S3 bucket that Packer will use for temporary image
-storing before importing it into EC2. It's strongly recommended creating the
-bucket in the `us-east-1` region if you are going to submit your images to the
-Amazon Marketplace. Accordingly to Amazon's [documentation](https://docs.aws.amazon.com/marketplace/latest/userguide/product-submission.html#submitting-amis-to-aws-marketplace),
-the self-service AMI scanner supports only that region.
-
-After configuring the AWS credentials and creating the S3 bucket, run the
-following command to build an AMI and import it to EC2:
-
-The Build process has two stages:
-
-* Stage 1: Build the first stage's AMI on your system and import it to the AWS.
-
-* Stage 2: Build the second stage's AMI on the EC2 Instance.
-
-The First Stage:
-
-QEMU:
-
-```sh
-packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" -only=qemu.almalinux-8-aws-stage1 .
-```
-
-VMware:
-
-```sh
-packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" -only=vmware-iso.almalinux-8-aws-stage1 .
-```
-
-If you are using a non-standard [role name](https://www.packer.io/docs/post-processors/amazon#role_name),
-it's possible to define it as a variable:
-
-QEMU:
-
-```sh
-packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
-    -var aws_role_name="YOUR_IAM_ROLE_NAME" -only=qemu.almalinux-8-aws-stage1 .
-```
-VMware:
-
-```sh
-packer build -var aws_s3_bucket_name="YOUR_S3_BUCKET_NAME" \
-    -var aws_role_name="YOUR_IAM_ROLE_NAME" -only=vmware-iso.almalinux-8-aws-stage1 .
-```
-The Second Stage:
-
-To finalize the AMI build process, you need to launch a minimum `t2.micro` EC2 instance from the first stage's AMI.
-
-Launch an instance with the `build-tools-on-ec2-userdata.yml` Cloud-init User Data. It will install all needed packages - `Packer`, `Ansible`, `Git` and `tmux` (if your connection is not stable) and clone the repo automatically.
-
-login as `ec2-user`:
-
-```sh
-cd cloud-images
-```
-
-Switch to the `root` user:
-```sh
-sudo su
-```
-
-Configure the AWS credentials:
-
-```sh
-export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
-export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
-export AWS_DEFAULT_REGION='us-east-1'
-```
-
-Install or Update installed plugins:
-```sh
-packer.io init -upgrade .
-```
-
-Start the Build:
-```sh
-packer.io build -only=amazon-chroot.almalinux-8-aws-stage2 .
-```
-You can remove the first stage's AMI after the build complete
-
-`AArch64`
-
-Configure the AWS credentials:
-
-```sh
-export AWS_ACCESS_KEY_ID='ENTER_YOUR_ACCESS_KEY_HERE'
-export AWS_SECRET_ACCESS_KEY='ENTER_YOUR_SECRET_KEY_HERE'
-export AWS_DEFAULT_REGION='us-east-1'
-```
-
-Install or Update installed plugins:
-```sh
-packer init -upgrade .
-```
-
-Start the Build:
-```sh
-packer build -only=amazon-ebssurrogate.almalinux-8-aws-aarch64 .
-```
-
-#### AlmaLinux OS 9
-
-Use one of these methods to set up your AWS credentials:
+1. Use one of these methods to set up your AWS credentials:
 
 - Static credentials
 - Environment variables
@@ -246,27 +132,136 @@ Use one of these methods to set up your AWS credentials:
 
 See https://www.packer.io/plugins/builders/amazon#authentication for instructions.
 
-Install or Update installed plugins:
+**Note:** Use `aws_profile` Packer input variable if you configured multiple profiles on the shared credentials file.
+
+2. Configure your region if it is different than `us-east-1`.
+
+The `us-east-1` is set as a default region of:
+- Source AMI ID: `aws_source_ami_9_x86_64`, `aws_source_ami_9_aarch64`, `aws_source_ami_8_x86_64`, `aws_source_ami_8_aarch64`.
+- Region of EC2 Instance to be used as a builder: `aws_ami_region`
+- The list of regions to copy the AMI to: `aws_ami_regions`
+
+You can get the ID of source AMI using one of these methods:
+
+AlmaLinux Wiki:
+
+Latest AMIs are published on: https://wiki.almalinux.org/cloud/AWS.html#community-amis
+
+AWS Console:
+
+On the page of EC2 service, click on AMIs on the left panel. Select filter as "Public Images" and paste this `Owner = 764336703387`.
+
+AWS CLI:
+
+Replace the `$REGION` with yours. e.g. `us-west-1`:
+
+AlmaLinux OS 8:
+
 ```sh
-packer init -upgrade .
+aws ec2 describe-images --owners 764336703387 --query 'sort_by(Images, &CreationDate)[*].[CreationDate,Name,ImageId]' --filters "Name=name,Values=AlmaLinux OS 8*" --region $REGION --output table
 ```
-Start the Build:
 
-`x86_64` BIOS only:
+AlmaLinux OS 9:
 
 ```sh
-packer build -only=amazon-ebssurrogate.almalinux-9-ami-x86_64 .
+aws ec2 describe-images --owners 764336703387 --query 'sort_by(Images, &CreationDate)[*].[CreationDate,Name,ImageId]' --filters "Name=name,Values=AlmaLinux OS 9*" --region $REGION --output table
 ```
 
-`AArch64`
+Use the one of the methods listed below to set input variables:
+
+- Command-line option
+- Variable definition file
+- Environment variable
+
+**Command line option**
 
 ```sh
-packer build -only=amazon-ebssurrogate.almalinux-9-ami-aarch64 .
+packer build \
+    -var='aws_source_ami_9_x86_64=ami-1234567890abcdef0' \
+    -var='aws_ami_region=us-west-1' \
+    -var='aws_ami_regions=["us-west-1"]' \
+    -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
 ```
+
+**Variable definition file**
+
+Auto-loaded with `.auto.pkrvars.hcl` file extension:
+
+`foo.auto.pkrvars.hcl`
+```hcl
+aws_source_ami_9_x86_64 = "ami-1234567890abcdef0"
+aws_ami_region          = "us-west-1"
+aws_ami_regions         = ["us-west-1"]
+```
+
+Standard definition with `.pkrvars.hcl` ending:
+```sh
+packer build -var-file="foo.pkrvars.hcl" -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
+```
+
+**Environment Variables**
+
+```sh
+export PKR_VAR_aws_source_ami_9_x86_64='ami-1234567890abcdef0'
+export PKR_VAR_aws_ami_region='us-west-1'
+export PKR_VAR_aws_ami_regions='["us-west-1"]'
+
+packer build -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
+```
+
+or
+
+```sh
+PKR_VAR_aws_source_ami_9_x86_64='ami-1234567890abcdef0' PKR_VAR_aws_ami_region='us-west-1' PKR_VAR_aws_ami_regions='["us-west-1"]' packer build -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
+```
+
+#### Build
+
+##### AlmaLinux OS 8
+
+`x86_64`:
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_8_ami_x86_64 .
+```
+
+`AArch64`:
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_8_ami_aarch64 .
+```
+
+##### AlmaLinux OS 9
+
+`x86_64`:
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
+```
+
+`AArch64`:
+
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_9_ami_aarch64 .
+```
+
+#### Customization
+
+These input variables can be used for the cutomization of AMIs:
+- Volume type of AMI (default: gp3): `aws_volume_type`
+- Volume size of AMI (default: 4 GiB): `aws_volume_size`
+
+You can also speed-up the build time with upgrading the instance type for builder EC2 Instances:
+- Instance type of x86_64 builder EC2 Instance (default: `t3.small`): `aws_instance_type_x86_64`
+- Instance type of AArch64 builder EC2 Instance (default: `t4g.small`): `aws_instance_type_aarch64`
+
+**Note:** Only Nitro based EC2 instances are supported as a builder.
+
+For any customization inside the AMI, import your custom ansible playbook after the "Install AWS Guest Tools" task on `ansible/roles/ami_[8-9]_(x86_64|aarch64)/tasks/main.yaml`.
 
 
 ### Vagrant Boxes
-
 
 #### AlmaLinux OS 8
 
@@ -352,7 +347,7 @@ VMware Desktop `aarch64`:
 packer build -only=vmware-iso.almalinux-9-aarch64 .
 ```
 
-Note: At this time, VMWare Fusion desktop, Apple M1 processer expects additional config settings to `run` vagrant box built for aarch64. It's behaviour of VMWare Fusion, not an issue of AlmaLinux.
+Note: At this time, VMWare Fusion desktop, Apple M1 processor expects additional config settings to `run` vagrant box built for aarch64. It's behavior of VMWare Fusion, not an issue of AlmaLinux OS.
 
 ```log
 Vagrant.configure("2") do |config|
