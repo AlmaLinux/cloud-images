@@ -1,0 +1,77 @@
+---
+- name: Create /etc/kernel directories
+  ansible.builtin.file:
+    path: /rootfs/etc/kernel
+    state: directory
+    mode: "0755"
+
+- name: Configure kernel parameters
+  ansible.builtin.template:
+    src: cmdline.j2
+    dest: /rootfs/etc/kernel/cmdline
+    mode: "0644"
+
+- name: Generate fake machine-id
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/machine-id
+    line: ffffffffffffffffffffffffffffffff
+    create: true
+    state: present
+    mode: "0444"
+
+- name: Installing the system release files # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-release-latest-8.aarch64.rpm
+  changed_when: true
+
+- name: Update the system # noqa: package-latest
+  ansible.builtin.dnf:
+    installroot: /rootfs
+    disable_gpg_check: true
+    name: "*"
+    state: latest
+
+- name: Creating fstab
+  ansible.builtin.template:
+    src: fstab.j2
+    dest: /rootfs/etc/fstab
+    mode: "0644"
+
+- name: Install Base System on chroot
+  ansible.builtin.shell:
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=cachedir=/var/cache/dnf install
+      langpacks-en
+      kernel
+      dracut-config-generic
+      grub2-efi-aa64
+      shim-aa64
+      efibootmgr
+      chrony
+      NetworkManager-cloud-setup
+      @core
+      --exclude="kexec-tools"
+      --exclude="biosdevname"
+      --exclude="open-vm-tools"
+      --exclude="rhn*"
+      --exclude="iprutils"
+      --exclude="iwl*-firmware"
+      --exclude="dnf-plugin-spacewalk"
+      --exclude="plymouth*"
+      --exclude="dracut-config-rescue"
+      --exclude="mdadm"
+  changed_when: true
+
+- name: Set default target/runlevel and disable tmp.mount
+  ansible.builtin.command:
+    cmd: chroot /rootfs systemctl {{ item.cmd }} {{ item.unit }}
+  loop:
+    - { cmd: set-default, unit: multi-user.target }
+    - { cmd: mask, unit: tmp.mount }
+  changed_when: true
+
+- name: Set default locale to en_US.UTF-8
+  ansible.builtin.copy:
+    content: LANG=en_US.UTF-8
+    dest: /rootfs/etc/locale.conf
+    mode: "0644"

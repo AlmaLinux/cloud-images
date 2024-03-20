@@ -1,4 +1,5 @@
+boto3>=1.34.62
 markdown-table==2020.12.3
-pytest-testinfra>=6.8.0
-paramiko>=2.11.0
-pyyaml>=6.0
+pytest-testinfra>=10.1.0
+paramiko>=3.4.0
+pyyaml>=6.0.1
