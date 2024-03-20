@@ -1,0 +1,3 @@
+{% set grubenv_block = "# GRUB Environment Block" ~ "\n" ~ "kernelopts=root=UUID=" ~ root_uuid.stdout ~ " " ~ ami_8_x86_64_kernel_opts ~ "\n" ~ "saved_entry=ffffffffffffffffffffffffffffffff-" ~ kernel_ver.stdout ~ "\n" -%}
+{% set grubenv_padded = grubenv_block.ljust(1024, '#') -%}
+{{ grubenv_padded }}

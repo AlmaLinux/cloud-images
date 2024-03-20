@@ -1,0 +1,99 @@
+---
+- name: Delete DNF cache
+  ansible.builtin.command:
+    cmd: dnf -y --installroot=/rootfs --nogpgcheck clean all
+  register: dnf_clean_output
+  changed_when: dnf_clean_output.stdout.split(' ')[0]|int > 0
+
+- name: Find DNF leftovers
+  ansible.builtin.find:
+    paths: /rootfs/var/cache/dnf
+    file_type: any
+    patterns: "*"
+    hidden: true
+    recurse: true
+  register: dnf_cache
+
+- name: Delete DNF leftovers
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ dnf_cache.files }}"
+
+- name: Find DNF history files
+  ansible.builtin.find:
+    paths: /rootfs/var/lib/dnf
+    patterns: history*
+  register: dnf_history
+
+- name: Reset DNF history
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ dnf_history.files }}"
+
+- name: Find temporary files
+  ansible.builtin.find:
+    file_type: any
+    paths:
+      - /rootfs/tmp
+      - /rootfs/var/tmp
+    patterns: "*"
+  register: tmp_files
+
+- name: Remove temporary files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ tmp_files.files }}"
+
+- name: Truncate files
+  ansible.builtin.command: truncate -s 0 {{ item }}
+  loop:
+    - /rootfs/etc/machine-id
+    - /rootfs/etc/hostname
+    - /rootfs/etc/resolv.conf
+    - /rootfs/var/log/audit/audit.log
+    - /rootfs/var/log/wtmp
+    - /rootfs/var/log/lastlog
+    - /rootfs/var/log/btmp
+    - /rootfs/var/log/cron
+    - /rootfs/var/log/maillog
+    - /rootfs/var/log/messages
+    - /rootfs/var/log/secure
+    - /rootfs/var/log/spooler
+  changed_when: true
+
+- name: Remove log folders.
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /rootfs/var/log/anaconda
+    - /rootfs/var/log/qemu-ga
+    - /rootfs/var/log/tuned
+    - /rootfs/var/lib/cloud
+    - /rootfs/etc/machine-info
+    - /rootfs/var/lib/systemd/credential.secret
+
+- name: Find log files.
+  ansible.builtin.find:
+    paths: /rootfs/var/log
+    patterns: "*log,*.old,*.log.gz,*.[0-9],*.gz,*-????????"
+  register: log_files
+
+- name: Remove log files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ log_files.files }}"
+
+- name: Remove random-seed
+  ansible.builtin.file:
+    path: /rootfs/var/lib/systemd/random-seed
+    state: absent
+
+- name: Sync disc
+  ansible.builtin.command:
+    cmd: sync
+  changed_when: false

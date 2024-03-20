@@ -1,0 +1,89 @@
+---
+- name: Create chroot directory
+  ansible.builtin.file:
+    path: /rootfs
+    state: directory
+    mode: "0555"
+
+- name: Mount chroot root partition
+  ansible.posix.mount:
+    src: /dev/nvme1n1p3
+    path: /rootfs
+    fstype: xfs
+    state: ephemeral
+
+- name: Create /boot directory
+  ansible.builtin.file:
+    path: /rootfs/boot
+    state: directory
+    mode: "0555"
+
+- name: Mount chroot boot partition
+  ansible.posix.mount:
+    src: /dev/nvme1n1p2
+    path: /rootfs/boot
+    fstype: xfs
+    state: ephemeral
+
+- name: Create ESP directory
+  ansible.builtin.file:
+    path: /rootfs/boot/efi
+    state: directory
+    mode: "0700"
+
+- name: Mount chroot esp partition
+  ansible.posix.mount:
+    src: /dev/nvme1n1p1
+    path: /rootfs/boot/efi
+    fstype: vfat
+    state: ephemeral
+
+- name: Create chroot device directory
+  ansible.builtin.file:
+    path: /rootfs/dev
+    state: directory
+    mode: "0755"
+
+- name: Mount chroot device filesystem
+  ansible.posix.mount:
+    src: /dev
+    path: /rootfs/dev
+    opts: bind
+    fstype: none
+    state: ephemeral
+
+- name: Create chroot sys directory
+  ansible.builtin.file:
+    path: /rootfs/sys
+    state: directory
+    mode: "0555"
+
+- name: Mount chroot sysfs
+  ansible.posix.mount:
+    src: sysfs
+    path: /rootfs/sys
+    fstype: sysfs
+    state: ephemeral
+
+- name: Creating the rootfs directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /rootfs/dev/pts, mode: "0755" }
+    - { path: /rootfs/dev/shm, mode: "1777" }
+    - { path: /rootfs/proc, mode: "0555" }
+    - { path: /rootfs/sys/fs/selinux, mode: "0555" }
+
+- name: Mount chroot pseudo filesystems
+  ansible.posix.mount:
+    src: "{{ item.src }}"
+    path: "{{ item.path }}"
+    fstype: "{{ item.fstype }}"
+    state: ephemeral
+  loop:
+    - { src: devpts, path: /rootfs/dev/pts, fstype: devpts }
+    - { src: tmpfs, path: /rootfs/dev/shm, fstype: tmpfs }
+    - { src: proc, path: /rootfs/proc, fstype: proc }
+    - { src: selinuxfs, path: /rootfs/sys/fs/selinux, fstype: selinuxfs }

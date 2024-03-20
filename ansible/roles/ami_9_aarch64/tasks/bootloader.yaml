@@ -1,0 +1,52 @@
+---
+- name: Generate GRUB defaults
+  ansible.builtin.template:
+    src: grub_defaults.j2
+    dest: /rootfs/etc/default/grub
+    mode: "0644"
+
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
+
+- name: Generate GRUB configuration
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: /rootfs/boot/grub2/grub.cfg
+    mode: "0644"
+
+- name: Get kernel version
+  ansible.builtin.command:
+    cmd: chroot /rootfs rpm -qa --queryformat "%{VERSION}-%{RELEASE}.%{ARCH}" kernel
+  register: kernel_ver
+  changed_when: false
+
+- name: Generate GRUB enviroment file
+  ansible.builtin.template:
+    src: grubenv.j2
+    dest: /rootfs/boot/grub2/grubenv
+    mode: "0600"
+
+- name: Remove trailing newline in grubenv
+  ansible.builtin.command:
+    cmd: truncate -s -1 /rootfs/boot/grub2/grubenv
+  changed_when: true
+
+- name: Get size of GRUB environment file
+  ansible.builtin.stat:
+    path: /rootfs/boot/grub2/grubenv
+  register: grubenv
+
+- name: Check if GRUB environment file size is 1024 bytes
+  ansible.builtin.assert:
+    that:
+      - grubenv.stat.size == 1024
+    fail_msg: The size of grubenv file is not 1024 bytes
+    success_msg: The size of grubenv file is 1024 bytes

@@ -1,0 +1,28 @@
+---
+- name: Create partition table, partitions and format
+  ansible.builtin.import_tasks:
+    file: storage.yaml
+
+- name: Mount chroot
+  ansible.builtin.import_tasks:
+    file: mount_chroot.yaml
+
+- name: Install system base
+  ansible.builtin.import_tasks:
+    file: install_system.yaml
+
+- name: Install AWS Guest Tools
+  ansible.builtin.import_tasks:
+    file: aws_guest.yaml
+
+- name: Configure bootloader
+  ansible.builtin.import_tasks:
+    file: bootloader.yaml
+
+- name: SELinux - Relabel the filesystem
+  ansible.builtin.import_tasks:
+    file: selinux.yaml
+
+- name: Cleanup system
+  ansible.builtin.import_tasks:
+    file: cleanup.yaml
