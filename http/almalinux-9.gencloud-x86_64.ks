@@ -18,7 +18,7 @@ firewall --enabled --service=ssh
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
-bootloader --timeout=1 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check crashkernel=auto net.ifnames=0"
+bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
 
 %pre --erroronfail
 

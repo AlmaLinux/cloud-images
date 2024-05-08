@@ -20,7 +20,8 @@ firewall --disabled
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
-bootloader --append="console=tty1 console=ttyS0,115200n8 earlyprintk=ttyS0,115200 rootdelay=300 net.ifnames=0" --location=mbr --timeout=1
+bootloader --timeout=0 --location=mbr --append="loglevel=3 console=tty1 console=ttyS0 earlyprintk=ttyS0 rootdelay=300 no_timer_check net.ifnames=0"
+
 zerombr
 bootloader --location=mbr --timeout=1
 part /boot/efi --onpart=sda15 --fstype=vfat
