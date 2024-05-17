@@ -311,39 +311,51 @@ local "azure_boot_command_9_x86_64" {
 
 # AWS
 
-variable "aws_disk_size" {
-  description = "The size in MiB of hard disk of VM"
+variable "aws_profile" {
+  description = "The profile to use in the shared credentials file for AWS"
+  default     = null
+}
+
+variable "aws_ami_region" {
+  description = "The region to create the AMI"
+
+  type    = string
+  default = "us-east-1"
+}
+
+variable "aws_ami_regions" {
+  description = "The list of regions to copy the AMI to"
+
+  type    = list(string)
+  default = ["us-east-1"]
+}
+
+variable "aws_volume_type" {
+  description = "Volume type for AMI"
+
+  type    = string
+  default = "gp3"
+}
+
+variable "aws_volume_size" {
+  description = "Volume size for AMI in GiB"
 
   type    = number
-  default = 4096
+  default = 4
 }
 
-variable "aws_ssh_username" {
-  description = "The username to connect to SSH with"
+variable "aws_instance_type_x86_64" {
+  description = "Instance type for builder. Only Nitro based is supported"
 
   type    = string
-  default = "root"
+  default = "t3.small"
 }
 
-variable "aws_ssh_password" {
-  description = "A plaintext password to use to authenticate with SSH"
+variable "aws_instance_type_aarch64" {
+  description = "Instance type for builder. Only Nitro based is supported"
 
   type    = string
-  default = "almalinux"
-}
-
-variable "aws_s3_bucket_name" {
-  description = "The name of the S3 bucket where the VM image will be copied to for import"
-
-  type    = string
-  default = null
-}
-
-variable "aws_role_name" {
-  description = "The name of the role to use for VM Import"
-
-  type    = string
-  default = null
+  default = "t4g.small"
 }
 
 local "aws_ami_name_x86_64_8" {
@@ -386,65 +398,32 @@ local "aws_ami_version_9" {
   expression = "${var.os_ver_9}.${formatdate("YYYYMMDD", timestamp())}"
 }
 
-variable "aws_ami_architecture" {
-  description = "The architecture of AMI"
+variable "aws_source_ami_8_x86_64" {
+  description = "AlmaLinux OS 8 x86_64 AMI as source"
 
   type    = string
-  default = "x86_64"
-}
-
-variable "aws_ami_region" {
-  description = "The region to create the AMI"
-
-  type    = string
-  default = "us-east-1"
-}
-
-variable "aws_ami_regions" {
-  description = "The list of regions to copy the AMI to"
-
-  type    = list(string)
-  default = ["us-east-1"]
-}
-
-variable "aws_volume_type" {
-  description = "Volume type for AMI"
-
-  type    = string
-  default = "gp3"
+  default = "ami-0f384fefb431fbea2"
 }
 
 variable "aws_source_ami_8_aarch64" {
   description = "AlmaLinux OS 8 AArch64 AMI as source"
 
   type    = string
-  default = "ami-02c9a8bba92028114"
+  default = "ami-099b4f20875da4c84"
 }
 
 variable "aws_source_ami_9_x86_64" {
   description = "AlmaLinux OS 9 x86_64 AMI as source"
 
   type    = string
-  default = "ami-06bc84fafec254e1d"
+  default = "ami-09ec283e9acdfa57e"
 }
 
 variable "aws_source_ami_9_aarch64" {
   description = "AlmaLinux OS 9 AArch64 AMI as source"
 
   type    = string
-  default = "ami-00a3e427999640fad"
-}
-
-variable "aws_boot_command_8" {
-  description = "Boot command for x86_64 BIOS"
-
-  type = list(string)
-  default = [
-    "<tab>",
-    "inst.text net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.aws.ks",
-    "<enter><wait>"
-  ]
+  default = "ami-01b09fbeec4dbcc45"
 }
 
 # Vagrant

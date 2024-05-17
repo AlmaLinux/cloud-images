@@ -1,0 +1,7 @@
+---
+- name: AlmaLinux OS 9 AMI AArch64
+  hosts: all
+  become: true
+
+  roles:
+    - ami_9_aarch64

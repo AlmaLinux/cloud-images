@@ -1,0 +1,3 @@
+{% set grubenv_block = "# GRUB Environment Block" ~ "\n" ~ "saved_entry=ffffffffffffffffffffffffffffffff-" ~ kernel_ver.stdout ~ "\n" -%}
+{% set grubenv_padded = grubenv_block.ljust(1024, '#') -%}
+{{ grubenv_padded }}

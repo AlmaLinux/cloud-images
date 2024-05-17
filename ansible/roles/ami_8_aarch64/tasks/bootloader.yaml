@@ -1,0 +1,77 @@
+---
+- name: Generate GRUB defaults
+  ansible.builtin.template:
+    src: grub_defaults.j2
+    dest: /rootfs/etc/default/grub
+    mode: "0644"
+
+- name: Configure the latest kernel as default
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/sysconfig/kernel
+    line: "{{ item }}"
+    state: present
+    create: true
+    mode: "0644"
+  loop:
+    - DEFAULTKERNEL=kernel
+    - UPDATEDEFAULT=yes
+
+- name: Generate GRUB configuration
+  ansible.builtin.template:
+    src: grub.cfg.j2
+    dest: /rootfs/boot/efi/EFI/almalinux/grub.cfg
+    mode: "0700"
+
+- name: Get kernel version
+  ansible.builtin.command:
+    cmd: chroot /rootfs rpm -qa --queryformat "%{VERSION}-%{RELEASE}.%{ARCH}" kernel
+  register: kernel_ver
+  changed_when: false
+
+- name: Delete old GRUB environment block
+  ansible.builtin.file:
+    path: /rootfs/boot/efi/EFI/almalinux/grubenv
+    state: absent
+
+- name: Generate new GRUB environment block
+  ansible.builtin.command:
+    cmd: chroot /rootfs grub2-editenv -v /boot/efi/EFI/almalinux/grubenv set saved_entry=ffffffffffffffffffffffffffffffff-{{ kernel_ver.stdout }}
+    creates: /rootfs/boot/efi/EFI/almalinux/grubenv
+
+# # Gives "ok" as status and doesn't modify the file permissions
+# - name: Set permissions of GRUB environment block
+#   ansible.builtin.file:
+#     path: /rootfs/boot/efi/EFI/almalinux/grubenv
+#     owner: root
+#     group: root
+#     mode: "0700"
+
+# # Use chmod command as a workaround
+# - name: Set permissions of GRUB environment block
+#   ansible.builtin.command:
+#     cmd: chmod 0700 /rootfs/boot/efi/EFI/almalinux/grubenv
+#   changed_when: true
+
+# # Template based approach
+# - name: Generate new GRUB environment block
+#   ansible.builtin.template:
+#     src: grubenv.j2
+#     dest: /rootfs/boot/efi/EFI/almalinux/grubenv
+#     mode: "0600"
+#
+# - name: Remove trailing newline in GRUB environment block
+#   ansible.builtin.command:
+#     cmd: truncate -s -1 /rootfs/boot/efi/EFI/almalinux/grubenv
+#   changed_when: true
+
+- name: Get size of GRUB environment block
+  ansible.builtin.stat:
+    path: /rootfs/boot/efi/EFI/almalinux/grubenv
+  register: grubenv
+
+- name: Check if GRUB environment block file size is 1024 bytes
+  ansible.builtin.assert:
+    that:
+      - grubenv.stat.size == 1024
+    fail_msg: The size of GRUB environment block file is not 1024 bytes
+    success_msg: The size of GRUB environment block file is 1024 bytes
