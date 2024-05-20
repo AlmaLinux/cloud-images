@@ -109,14 +109,15 @@ build {
   ]
 
   provisioner "ansible" {
-    playbook_file    = "./ansible/oci.yml"
-    galaxy_file      = "./ansible/requirements.yml"
-    roles_path       = "./ansible/roles"
-    collections_path = "./ansible/collections"
+    galaxy_file          = "./ansible/requirements.yml"
+    galaxy_force_install = true
+    collections_path     = "./ansible/collections"
+    roles_path           = "./ansible/roles"
+    playbook_file        = "./ansible/oci.yml"
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O"
     ]
   }
 }

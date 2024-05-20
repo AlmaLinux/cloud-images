@@ -661,7 +661,7 @@ Output:
 
 By default, Packer looks for QEMU binary as `qemu-system-x86_64`. If it is different in your system, You can set your qemu binary with the `qemu_binary` Packer variable.
 
-on EL - `/usr/libexec/qemu-kvm`
+on EL, it's `/usr/libexec/qemu-kvm`:
 
 ```sh
 packer build -var qemu_binary="/usr/libexec/qemu-kvm" -only=qemu.almalinux-8-gencloud-x86_64 .
@@ -675,42 +675,18 @@ or set the `qemu_binary` Packer variable in `.auto.pkrvars.hcl` file:
 qemu_binary = "/usr/libexec/qemu-kvm"
 ```
 
-### Failed to connect to the host via scp with OpenSSH >= 9.0/9.0p1 and EL9
+### File transfer fails with OpenSSH < 9.0/9.0p1
 
-OpenSSH `>= 9.0/9.0p1` and EL9 support was added in [scp_90](https://github.com/AlmaLinux/cloud-images/tree/scp_90) branch instead of the `main` for backward compatibility. Please switch to this branch with `git checkout scp_90`
+On AlmaLinux OS 8, Debian 11 (bullseye) and Ubuntu 20.04 LTS (Focal Fossa), comment `"ANSIBLE_SCP_EXTRA_ARGS=-O"` Ansible variable:
 
-The Ansible's `ansible.builtin.template` module gives error on EL9 and >= OpenSSH 9.0/9.0p1 (2022-04-08) Host OS.
+```sh
+sed -i 's/.*\("ANSIBLE_SCP_EXTRA_ARGS=-O"\).*/# \1/g' almalinux*.pkr.hcl
+```
 
 Error output:
 
 ```sh
-fatal: [default]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via scp: bash: line 1: /usr/lib/sftp-server: No such file or directory\nConnection closed\r\n", "unreachable": true}
-```
-
-EL9 and OpenSSH >=9.0 deprecated the SCP protocol. Use the new `-O` flag until Ansible starts to use SFTP directly.
-
-From [OpenSSH 9.0/9.0p1 \(2022-04-08\) release note:](https://www.openssh.com/txt/release-9.0)
-
-> In case of incompatibility, the `scp(1)` client may be instructed to use
-the legacy scp/rcp using the `-O` flag.
-
-See: [OpenSSH SCP deprecation in RHEL 9: What you need to know ](https://www.redhat.com/en/blog/openssh-scp-deprecation-rhel-9-what-you-need-know)
-
-Add `extra_arguments  = [ "--scp-extra-args", "'-O'" ]` to the Packer's Ansible Provisioner Block:
-
-```hcl
-  provisioner "ansible" {
-    playbook_file    = "./ansible/gencloud.yml"
-    galaxy_file      = "./ansible/requirements.yml"
-    roles_path       = "./ansible/roles"
-    collections_path = "./ansible/collections"
-    extra_arguments  = [ "--scp-extra-args", "'-O'" ]
-    ansible_env_vars = [
-      "ANSIBLE_PIPELINING=True",
-      "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SSH_ARGS='-o ControlMaster=no -o ControlPersist=180s -o ServerAliveInterval=120s -o TCPKeepAlive=yes'"
-    ]
-  }
+fatal: [default]: FAILED! => {"msg": "failed to transfer file to /home/vagrant/.ansible/tmp/ansible-local-3759yjc1ghcz/tmpzo9a3_vb/grub.conf.j2 /tmp/ansible-tmp-1715955434.1781824-3861-34379722779259/source:\n\nunknown option -- O\r\nusage: scp [-346BCpqrTv] [-c cipher] [-F ssh_config] [-i identity_file]\n            [-J destination] [-l limit] [-o ssh_option] [-P port]\n            [-S program] source ... target\n"}
 ```
 
 ### Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system
@@ -751,18 +727,3 @@ See:
 * ["qemu-system-x86_64": executable file not found in $PATH](https://github.com/AlmaLinux/cloud-images#qemu-system-x86_64-executable-file-not-found-in-path)
 * [Packer's Ansible Plugin can't connect via SSH on SHA1 disabled system](https://github.com/AlmaLinux/cloud-images#packers-ansible-plugin-cant-connect-via-ssh-on-sha1-disabled-system)
 * [Failed to connect to the host via scp with OpenSSH >= 9.0/9.0p1 and EL9](https://github.com/AlmaLinux/cloud-images#failed-to-connect-to-the-host-via-scp-with-openssh--9090p1-and-el9)
-
-## References
-
-* AWS
-  * [EC2 documentation: Guidelines for shared Linux AMIs](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/building-shared-amis.html)
-  * [EC2 documentation: VM Import/Export](https://aws.amazon.com/ec2/vm-import/)
-  * [Marketplace documentation: Submitting your product for publication](https://docs.aws.amazon.com/marketplace/latest/userguide/product-submission.html)
-* [RHEL® 8 documentation: Kickstart installation basics](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/performing_an_advanced_rhel_installation/kickstart-installation-basics_installing-rhel-as-an-experienced-user)
-* [CentOS kickstart files](https://git.centos.org/centos/kickstarts)
-* [CentOS Stream kickstart files](https://gitlab.com/redhat/centos-stream/release-engineering/kickstarts)
-
-
-## License
-
-Licensed under the MIT license, see the [LICENSE](LICENSE) file for details.
