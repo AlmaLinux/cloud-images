@@ -1,6 +1,3 @@
-# AWS
-aws_s3_bucket_name = "foo"
-
 # DigitalOcean
 do_api_token = "foo"
 do_spaces_key = "foo"
