@@ -40,7 +40,9 @@
 
 - name: Generate new GRUB environment block
   ansible.builtin.command:
-    cmd: chroot /rootfs grub2-editenv -v - set saved_entry=ffffffffffffffffffffffffffffffff-{{ kernel_ver.stdout }}
+    cmd: >
+      chroot /rootfs grub2-editenv -v - set
+      saved_entry=ffffffffffffffffffffffffffffffff-{{ kernel_ver.stdout }}
     creates: /rootfs/boot/grub2/grubenv
 
 - name: Set permissions of GRUB environment block
