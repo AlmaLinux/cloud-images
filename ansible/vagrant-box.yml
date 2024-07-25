@@ -7,7 +7,6 @@
     - almalinux.ci
 
   roles:
-    - upgrade_and_reboot
     - role: unified_boot
       when: is_unified_boot is defined
     - role: ezamriy.vbox_guest
