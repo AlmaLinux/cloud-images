@@ -38,18 +38,12 @@ packer init -upgrade .
 
 #### AlmaLinux OS 8
 
-`x86_64` BIOS only (Default):
-
-```sh
-packer build -only=qemu.almalinux-8-gencloud-x86_64 .
-```
-
-`x86_64` UEFI only:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
 ```sh
-packer build -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
+packer build -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
 `AArch64`:
@@ -67,7 +61,7 @@ packer build -only=qemu.almalinux-8-gencloud-ppc64le .
 
 #### AlmaLinux OS 9
 
-`x86_64` BIOS+UEFI (Default):
+`x86_64` Unified Boot (BIOS and UEFI):
 
 See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
@@ -103,14 +97,14 @@ Both AlmaLinux OS 8 and 9 cloud images supports Generation 1 and Generation 2 VM
 
 See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
-`x86_64` BIOS + UEFI:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=qemu.almalinux-8-azure-x86_64 .
 ```
 #### AlmaLinux OS 9
 
-`x86_64` BIOS + UEFI:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
 
@@ -219,7 +213,7 @@ PKR_VAR_aws_source_ami_9_x86_64='ami-1234567890abcdef0' PKR_VAR_aws_ami_region='
 
 ##### AlmaLinux OS 8
 
-`x86_64`:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=amazon-ebssurrogate.almalinux_8_ami_x86_64 .
@@ -233,7 +227,7 @@ packer build -only=amazon-ebssurrogate.almalinux_8_ami_aarch64 .
 
 ##### AlmaLinux OS 9
 
-`x86_64`:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
@@ -265,13 +259,7 @@ For any customization inside the AMI, import your custom ansible playbook after 
 
 #### AlmaLinux OS 8
 
-Libvirt `x86_64` BIOS only:
-
-```sh
-packer build -only=qemu.almalinux-8 .
-```
-
-Libvirt `x86_64` UEFI only:
+Libvirt `x86_64` Unified Boot (BIOS and UEFI):
 
 See:
 
@@ -280,10 +268,10 @@ See:
 * [How to use UEFI supported Vagrant boxes](https://github.com/AlmaLinux/cloud-images#how-to-use-uefi-supported-vagrant-boxes)
 
 ```sh
-packer build -only=qemu.almalinux-8-uefi .
+packer build -only=qemu.almalinux-8 .
 ```
 
-VirtualBox `x86_64`:
+VirtualBox `x86_64` Unified Boot (BIOS and UEFI)::
 
 ```sh
 packer build -only=virtualbox-iso.almalinux-8 .
@@ -316,7 +304,7 @@ packer build -var hyperv_switch_name="HyperV-vSwitch" -only="hyperv-iso.almalinu
 #### AlmaLinux OS 9
 
 
-Libvirt `x86_64` BIOS + UEFI:
+Libvirt `x86_64` Unified Boot (BIOS and UEFI):
 
 See:
 
@@ -329,7 +317,7 @@ See:
 packer build -only=qemu.almalinux-9 .
 ```
 
-VirtualBox `x86_64`:
+VirtualBox `x86_64` Unified Boot (BIOS and UEFI)::
 
 ```sh
 packer build -only=virtualbox-iso.almalinux-9 .
@@ -373,7 +361,7 @@ packer build -only=parallels-iso.almalinux-9-aarch64 .
 ```
 
 
-Hyper-V `x86_64`:
+Hyper-V `x86_64` Unified Boot (BIOS and UEFI):
 
 ```powershell
 packer build -only="hyperv-iso.almalinux-9" .
@@ -390,7 +378,7 @@ packer build -var hyperv_switch_name="HyperV-vSwitch" -only="hyperv-iso.almalinu
 
 #### AlmaLinux OS 8
 
-`x86_64` BIOS only:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=qemu.almalinux-8-opennebula-x86_64 .
@@ -404,8 +392,7 @@ packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 
 #### AlmaLinux OS 9
 
-
-`x86_64` BIOS + UEFI (Default)
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=qemu.almalinux-9-opennebula-x86_64 .
@@ -432,13 +419,7 @@ Update the Oracle Cloud Agent RPM link if a newer version is available
 
 `ansible/roles/oci_guest/defaults/main.yml`
 
-`x86_64` UEFI only (Default):
-
-```sh
-packer build -only=qemu.almalinux-8-oci-uefi-x86_64 .
-```
-
-`x86_64` BIOS only:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only=qemu.almalinux-8-oci-x86_64 .
@@ -452,8 +433,7 @@ packer build -only=qemu.almalinux-8-oci-aarch64 .
 
 #### AlmaLinux OS 9
 
-
-`x86_64` BIOS + UEFI (Default):
+`x86_64` Unified Boot (BIOS and UEFI):
 ```sh
 packer build -only=qemu.almalinux-9-oci-x86_64 .
 ```
@@ -505,7 +485,7 @@ Now, you're all setup. You can try building the image with:
 
 #### AlmaLinux OS 8
 
-`x86_64` BIOS only:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only qemu.almalinux-8-digitalocean-x86_64 .
@@ -513,7 +493,7 @@ packer build -only qemu.almalinux-8-digitalocean-x86_64 .
 
 #### AlmaLinux OS 9
 
-`x86_64` BIOS only:
+`x86_64` Unified Boot (BIOS and UEFI):
 
 ```sh
 packer build -only qemu.almalinux-9-digitalocean-x86_64 .
