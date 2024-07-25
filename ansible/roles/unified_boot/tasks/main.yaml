@@ -1,0 +1,115 @@
+---
+# We do this as a part on kickstart files
+# - name: Install GRUB for BIOS
+#   ansible.builtin.dnf:
+#     name: grub2-pc
+#     state: present
+
+# - name: Find root disk
+#   ansible.builtin.command:
+#     cmd: grub2-probe --target=disk /boot/grub2
+#   register: root_disk
+#   changed_when: false
+#
+# - name: Install GRUB for BIOS
+#   ansible.builtin.command:
+#     cmd: grub2-install --target=i386-pc {{ root_disk.stdout }}
+#     creates: /boot/grub2/i386-pc
+
+- name: Get UUID of boot partition
+  ansible.builtin.command:
+    cmd: grub2-probe --target=fs_uuid /boot/grub2
+  register: boot_uuid
+  changed_when: false
+
+- name: Get UUID of root partition
+  ansible.builtin.command:
+    cmd: findmnt -n -o UUID /
+  register: root_uuid
+  changed_when: false
+
+- name: Generate GRUB2 stub configuration
+  ansible.builtin.template:
+    src: grub_cfg_stub.j2
+    dest: /boot/efi/EFI/almalinux/grub.cfg
+    mode: "0700"
+
+- name: Generate GRUB2 main configuration
+  ansible.builtin.template:
+    src: grub_cfg_main.j2
+    dest: /boot/grub2/grub.cfg
+    mode: "0600"
+
+- name: Remove symlink of GRUB2 environment block
+  ansible.builtin.file:
+    path: /boot/grub2/grubenv
+    state: absent
+
+- name: Remove old GRUB2 environment block on ESP
+  ansible.builtin.file:
+    path: /boot/efi/EFI/almalinux/grubenv
+    state: absent
+
+- name: Get version of installed kernel # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: rpm -qa --queryformat "%{VERSION}-%{RELEASE}.%{ARCH}" kernel
+  register: kernel_ver
+  changed_when: false
+
+- name: Read machine ID
+  ansible.builtin.slurp:
+    src: /etc/machine-id
+  register: machine_id_base64
+
+- name: Store machine ID
+  ansible.builtin.set_fact:
+    machine_id: "{{ machine_id_base64['content'] | b64decode | trim }}"
+
+- name: Remove old GRUB2 environment block
+  ansible.builtin.file:
+    path: /boot/grub2/grubenv
+    state: absent
+
+# The kernelopts is only needed for AlmaLinux OS 8
+- name: Generate new GRUB2 environment block
+  ansible.builtin.command:
+    cmd: >
+      grub2-editenv -v - set
+      kernelopts="root=UUID={{ root_uuid.stdout }}
+      console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
+      saved_entry={{ machine_id }}-{{ kernel_ver.stdout }}
+    creates: /boot/grub2/grubenv
+
+- name: Set permissions of new GRUB2 environment block
+  ansible.builtin.file:
+    path: /boot/grub2/grubenv
+    owner: root
+    group: root
+    mode: "0600"
+
+# Test if the size of GRUB2 environment block is correct
+- name: Get size of GRUB2 environment block
+  ansible.builtin.stat:
+    path: /boot/grub2/grubenv
+  register: grubenv
+
+- name: Check if file size of GRUB2 environment block is 1024 bytes
+  ansible.builtin.assert:
+    that:
+      - grubenv.stat.size == 1024
+    fail_msg: The file size of GRUB2 environment block is not 1024 bytes
+    success_msg: The file size of GRUB2 environment block is 1024 bytes
+
+# Test if grubby is able to identify absolute path of default kernel
+- name: Get absolute path of default kernel using grubby
+  ansible.builtin.command:
+    cmd: grubby --default-kernel
+  register: default_kernel_path
+  changed_when: false
+
+- name: Check if grubby can correctly identify the default kernel
+  ansible.builtin.assert:
+    that:
+      - default_kernel_path.stdout == "/boot/vmlinuz-" ~ kernel_ver.stdout
+    fail_msg: Grubby could not found the absolute path of default kernel
+    success_msg: Grubby correctly identify the absolute path of default kernel

@@ -165,19 +165,7 @@ variable "gencloud_boot_wait_ppc64le" {
   default = "8s"
 }
 
-variable "gencloud_boot_command_8_x86_64" {
-  description = "Boot command for x86_64 BIOS"
-
-  type = list(string)
-  default = [
-    "<tab>",
-    "inst.text net.ifnames=0 inst.gpt",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-x86_64.ks",
-    "<enter><wait>"
-  ]
-}
-
-local "gencloud_boot_command_8_x86_64_uefi" {
+local "gencloud_boot_command_8_x86_64" {
   expression = [
     "c<wait>",
     "linuxefi",
@@ -456,24 +444,24 @@ variable "vagrant_ssh_password" {
   default = "vagrant"
 }
 
-variable "vagrant_boot_command_8_x86_64" {
+variable "vagrant_boot_command_8_x86_64_bios" {
   description = "Boot command for x86_64 BIOS"
 
   type = list(string)
   default = [
     "<tab>",
-    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks",
+    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-bios.ks",
     "<enter><wait>"
   ]
 }
 
-local "vagrant_boot_command_8_x86_64_uefi" {
+local "vagrant_boot_command_8_x86_64_unified" {
   expression = [
     "c<wait>",
     "linuxefi /images/pxeboot/vmlinuz",
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-x86_64-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant.ks",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-unified.ks",
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
     "boot<enter><wait>"
@@ -515,34 +503,6 @@ variable "vagrant_boot_command_9_aarch64" {
     "<down><down><end><bs><bs><bs><bs><bs>",
     "inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks",
     "<leftCtrlOn>x<leftCtrlOff>"
-  ]
-}
-
-# OpenNebula
-
-variable "opennebula_boot_command_8_x86_64" {
-  description = "Boot command for x86_64 BIOS"
-
-  type = list(string)
-  default = [
-    "<tab>",
-    " inst.text net.ifnames=0 inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.opennebula-x86_64.ks",
-    "<enter><wait>"
-  ]
-}
-
-local "opennebula_boot_command_8_aarch64" {
-  expression = [
-    "c",
-    "<wait>",
-    "linux /images/pxeboot/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.opennebula-aarch64.ks",
-    "<enter>",
-    "initrd /images/pxeboot/initrd.img",
-    "<enter>",
-    "boot<enter><wait>"
   ]
 }
 

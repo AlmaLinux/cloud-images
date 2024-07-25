@@ -5,5 +5,7 @@
   become: true
 
   roles:
+    - role: unified_boot
+      when: is_unified_boot is defined
     - azure_guest
     - cleanup_vm
