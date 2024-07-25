@@ -1,4 +1,4 @@
-# AlmaLinux 9 aarch64 kickstart file for Vagrant boxes
+# AlmaLinux OS 9 kickstart file for Vagrant boxes on AArch64
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/os/
@@ -8,11 +8,9 @@ text
 skipx
 eula --agreed
 firstboot --disabled
-
 lang C.UTF-8
 keyboard us
 timezone UTC --utc
-
 network --bootproto=dhcp
 firewall --disabled
 services --enabled=sshd
@@ -22,13 +20,13 @@ bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,11520
 
 zerombr
 clearpart --all --initlabel
-autopart --type=plain --nohome --noboot --noswap
+part /boot/efi --fstype=efi --size=200
+part /boot --fstype=xfs --size=1024
+part / --fstype=xfs --grow
 
 rootpw vagrant
 user --name=vagrant --plaintext --password vagrant
-
 reboot --eject
-
 
 %packages --inst-langs=en
 @core
@@ -48,20 +46,18 @@ usermode
 -rhn*
 %end
 
-
 # disable kdump service
 %addon com_redhat_kdump --disable
 %end
 
+%post --erroronfail
 
-%post
 # allow vagrant user to run everything without a password
 echo "vagrant     ALL=(ALL)     NOPASSWD: ALL" >> /etc/sudoers.d/vagrant
 
 # see Vagrant documentation (https://docs.vagrantup.com/v2/boxes/base.html)
 # for details about the requiretty.
 sed -i "s/^.*requiretty/# Defaults requiretty/" /etc/sudoers
-yum clean all
 
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf

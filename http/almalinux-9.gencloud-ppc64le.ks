@@ -1,4 +1,4 @@
-# AlmaLinux 9 kickstart file for Generic Cloud (OpenStack) ppc64le image
+# AlmaLinux OS 9 kickstart file for OpenStack compatible Generic Cloud (Cloud-init) images on ppc64le
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/os/
@@ -8,13 +8,11 @@ text
 skipx
 eula --agreed
 firstboot --disabled
-
 lang C.UTF-8
 keyboard us
 timezone UTC --utc
-
 network --bootproto=dhcp
-firewall --enabled --service=ssh
+firewall --disabled
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
@@ -23,13 +21,11 @@ bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,11520
 zerombr
 clearpart --all --initlabel
 reqpart
-part /boot --size=512 --fstype=xfs
-part / --size=8000 --fstype=xfs
+part /boot --fstype=xfs --size=1024
+part / --fstype=xfs --grow
 
 rootpw --plaintext almalinux
-
 reboot --eject
-
 
 %packages --inst-langs=en
 @core
@@ -46,7 +42,6 @@ usermode
 -plymouth
 -rhn*
 %end
-
 
 # disable kdump service
 %addon com_redhat_kdump --disable
