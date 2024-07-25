@@ -30,6 +30,8 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ net_rules.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Configure /etc/sysconfig/network
   ansible.builtin.lineinfile:

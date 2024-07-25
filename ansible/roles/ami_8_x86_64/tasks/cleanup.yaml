@@ -19,6 +19,8 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ dnf_cache.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Find DNF history files
   ansible.builtin.find:
@@ -31,6 +33,8 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ dnf_history.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Find temporary files
   ansible.builtin.find:
@@ -46,6 +50,8 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ tmp_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Truncate files
   ansible.builtin.command: truncate -s 0 {{ item }}
@@ -87,6 +93,8 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ log_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Remove random-seed
   ansible.builtin.file:
