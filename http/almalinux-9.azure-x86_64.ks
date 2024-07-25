@@ -1,4 +1,4 @@
-# AlmaLinux 9 kickstart file for Azure x86-64 image
+# AlmaLinux OS 9 kickstart file for Azure VM images on x86_64
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/
@@ -8,13 +8,11 @@ text
 skipx
 eula --agreed
 firstboot --disabled
-
 lang C.UTF-8
 keyboard us
 timezone UTC --utc
-
 network --bootproto=dhcp
-firewall --enabled --service=ssh
+firewall --disabled
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
@@ -36,9 +34,7 @@ part /boot --fstype=xfs --onpart=sda3
 part / --fstype=xfs --onpart=sda4
 
 rootpw --plaintext almalinux
-
 reboot --eject
-
 
 %packages --inst-langs=en
 @core
@@ -57,14 +53,21 @@ usermode
 -rhn*
 %end
 
-
 # disable kdump service
 %addon com_redhat_kdump --disable
 %end
 
 %post --erroronfail
 
-grub2-install --target=i386-pc /dev/sda
+EX_NOINPUT=66
+
+root_disk=$(grub2-probe --target=disk /boot/grub2)
+
+if [[ "$root_disk" =~ ^"/dev/" ]]; then
+    grub2-install --target=i386-pc "$root_disk"
+else
+    exit "$EX_NOINPUT"
+fi
 
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
