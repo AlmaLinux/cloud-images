@@ -1,0 +1,3 @@
+# Line endings are converted from LF to CRLF on Windows.
+# Anaconda installer doesn't understand kickstart files with CRLF line endings.
+*.ks text eol=lf
