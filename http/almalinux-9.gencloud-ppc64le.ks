@@ -1,4 +1,4 @@
-# AlmaLinux OS 9 kickstart file for OpenStack compatible Generic Cloud (Cloud-init) images on ppc64le
+# AlmaLinux OS 9 kickstart file for Cloud-init included and OpenStack compatible Generic Cloud images on ppc64le
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/os/

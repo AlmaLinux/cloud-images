@@ -1,4 +1,4 @@
-# AlmaLinux OS 9 kickstart file for OpenStack compatible Generic Cloud (Cloud-init) images with unified (BIOS+UEFI) boot on x86_64
+# AlmaLinux OS 9 kickstart file for Cloud-init included and OpenStack compatible Generic Cloud images with unified (BIOS+UEFI) boot on x86_64
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/x86_64/os/

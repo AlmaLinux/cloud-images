@@ -1,4 +1,4 @@
-# AlmaLinux OS 8 kickstart file for OpenStack compatible Generic Cloud (Cloud-init) images on AArch64
+# AlmaLinux OS 8 kickstart file for Cloud-init included and OpenStack compatible Generic Cloud images on AArch64
 
 url --url https://repo.almalinux.org/almalinux/8/BaseOS/aarch64/kickstart/
 repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/8/BaseOS/aarch64/os/
