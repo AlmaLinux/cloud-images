@@ -1,6 +1,4 @@
-/*
- * AlmaLinux OS 8 Packer template for building an Azure image.
- */
+# AlmaLinux OS 8 Packer template for Azure VM images
 
 source "qemu" "almalinux-8-azure-x86_64" {
   iso_url            = local.iso_url_8_x86_64
@@ -10,15 +8,14 @@ source "qemu" "almalinux-8-azure-x86_64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.gencloud_boot_command_8_x86_64
+  boot_command       = local.azure_boot_command_8_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
-  disk_size          = var.gencloud_disk_size
+  disk_size          = var.azure_disk_size
   disk_cache         = "unsafe"
   disk_discard       = "unmap"
   disk_detect_zeroes = "unmap"
-  disk_compression   = true
   format             = "raw"
   headless           = var.headless
   machine_type       = "q35"

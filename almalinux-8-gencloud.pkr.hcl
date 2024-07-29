@@ -1,4 +1,4 @@
-# AlmaLinux OS 8 Packer template for OpenStack compatible Generic Cloud images with Cloud-init
+# AlmaLinux OS 8 Packer template for Cloud-init included and OpenStack compatible Generic Cloud images
 
 source "qemu" "almalinux-8-gencloud-x86_64" {
   iso_url            = local.iso_url_8_x86_64
@@ -69,12 +69,13 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
 source "qemu" "almalinux-8-gencloud-ppc64le" {
   iso_url            = local.iso_url_8_ppc64le
   iso_checksum       = local.iso_checksum_8_ppc64le
-  shutdown_command   = var.root_shutdown_command
   http_directory     = var.http_directory
+  shutdown_command   = var.root_shutdown_command
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  cpus               = var.cpus
+  boot_command       = local.gencloud_boot_command_8_ppc64le
+  boot_wait          = var.gencloud_boot_wait_ppc64le
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -88,8 +89,7 @@ source "qemu" "almalinux-8-gencloud-ppc64le" {
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-8-GenericCloud-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"
-  boot_wait          = var.gencloud_boot_wait_ppc64le
-  boot_command       = local.gencloud_boot_command_8_ppc64le
+  cpus               = var.cpus
 }
 
 build {

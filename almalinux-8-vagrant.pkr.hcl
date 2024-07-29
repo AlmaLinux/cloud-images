@@ -1,4 +1,4 @@
-# AlmaLinux OS 8 Packer template for building Vagrant boxes
+# AlmaLinux OS 8 Packer template for Vagrant boxes
 
 source "qemu" "almalinux-8" {
   iso_url            = local.iso_url_8_x86_64
@@ -8,7 +8,7 @@ source "qemu" "almalinux-8" {
   ssh_username       = var.vagrant_ssh_username
   ssh_password       = var.vagrant_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.vagrant_boot_command_8_x86_64_unified
+  boot_command       = local.vagrant_boot_command_8_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
@@ -40,7 +40,7 @@ source "virtualbox-iso" "almalinux-8" {
   ssh_username         = var.vagrant_ssh_username
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
-  boot_command         = local.vagrant_boot_command_8_x86_64_unified
+  boot_command         = local.vagrant_boot_command_8_x86_64
   boot_wait            = var.boot_wait
   firmware             = "efi"
   disk_size            = var.vagrant_disk_size
@@ -62,39 +62,39 @@ source "virtualbox-iso" "almalinux-8" {
 source "hyperv-iso" "almalinux-8" {
   iso_url               = local.iso_url_8_x86_64
   iso_checksum          = local.iso_checksum_8_x86_64
-  boot_command          = local.vagrant_boot_command_8_x86_64_unified
-  boot_wait             = var.boot_wait
-  generation            = 2
-  switch_name           = var.hyperv_switch_name
-  cpus                  = var.cpus
-  memory                = var.memory
-  enable_dynamic_memory = true
-  disk_size             = var.vagrant_disk_size
-  disk_block_size       = 1
-  headless              = var.headless
   http_directory        = var.http_directory
   shutdown_command      = var.vagrant_shutdown_command
   communicator          = "ssh"
   ssh_username          = var.vagrant_ssh_username
   ssh_password          = var.vagrant_ssh_password
   ssh_timeout           = var.ssh_timeout
+  boot_command          = local.vagrant_boot_command_8_x86_64
+  boot_wait             = var.boot_wait
+  disk_size             = var.vagrant_disk_size
+  disk_block_size       = 1
+  memory                = var.memory
+  switch_name           = var.hyperv_switch_name
+  cpus                  = var.cpus
+  generation            = 2
+  enable_dynamic_memory = true
+  headless              = var.headless
 }
 
 source "vmware-iso" "almalinux-8" {
   iso_url          = local.iso_url_8_x86_64
   iso_checksum     = local.iso_checksum_8_x86_64
-  boot_command     = var.vagrant_boot_command_8_x86_64_bios
-  boot_wait        = var.boot_wait
-  cpus             = var.cpus
-  memory           = var.memory
-  disk_size        = var.vagrant_disk_size
-  headless         = var.headless
   http_directory   = var.http_directory
-  guest_os_type    = "centos-64"
   shutdown_command = var.vagrant_shutdown_command
   ssh_username     = var.vagrant_ssh_username
   ssh_password     = var.vagrant_ssh_password
   ssh_timeout      = var.ssh_timeout
+  boot_command     = var.vagrant_boot_command_8_x86_64_bios
+  boot_wait        = var.boot_wait
+  disk_size        = var.vagrant_disk_size
+  guest_os_type    = "centos-64"
+  cpus             = var.cpus
+  memory           = var.memory
+  headless         = var.headless
   vmx_data = {
     "cpuid.coresPerSocket" : "1"
   }
@@ -107,20 +107,20 @@ source "vmware-iso" "almalinux-8" {
 }
 
 source "parallels-iso" "almalinux-8" {
+  iso_url                = local.iso_url_8_x86_64
+  iso_checksum           = local.iso_checksum_8_x86_64
+  http_directory         = var.http_directory
+  shutdown_command       = var.vagrant_shutdown_command
+  ssh_username           = var.vagrant_ssh_username
+  ssh_password           = var.vagrant_ssh_password
+  ssh_timeout            = var.ssh_timeout
   boot_command           = var.vagrant_boot_command_8_x86_64_bios
   boot_wait              = var.boot_wait
   cpus                   = var.cpus
   disk_size              = var.vagrant_disk_size
   guest_os_type          = "centos"
-  http_directory         = var.http_directory
-  iso_checksum           = local.iso_checksum_8_x86_64
-  iso_url                = local.iso_url_8_x86_64
   memory                 = var.memory
   parallels_tools_flavor = var.parallels_tools_flavor_x86_64
-  shutdown_command       = var.vagrant_shutdown_command
-  ssh_password           = var.vagrant_ssh_password
-  ssh_timeout            = var.ssh_timeout
-  ssh_username           = var.vagrant_ssh_username
 }
 
 build {

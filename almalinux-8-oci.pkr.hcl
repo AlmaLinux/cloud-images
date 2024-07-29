@@ -1,4 +1,4 @@
-# AlmaLinux OS 8 Packer template for Oracle Cloud images
+# AlmaLinux OS 8 Packer template for Oracle Cloud Infrastructure images
 
 source "qemu" "almalinux-8-oci-x86_64" {
   iso_url            = local.iso_url_8_x86_64
@@ -71,6 +71,7 @@ build {
     "qemu.almalinux-8-oci-x86_64",
     "qemu.almalinux-8-oci-aarch64"
   ]
+
   provisioner "ansible" {
     galaxy_file          = "./ansible/requirements.yml"
     galaxy_force_install = true
@@ -87,6 +88,7 @@ build {
     ]
     only = ["qemu.almalinux-8-oci-x86_64"]
   }
+
   provisioner "ansible" {
     galaxy_file          = "./ansible/requirements.yml"
     galaxy_force_install = true

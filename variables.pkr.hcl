@@ -208,18 +208,6 @@ local "gencloud_boot_command_8_ppc64le" {
   ]
 }
 
-variable "gencloud_boot_command_9_x86_64_bios" {
-  description = "Boot command for x86_64 BIOS"
-
-  type = list(string)
-  default = [
-    "<tab>",
-    "inst.text biosdevname=0 net.ifnames=0 inst.gpt",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64-bios.ks",
-    "<enter><wait>"
-  ]
-}
-
 local "gencloud_boot_command_9_x86_64" {
   expression = [
     "c<wait>",
@@ -450,18 +438,18 @@ variable "vagrant_boot_command_8_x86_64_bios" {
   type = list(string)
   default = [
     "<tab>",
-    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-bios.ks",
+    " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-x86_64-bios.ks",
     "<enter><wait>"
   ]
 }
 
-local "vagrant_boot_command_8_x86_64_unified" {
+local "vagrant_boot_command_8_x86_64" {
   expression = [
     "c<wait>",
     "linuxefi /images/pxeboot/vmlinuz",
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-x86_64-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-unified.ks",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-x86_64.ks",
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
     "boot<enter><wait>"
@@ -489,7 +477,7 @@ variable "vagrant_boot_command_9_x86_64_bios" {
   type = list(string)
   default = [
     "<tab>",
-    "inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64.ks",
+    "inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64-bios.ks",
     "<enter><wait>"
   ]
 }
