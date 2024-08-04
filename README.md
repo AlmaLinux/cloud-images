@@ -58,6 +58,47 @@ packer build -only=qemu.almalinux-8-gencloud-aarch64 .
 packer build -only=qemu.almalinux-8-gencloud-ppc64le .
 ```
 
+`s390x`:
+
+If you are building on AlmaLinux OS or other EL distro, the latest version of [Oz](https://github.com/clalancette/oz.git) is available on [Synergy](https://wiki.almalinux.org/repos/Synergy.html).
+
+Consult the [reference configuration](https://github.com/clalancette/oz/blob/master/oz.cfg) to configure `almalinux_oz.cfg`.
+
+Generate a Oz TDL file with a timestamp in UTC and minor version of AlmaLinux OS 8.
+
+```sh
+export IMAGE_TIMESTAMP=$(date -u '+%Y%m%d')
+# For AlmaLinux OS 8.10, It is 10.
+export IMAGE_MINOR_VERSION='10'
+
+sed -E "s/TIMESTAMP/"${IMAGE_TIMESTAMP}"/g" almalinux_8_gencloud_s390x.xml.tmpl > almalinux_8_gencloud_s390x.xml
+sed -Ei "s/MINOR_VERSION/"${IMAGE_MINOR_VERSION}"/g" almalinux_8_gencloud_s390x.xml
+```
+
+Build.
+
+Use `-t` to increase timeout in seconds if the builder machine is slow.
+
+```sh
+sudo oz-install \
+    -a http/almalinux-8.gencloud-s390x.ks \
+    -c almalinux_oz.cfg \
+    -d 2 \
+    -f \
+    -p \
+    almalinux_8_gencloud_s390x.xml
+```
+
+Optional: Compress QCOW2 image file and upgrade its version from QCOW2 v2 (`0.10`) to QCOW2 v3 (`1.1`).
+
+```sh
+qemu-img convert \
+    -c \
+    -f qcow2 \
+    -O qcow2 \
+    /var/lib/libvirt/images/AlmaLinux-8-GenericCloud-8."${IMAGE_MINOR_VERSION}"-"${IMAGE_TIMESTAMP}".s390x.qcow2 \
+    AlmaLinux-8-GenericCloud-8."${IMAGE_MINOR_VERSION}"-"${IMAGE_TIMESTAMP}".s390x.qcow2
+```
 
 #### AlmaLinux OS 9
 
@@ -87,6 +128,47 @@ packer build -only=qemu.almalinux-9-gencloud-aarch64 .
 packer build -only=qemu.almalinux-9-gencloud-ppc64le .
 ```
 
+`s390x`:
+
+If you are building on AlmaLinux OS or other EL distro, the latest version of [Oz](https://github.com/clalancette/oz.git) is available on [Synergy](https://wiki.almalinux.org/repos/Synergy.html).
+
+Consult the [reference configuration](https://github.com/clalancette/oz/blob/master/oz.cfg) to configure `almalinux_oz.cfg`.
+
+Generate a Oz TDL file with a timestamp in UTC and minor version of AlmaLinux OS 9.
+
+```sh
+export IMAGE_TIMESTAMP=$(date -u '+%Y%m%d')
+# For AlmaLinux OS 9.4, It is 4.
+export IMAGE_MINOR_VERSION='4'
+
+sed -E "s/TIMESTAMP/"${IMAGE_TIMESTAMP}"/g" almalinux_9_gencloud_s390x.xml.tmpl > almalinux_9_gencloud_s390x.xml
+sed -Ei "s/MINOR_VERSION/"${IMAGE_MINOR_VERSION}"/g" almalinux_9_gencloud_s390x.xml
+```
+
+Build.
+
+Use `-t` to increase timeout in seconds if the builder machine is slow.
+
+```sh
+sudo oz-install \
+    -a http/almalinux-9.gencloud-s390x.ks \
+    -c almalinux_oz.cfg \
+    -d 2 \
+    -f \
+    -p \
+    almalinux_9_gencloud_s390x.xml
+```
+
+Optional: Compress QCOW2 image file and upgrade its version from QCOW2 v2 (`0.10`) to QCOW2 v3 (`1.1`).
+
+```sh
+qemu-img convert \
+    -c \
+    -f qcow2 \
+    -O qcow2 \
+    /var/lib/libvirt/images/AlmaLinux-9-GenericCloud-9."${IMAGE_MINOR_VERSION}"-"${IMAGE_TIMESTAMP}".s390x.qcow2 \
+    AlmaLinux-9-GenericCloud-9."${IMAGE_MINOR_VERSION}"-"${IMAGE_TIMESTAMP}".s390x.qcow2
+```
 
 ### Azure VM Images
 
