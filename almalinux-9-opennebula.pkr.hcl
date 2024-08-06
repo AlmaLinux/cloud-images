@@ -62,14 +62,14 @@ source "qemu" "almalinux-9-opennebula-aarch64" {
   cpus               = var.cpus
   qemuargs = [
     ["-boot", "strict=on"],
-    ["-monitor", "none"]
+    ["-monitor", "none"],
   ]
 }
 
 build {
   sources = [
-    "qemu.almalinux-9-opennebula-x86_64",
-    "qemu.almalinux-9-opennebula-aarch64"
+    "source.qemu.almalinux-9-opennebula-x86_64",
+    "source.qemu.almalinux-9-opennebula-aarch64",
   ]
 
   provisioner "ansible" {
@@ -81,7 +81,7 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
   }
 }

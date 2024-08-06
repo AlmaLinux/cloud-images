@@ -35,8 +35,8 @@ source "amazon-ebssurrogate" "almalinux_8_ami_x86_64" {
   ami_virtualization_type = "hvm"
   ami_regions             = var.aws_ami_regions
   tags = {
-    Name         = "${local.aws_ami_name_x86_64_8}",
-    Version      = "${local.aws_ami_version_8}",
+    Name         = "${local.aws_ami_name_x86_64_8}"
+    Version      = "${local.aws_ami_version_8}"
     Architecture = "x86_64"
   }
   boot_mode    = "uefi-preferred"
@@ -74,8 +74,8 @@ source "amazon-ebssurrogate" "almalinux_8_ami_aarch64" {
   ami_virtualization_type = "hvm"
   ami_regions             = var.aws_ami_regions
   tags = {
-    Name         = "${local.aws_ami_name_aarch64_8}",
-    Version      = "${local.aws_ami_version_8}",
+    Name         = "${local.aws_ami_name_aarch64_8}"
+    Version      = "${local.aws_ami_version_8}"
     Architecture = "aarch64"
   }
   imds_support  = "v2.0"
@@ -100,18 +100,21 @@ source "amazon-ebssurrogate" "almalinux_8_ami_aarch64" {
 
 build {
   sources = [
-    "sources.amazon-ebssurrogate.almalinux_8_ami_x86_64",
-    "sources.amazon-ebssurrogate.almalinux_8_ami_aarch64"
+    "source.amazon-ebssurrogate.almalinux_8_ami_x86_64",
+    "source.amazon-ebssurrogate.almalinux_8_ami_aarch64",
   ]
+
   provisioner "shell" {
     inline = ["sudo dnf -y install ansible-core dosfstools"]
   }
+
   provisioner "ansible-local" {
     playbook_dir  = "./ansible"
     playbook_file = "./ansible/ami_8_x86_64.yaml"
     galaxy_file   = "./ansible/requirements.yml"
     only          = ["amazon-ebssurrogate.almalinux_8_ami_x86_64"]
   }
+
   provisioner "ansible-local" {
     playbook_dir  = "./ansible"
     playbook_file = "./ansible/ami_8_aarch64.yaml"
