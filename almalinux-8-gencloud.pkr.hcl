@@ -62,7 +62,7 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
   cpus               = var.cpus
   qemuargs = [
     ["-boot", "strict=on"],
-    ["-monitor", "none"]
+    ["-monitor", "none"],
   ]
 }
 
@@ -94,9 +94,9 @@ source "qemu" "almalinux-8-gencloud-ppc64le" {
 
 build {
   sources = [
-    "qemu.almalinux-8-gencloud-x86_64",
-    "qemu.almalinux-8-gencloud-aarch64",
-    "qemu.almalinux-8-gencloud-ppc64le"
+    "source.qemu.almalinux-8-gencloud-x86_64",
+    "source.qemu.almalinux-8-gencloud-aarch64",
+    "source.qemu.almalinux-8-gencloud-ppc64le",
   ]
 
   provisioner "ansible" {
@@ -108,10 +108,11 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     extra_arguments = [
-      "--extra-vars", "is_unified_boot=true"
+      "--extra-vars",
+      "is_unified_boot=true",
     ]
     only = ["qemu.almalinux-8-gencloud-x86_64"]
   }
@@ -125,11 +126,11 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     only = [
       "qemu.almalinux-8-gencloud-aarch64",
-      "qemu.almalinux-8-gencloud-ppc64le"
+      "qemu.almalinux-8-gencloud-ppc64le",
     ]
   }
 }

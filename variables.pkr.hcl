@@ -176,7 +176,7 @@ local "gencloud_boot_command_8_x86_64" {
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -190,7 +190,7 @@ local "gencloud_boot_command_8_aarch64" {
     "<enter>",
     "initrd /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -204,7 +204,7 @@ local "gencloud_boot_command_8_ppc64le" {
     "<enter>",
     "initrd /ppc/ppc64/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -218,7 +218,7 @@ local "gencloud_boot_command_9_x86_64" {
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -231,7 +231,7 @@ local "gencloud_boot_command_9_aarch64" {
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks",
     "<enter>",
     "initrd /images/pxeboot/initrd.img<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -244,7 +244,7 @@ local "gencloud_boot_command_9_ppc64le" {
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
     "<enter>",
     "initrd /ppc/ppc64/initrd.img<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -267,7 +267,7 @@ local "azure_boot_command_8_x86_64" {
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -281,7 +281,7 @@ local "azure_boot_command_9_x86_64" {
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -439,7 +439,7 @@ variable "vagrant_boot_command_8_x86_64_bios" {
   default = [
     "<tab>",
     " inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-x86_64-bios.ks",
-    "<enter><wait>"
+    "<enter><wait>",
   ]
 }
 
@@ -452,7 +452,7 @@ local "vagrant_boot_command_8_x86_64" {
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-x86_64.ks",
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -467,7 +467,7 @@ local "vagrant_boot_command_9_x86_64" {
     "<enter>",
     "initrdefi /images/pxeboot/initrd.img",
     "<enter>",
-    "boot<enter><wait>"
+    "boot<enter><wait>",
   ]
 }
 
@@ -478,7 +478,7 @@ variable "vagrant_boot_command_9_x86_64_bios" {
   default = [
     "<tab>",
     "inst.text inst.gpt inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64-bios.ks",
-    "<enter><wait>"
+    "<enter><wait>",
   ]
 }
 
@@ -490,7 +490,7 @@ variable "vagrant_boot_command_9_aarch64" {
     "e",
     "<down><down><end><bs><bs><bs><bs><bs>",
     "inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks",
-    "<leftCtrlOn>x<leftCtrlOff>"
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 

@@ -50,12 +50,10 @@ source "virtualbox-iso" "almalinux-9" {
   headless             = var.headless
   hard_drive_interface = "sata"
   iso_interface        = "sata"
-  vboxmanage = [
-    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
-  ]
+  vboxmanage           = [["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"]]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
-    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus],
   ]
 }
 
@@ -81,29 +79,28 @@ source "hyperv-iso" "almalinux-9" {
 }
 
 source "vmware-iso" "almalinux-9" {
-  iso_url          = local.iso_url_9_x86_64
-  iso_checksum     = local.iso_checksum_9_x86_64
-  http_directory   = var.http_directory
-  shutdown_command = var.vagrant_shutdown_command
-  ssh_username     = var.vagrant_ssh_username
-  ssh_password     = var.vagrant_ssh_password
-  ssh_timeout      = var.ssh_timeout
-  boot_command     = var.vagrant_boot_command_9_x86_64_bios
-  boot_wait        = var.boot_wait
-  disk_size        = var.vagrant_disk_size
-  guest_os_type    = "centos-64"
-  cpus             = var.cpus
-  memory           = var.memory
-  headless         = var.headless
+  iso_url                        = local.iso_url_9_x86_64
+  iso_checksum                   = local.iso_checksum_9_x86_64
+  http_directory                 = var.http_directory
+  shutdown_command               = var.vagrant_shutdown_command
+  ssh_username                   = var.vagrant_ssh_username
+  ssh_password                   = var.vagrant_ssh_password
+  ssh_timeout                    = var.ssh_timeout
+  boot_command                   = var.vagrant_boot_command_9_x86_64_bios
+  boot_wait                      = var.boot_wait
+  disk_size                      = var.vagrant_disk_size
+  guest_os_type                  = "centos-64"
+  cpus                           = var.cpus
+  memory                         = var.memory
+  headless                       = var.headless
+  vmx_remove_ethernet_interfaces = true
   vmx_data = {
-    "cpuid.coresPerSocket" : "1"
+    "cpuid.coresPerSocket" = "1"
   }
   vmx_data_post = {
-    "memsize" : var.post_memory
-    "numvcpus" : var.post_cpus
+    "memsize"  = var.post_memory
+    "numvcpus" = var.post_cpus
   }
-
-  vmx_remove_ethernet_interfaces = true
 }
 
 source "parallels-iso" "almalinux-9" {
@@ -124,32 +121,32 @@ source "parallels-iso" "almalinux-9" {
 }
 
 source "vmware-iso" "almalinux-9-aarch64" {
-  iso_url          = local.iso_url_9_aarch64
-  iso_checksum     = local.iso_checksum_9_aarch64
-  http_directory   = var.http_directory
-  shutdown_command = var.vagrant_shutdown_command
-  ssh_username     = var.vagrant_ssh_username
-  ssh_password     = var.vagrant_ssh_password
-  ssh_timeout      = var.ssh_timeout
-  boot_command     = var.vagrant_boot_command_9_aarch64
-  boot_wait        = var.boot_wait
-  disk_size        = var.vagrant_disk_size
-  guest_os_type    = "arm-rhel9-64"
-  cpus             = var.cpus
-  memory           = var.memory
-  headless         = var.headless
-  vmx_data = {
-    ".encoding"            = "UTF-8",
-    "config.version"       = "8",
-    "virtualHW.version"    = "20",
-    "usb_xhci.present"     = "true",
-    "ethernet0.virtualdev" = "e1000e",
-    "firmware"             = "efi"
-  }
+  iso_url                        = local.iso_url_9_aarch64
+  iso_checksum                   = local.iso_checksum_9_aarch64
+  http_directory                 = var.http_directory
+  shutdown_command               = var.vagrant_shutdown_command
+  ssh_username                   = var.vagrant_ssh_username
+  ssh_password                   = var.vagrant_ssh_password
+  ssh_timeout                    = var.ssh_timeout
+  boot_command                   = var.vagrant_boot_command_9_aarch64
+  boot_wait                      = var.boot_wait
+  disk_size                      = var.vagrant_disk_size
+  guest_os_type                  = "arm-rhel9-64"
+  cpus                           = var.cpus
+  memory                         = var.memory
+  headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
   vm_name                        = "almalinux-9"
   usb                            = true
   disk_adapter_type              = "nvme"
+  vmx_data = {
+    ".encoding"            = "UTF-8"
+    "config.version"       = "8"
+    "virtualHW.version"    = "20"
+    "usb_xhci.present"     = "true"
+    "ethernet0.virtualdev" = "e1000e"
+    "firmware"             = "efi"
+  }
 }
 
 source "parallels-iso" "almalinux-9-aarch64" {
@@ -185,25 +182,23 @@ source "virtualbox-iso" "almalinux-9-aarch64" {
   memory               = var.memory
   headless             = var.headless
   hard_drive_interface = "sata"
-  vboxmanage = [
-    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
-  ]
+  vboxmanage           = [["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"]]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
-    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus],
   ]
 }
 
 build {
   sources = [
-    "sources.qemu.almalinux-9",
-    "sources.virtualbox-iso.almalinux-9",
-    "sources.hyperv-iso.almalinux-9",
-    "sources.vmware-iso.almalinux-9",
-    "sources.parallels-iso.almalinux-9",
-    "sources.virtualbox-iso.almalinux-9-aarch64",
-    "sources.vmware-iso.almalinux-9-aarch64",
-    "sources.parallels-iso.almalinux-9-aarch64"
+    "source.qemu.almalinux-9",
+    "source.virtualbox-iso.almalinux-9",
+    "source.hyperv-iso.almalinux-9",
+    "source.vmware-iso.almalinux-9",
+    "source.parallels-iso.almalinux-9",
+    "source.virtualbox-iso.almalinux-9-aarch64",
+    "source.vmware-iso.almalinux-9-aarch64",
+    "source.parallels-iso.almalinux-9-aarch64",
   ]
 
   provisioner "ansible" {
@@ -215,20 +210,20 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type}"
+      "packer_provider=${source.type}",
     ]
     only = [
-      "sources.qemu.almalinux-9",
-      "sources.virtualbox-iso.almalinux-9",
-      "sources.vmware-iso.almalinux-9",
-      "sources.parallels-iso.almalinux-9",
-      "sources.virtualbox-iso.almalinux-9-aarch64",
-      "sources.vmware-iso.almalinux-9-aarch64",
-      "sources.parallels-iso.almalinux-9-aarch64"
+      "qemu.almalinux-9",
+      "virtualbox-iso.almalinux-9",
+      "vmware-iso.almalinux-9",
+      "parallels-iso.almalinux-9",
+      "virtualbox-iso.almalinux-9-aarch64",
+      "vmware-iso.almalinux-9-aarch64",
+      "parallels-iso.almalinux-9-aarch64",
     ]
   }
 
@@ -243,25 +238,20 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type} ansible_ssh_pass=vagrant"
+      "packer_provider=${source.type} ansible_ssh_pass=vagrant",
     ]
-    only = [
-      "hyperv-iso.almalinux-9"
-    ]
+    only = ["hyperv-iso.almalinux-9"]
   }
 
   provisioner "shell" {
     expect_disconnect = true
-    inline = [
-      "sudo rm -fr /etc/ssh/*host*key*"
-    ]
-    only = [
-      "hyperv-iso.almalinux-9"
-    ]
+    inline            = ["sudo rm -fr /etc/ssh/*host*key*"]
+    only              = ["hyperv-iso.almalinux-9"]
   }
 
   post-processors {
@@ -270,9 +260,10 @@ build {
       compression_level = "9"
       output            = "AlmaLinux-9-Vagrant-{{.Provider}}-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.box"
       only = [
-        "sources.virtualbox-iso.almalinux-9",
-        "sources.vmware-iso.almalinux-9",
-        "sources.parallels-iso.almalinux-9",
+        "virtualbox-iso.almalinux-9",
+        "hyperv-iso.almalinux-9",
+        "vmware-iso.almalinux-9",
+        "parallels-iso.almalinux-9",
       ]
     }
 
@@ -280,9 +271,9 @@ build {
       compression_level = "9"
       output            = "AlmaLinux-9-Vagrant-{{.Provider}}-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.box"
       only = [
-        "sources.virtualbox-iso.almalinux-9-aarch64",
-        "sources.vmware-iso.almalinux-9-aarch64",
-        "sources.parallels-iso.almalinux-9-aarch64"
+        "virtualbox-iso.almalinux-9-aarch64",
+        "vmware-iso.almalinux-9-aarch64",
+        "parallels-iso.almalinux-9-aarch64",
       ]
     }
 
@@ -290,9 +281,7 @@ build {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
       output               = "AlmaLinux-9-Vagrant-{{.Provider}}-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.box"
-      only = [
-        "qemu.almalinux-9"
-      ]
+      only                 = ["qemu.almalinux-9"]
     }
   }
 }

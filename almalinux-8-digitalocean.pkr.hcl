@@ -33,7 +33,8 @@ source "qemu" "almalinux-8-digitalocean-x86_64" {
 }
 
 build {
-  sources = ["qemu.almalinux-8-digitalocean-x86_64"]
+  sources = ["source.qemu.almalinux-8-digitalocean-x86_64"]
+
   provisioner "ansible" {
     galaxy_file          = "./ansible/requirements.yml"
     galaxy_force_install = true
@@ -43,16 +44,16 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     extra_arguments = [
-      "--extra-vars", "is_unified_boot=true"
+      "--extra-vars",
+      "is_unified_boot=true",
     ]
   }
+
   provisioner "shell" {
-    scripts = [
-      "vm-scripts/digitalocean/99-img-check.sh"
-    ]
+    scripts = ["vm-scripts/digitalocean/99-img-check.sh"]
   }
 
   post-processor "digitalocean-import" {

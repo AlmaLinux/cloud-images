@@ -50,12 +50,10 @@ source "virtualbox-iso" "almalinux-8" {
   headless             = var.headless
   hard_drive_interface = "sata"
   iso_interface        = "sata"
-  vboxmanage = [
-    ["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"],
-  ]
+  vboxmanage           = [["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"]]
   vboxmanage_post = [
     ["modifyvm", "{{.Name}}", "--memory", var.post_memory],
-    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus]
+    ["modifyvm", "{{.Name}}", "--cpus", var.post_cpus],
   ]
 }
 
@@ -81,29 +79,28 @@ source "hyperv-iso" "almalinux-8" {
 }
 
 source "vmware-iso" "almalinux-8" {
-  iso_url          = local.iso_url_8_x86_64
-  iso_checksum     = local.iso_checksum_8_x86_64
-  http_directory   = var.http_directory
-  shutdown_command = var.vagrant_shutdown_command
-  ssh_username     = var.vagrant_ssh_username
-  ssh_password     = var.vagrant_ssh_password
-  ssh_timeout      = var.ssh_timeout
-  boot_command     = var.vagrant_boot_command_8_x86_64_bios
-  boot_wait        = var.boot_wait
-  disk_size        = var.vagrant_disk_size
-  guest_os_type    = "centos-64"
-  cpus             = var.cpus
-  memory           = var.memory
-  headless         = var.headless
+  iso_url                        = local.iso_url_8_x86_64
+  iso_checksum                   = local.iso_checksum_8_x86_64
+  http_directory                 = var.http_directory
+  shutdown_command               = var.vagrant_shutdown_command
+  ssh_username                   = var.vagrant_ssh_username
+  ssh_password                   = var.vagrant_ssh_password
+  ssh_timeout                    = var.ssh_timeout
+  boot_command                   = var.vagrant_boot_command_8_x86_64_bios
+  boot_wait                      = var.boot_wait
+  disk_size                      = var.vagrant_disk_size
+  guest_os_type                  = "centos-64"
+  cpus                           = var.cpus
+  memory                         = var.memory
+  headless                       = var.headless
+  vmx_remove_ethernet_interfaces = true
   vmx_data = {
-    "cpuid.coresPerSocket" : "1"
+    "cpuid.coresPerSocket" = "1"
   }
   vmx_data_post = {
-    "memsize" : var.post_memory
-    "numvcpus" : var.post_cpus
+    "memsize"  = var.post_memory
+    "numvcpus" = var.post_cpus
   }
-
-  vmx_remove_ethernet_interfaces = true
 }
 
 source "parallels-iso" "almalinux-8" {
@@ -125,11 +122,11 @@ source "parallels-iso" "almalinux-8" {
 
 build {
   sources = [
-    "qemu.almalinux-8",
-    "virtualbox-iso.almalinux-8",
-    "hyperv-iso.almalinux-8",
-    "vmware-iso.almalinux-8",
-    "parallels-iso.almalinux-8"
+    "source.qemu.almalinux-8",
+    "source.virtualbox-iso.almalinux-8",
+    "source.hyperv-iso.almalinux-8",
+    "source.vmware-iso.almalinux-8",
+    "source.parallels-iso.almalinux-8",
   ]
 
   provisioner "ansible" {
@@ -141,11 +138,11 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type} is_unified_boot=true"
+      "packer_provider=${source.type} is_unified_boot=true",
     ]
     only = [
       "qemu.almalinux-8",
@@ -165,25 +162,19 @@ build {
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
       "ANSIBLE_SCP_EXTRA_ARGS=-O",
-      "ANSIBLE_HOST_KEY_CHECKING=False"
+      "ANSIBLE_HOST_KEY_CHECKING=False",
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type} ansible_ssh_pass=vagrant is_unified_boot=true"
+      "packer_provider=${source.type} ansible_ssh_pass=vagrant is_unified_boot=true",
     ]
-    only = [
-      "hyperv-iso.almalinux-8"
-    ]
+    only = ["hyperv-iso.almalinux-8"]
   }
 
   provisioner "shell" {
     expect_disconnect = true
-    inline = [
-      "sudo rm -fr /etc/ssh/*host*key*"
-    ]
-    only = [
-      "hyperv-iso.almalinux-8"
-    ]
+    inline            = ["sudo rm -fr /etc/ssh/*host*key*"]
+    only              = ["hyperv-iso.almalinux-8"]
   }
 
   provisioner "ansible" {
@@ -195,15 +186,15 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     extra_arguments = [
       "--extra-vars",
-      "packer_provider=${source.type}"
+      "packer_provider=${source.type}",
     ]
     only = [
       "vmware-iso.almalinux-8",
-      "parallels-iso.almalinux-8"
+      "parallels-iso.almalinux-8",
     ]
   }
 
@@ -213,9 +204,7 @@ build {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
       output               = "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.{{.Provider}}.box"
-      only = [
-        "qemu.almalinux-8"
-      ]
+      only                 = ["qemu.almalinux-8"]
     }
 
     post-processor "vagrant" {
@@ -225,7 +214,7 @@ build {
         "virtualbox-iso.almalinux-8",
         "hyperv-iso.almalinux-8",
         "vmware-iso.almalinux-8",
-        "parallels-iso.almalinux-8"
+        "parallels-iso.almalinux-8",
       ]
     }
   }

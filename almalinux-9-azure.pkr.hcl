@@ -32,7 +32,7 @@ source "qemu" "almalinux-9-azure-x86_64" {
 }
 
 build {
-  sources = ["qemu.almalinux-9-azure-x86_64"]
+  sources = ["source.qemu.almalinux-9-azure-x86_64"]
 
   provisioner "ansible" {
     galaxy_file          = "./ansible/requirements.yml"
@@ -43,7 +43,7 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
-      "ANSIBLE_SCP_EXTRA_ARGS=-O"
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
   }
 }
