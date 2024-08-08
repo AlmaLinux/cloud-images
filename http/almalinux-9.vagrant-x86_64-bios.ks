@@ -20,6 +20,7 @@ bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,11520
 
 zerombr
 clearpart --all --initlabel
+reqpart
 part /boot --fstype=xfs --size=1024
 part / --fstype=xfs --grow
 
