@@ -6,6 +6,8 @@
 
   roles:
     - role: unified_boot
+      vars:
+        unified_boot_kernel_opts: loglevel=3 console=tty1 console=ttyS0 earlyprintk=ttyS0 rootdelay=300 no_timer_check biosdevname=0 net.ifnames=0
       when: is_unified_boot is defined
     - azure_guest
     - cleanup_vm

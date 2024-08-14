@@ -76,7 +76,7 @@
     cmd: >
       grub2-editenv -v - set
       kernelopts="root=UUID={{ root_uuid.stdout }}
-      console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
+      {{ unified_boot_kernel_opts }}"
       saved_entry={{ machine_id }}-{{ kernel_ver.stdout }}
     creates: /boot/grub2/grubenv
 
