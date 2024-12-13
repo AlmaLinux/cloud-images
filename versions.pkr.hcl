@@ -34,7 +34,7 @@ packer {
       source  = "github.com/hashicorp/virtualbox"
     }
     vmware = {
-      version = ">= 1.0.6"
+      version = ">= 1.1.0"
       source  = "github.com/hashicorp/vmware"
     }
   }

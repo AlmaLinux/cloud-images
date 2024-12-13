@@ -86,12 +86,16 @@ source "vmware-iso" "almalinux-8" {
   ssh_username                   = var.vagrant_ssh_username
   ssh_password                   = var.vagrant_ssh_password
   ssh_timeout                    = var.ssh_timeout
-  boot_command                   = var.vagrant_boot_command_8_x86_64_bios
+  boot_command                   = local.vagrant_boot_command_8_x86_64
   boot_wait                      = var.boot_wait
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"
+  version                        = 21
+  vm_name                        = "AlmaLinux-8-Vagrant-VMware-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64"
+  firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_x86_64
+  network_adapter_type           = "vmxnet3"
   headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
   vmx_data = {
@@ -147,6 +151,7 @@ build {
     only = [
       "qemu.almalinux-8",
       "virtualbox-iso.almalinux-8",
+      "vmware-iso.almalinux-8",
     ]
   }
 
@@ -192,10 +197,7 @@ build {
       "--extra-vars",
       "packer_provider=${source.type}",
     ]
-    only = [
-      "vmware-iso.almalinux-8",
-      "parallels-iso.almalinux-8",
-    ]
+    only = ["parallels-iso.almalinux-8"]
   }
 
   post-processors {
