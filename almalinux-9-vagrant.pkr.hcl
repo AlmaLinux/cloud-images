@@ -20,7 +20,7 @@ source "qemu" "almalinux-9" {
   format             = "qcow2"
   headless           = var.headless
   machine_type       = "q35"
-  memory             = var.memory
+  memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-9-Vagrant-Libvirt-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
@@ -46,7 +46,7 @@ source "virtualbox-iso" "almalinux-9" {
   disk_size            = var.vagrant_disk_size
   guest_os_type        = "RedHat_64"
   cpus                 = var.cpus
-  memory               = var.memory
+  memory               = var.memory_x86_64
   headless             = var.headless
   hard_drive_interface = "sata"
   iso_interface        = "sata"
@@ -70,7 +70,7 @@ source "hyperv-iso" "almalinux-9" {
   boot_wait             = var.boot_wait
   disk_size             = var.vagrant_disk_size
   disk_block_size       = 1
-  memory                = var.memory
+  memory                = var.memory_x86_64
   switch_name           = var.hyperv_switch_name
   cpus                  = var.cpus
   generation            = 2
@@ -91,7 +91,7 @@ source "vmware-iso" "almalinux-9" {
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"
   cpus                           = var.cpus
-  memory                         = var.memory
+  memory                         = var.memory_x86_64
   headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
   vmx_data = {
@@ -116,7 +116,7 @@ source "parallels-iso" "almalinux-9" {
   cpus                   = var.cpus
   disk_size              = var.vagrant_disk_size
   guest_os_type          = "centos"
-  memory                 = var.memory
+  memory                 = var.memory_x86_64
   parallels_tools_flavor = var.parallels_tools_flavor_x86_64
 }
 
@@ -133,7 +133,7 @@ source "vmware-iso" "almalinux-9-aarch64" {
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "arm-rhel9-64"
   cpus                           = var.cpus
-  memory                         = var.memory
+  memory                         = var.memory_aarch64
   headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
   vm_name                        = "almalinux-9"
@@ -162,7 +162,7 @@ source "parallels-iso" "almalinux-9-aarch64" {
   cpus                   = var.cpus
   disk_size              = var.vagrant_disk_size
   guest_os_type          = "centos"
-  memory                 = var.memory
+  memory                 = var.memory_aarch64
   parallels_tools_flavor = var.parallels_tools_flavor_aarch64
 }
 
@@ -179,7 +179,7 @@ source "virtualbox-iso" "almalinux-9-aarch64" {
   disk_size            = var.vagrant_disk_size
   guest_os_type        = "RedHat_64"
   cpus                 = var.cpus
-  memory               = var.memory
+  memory               = var.memory_aarch64
   headless             = var.headless
   hard_drive_interface = "sata"
   vboxmanage           = [["modifyvm", "{{.Name}}", "--nat-localhostreachable1", "on"]]

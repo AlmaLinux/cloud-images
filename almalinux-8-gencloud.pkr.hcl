@@ -20,7 +20,7 @@ source "qemu" "almalinux-8-gencloud-x86_64" {
   format             = "qcow2"
   headless           = var.headless
   machine_type       = "q35"
-  memory             = var.memory
+  memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-8-GenericCloud-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.qcow2"
@@ -54,7 +54,7 @@ source "qemu" "almalinux-8-gencloud-aarch64" {
   format             = "qcow2"
   headless           = var.headless
   machine_type       = "virt,gic-version=max"
-  memory             = var.memory
+  memory             = var.memory_aarch64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-8-GenericCloud-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
@@ -85,7 +85,7 @@ source "qemu" "almalinux-8-gencloud-ppc64le" {
   format             = "qcow2"
   headless           = var.headless
   machine_type       = "pseries,accel=kvm,kvm-type=HV"
-  memory             = var.memory
+  memory             = var.memory_ppc64le
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-8-GenericCloud-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.ppc64le.qcow2"

@@ -65,11 +65,25 @@ variable "cpus" {
   default = 2
 }
 
-variable "memory" {
-  description = "The amount of memory"
+variable "memory_x86_64" {
+  description = "The amount of memory to use when building the x86_64 VM in megabytes"
 
   type    = number
-  default = 2048
+  default = 3072
+}
+
+variable "memory_aarch64" {
+  description = "The amount of memory to use when building the AArch64 VM in megabytes"
+
+  type    = number
+  default = 4096
+}
+
+variable "memory_ppc64le" {
+  description = "The amount of memory to use when building the ppc64le VM in megabytes"
+
+  type    = number
+  default = 4096
 }
 
 variable "post_cpus" {
