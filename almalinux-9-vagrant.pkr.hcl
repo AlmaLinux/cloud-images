@@ -86,12 +86,16 @@ source "vmware-iso" "almalinux-9" {
   ssh_username                   = var.vagrant_ssh_username
   ssh_password                   = var.vagrant_ssh_password
   ssh_timeout                    = var.ssh_timeout
-  boot_command                   = var.vagrant_boot_command_9_x86_64_bios
+  boot_command                   = local.vagrant_boot_command_9_x86_64
   boot_wait                      = var.boot_wait
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"
+  version                        = 21
+  vm_name                        = "AlmaLinux-9-Vagrant-VMware-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64"
+  firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_x86_64
+  network_adapter_type           = "vmxnet3"
   headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
   vmx_data = {
@@ -132,21 +136,16 @@ source "vmware-iso" "almalinux-9-aarch64" {
   boot_wait                      = var.boot_wait
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "arm-rhel9-64"
+  version                        = 21
+  vm_name                        = "AlmaLinux-9-Vagrant-VMware-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64"
+  firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_aarch64
+  network_adapter_type           = "vmxnet3"
   headless                       = var.headless
   vmx_remove_ethernet_interfaces = true
-  vm_name                        = "almalinux-9"
   usb                            = true
   disk_adapter_type              = "nvme"
-  vmx_data = {
-    ".encoding"            = "UTF-8"
-    "config.version"       = "8"
-    "virtualHW.version"    = "20"
-    "usb_xhci.present"     = "true"
-    "ethernet0.virtualdev" = "e1000e"
-    "firmware"             = "efi"
-  }
 }
 
 source "parallels-iso" "almalinux-9-aarch64" {
