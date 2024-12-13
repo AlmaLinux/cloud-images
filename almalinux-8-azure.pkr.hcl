@@ -19,7 +19,7 @@ source "qemu" "almalinux-8-azure-x86_64" {
   format             = "raw"
   headless           = var.headless
   machine_type       = "q35"
-  memory             = var.memory
+  memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
