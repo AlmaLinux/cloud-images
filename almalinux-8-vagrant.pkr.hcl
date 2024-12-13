@@ -134,7 +134,7 @@ build {
     galaxy_force_install = true
     collections_path     = "./ansible/collections"
     roles_path           = "./ansible/roles"
-    playbook_file        = "./ansible/vagrant-box.yml"
+    playbook_file        = "./ansible/vagrant.yml"
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
@@ -157,7 +157,7 @@ build {
     galaxy_force_install = true
     collections_path     = "./ansible/collections"
     roles_path           = "./ansible/roles"
-    playbook_file        = "./ansible/vagrant-box.yml"
+    playbook_file        = "./ansible/vagrant.yml"
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
@@ -182,7 +182,7 @@ build {
     galaxy_force_install = true
     collections_path     = "./ansible/collections"
     roles_path           = "./ansible/roles"
-    playbook_file        = "./ansible/vagrant-box.yml"
+    playbook_file        = "./ansible/vagrant.yml"
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",

@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  author: AlmaLinux OS Cloud SIG
+  description: Configuration and optimizations for a Vagrant guest
+  company: AlmaLinux OS Foundation
+  # https://almalinux.org/p/the-almalinux-os-licensing-policy
+  license: GPL-3.0-only
+  min_ansible_version: "2.14"

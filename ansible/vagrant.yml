@@ -9,6 +9,7 @@
   roles:
     - role: unified_boot
       when: is_unified_boot is defined
+    - vagrant
     - role: ezamriy.vbox_guest
       when: packer_provider == 'virtualbox-iso'
     - role: vmware_guest
@@ -17,7 +18,5 @@
       when: packer_provider == 'qemu'
     - role: hyperv_guest
       when: packer_provider == 'hyperv-iso'
-    - install_vagrant_key
-    - nfs-client
     - role: cleanup_vm
       cleanup_ssh_host_keys: "{{ packer_provider != 'hyperv-iso' }}"
