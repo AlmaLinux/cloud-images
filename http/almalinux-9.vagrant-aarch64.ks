@@ -1,20 +1,13 @@
 # AlmaLinux OS 9 kickstart file for Vagrant boxes on AArch64
 
-url --url https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/kickstart/
-repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/os/
-repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/9/AppStream/aarch64/os/
-
+url --url https://repo.almalinux.org/almalinux/9/BaseOS/aarch64/os
 text
-skipx
-eula --agreed
-firstboot --disabled
 lang C.UTF-8
 keyboard us
 timezone UTC --utc
-network --bootproto=dhcp
+selinux --enforcing
 firewall --disabled
 services --enabled=sshd
-selinux --enforcing
 
 bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
 
@@ -28,22 +21,12 @@ rootpw vagrant
 user --name=vagrant --plaintext --password vagrant
 reboot --eject
 
-%packages --inst-langs=en
-@core
-bzip2
+%packages --exclude-weakdeps --inst-langs=en
 dracut-config-generic
 tar
-usermode
--biosdevname
--dnf-plugin-spacewalk
+-*firmware
 -dracut-config-rescue
--iprutils
--iwl*-firmware
--langpacks-*
--mdadm
--open-vm-tools
--plymouth
--rhn*
+-firewalld
 %end
 
 # disable kdump service
