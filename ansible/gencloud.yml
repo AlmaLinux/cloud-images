@@ -1,7 +1,7 @@
-# An Ansible playbook that configures a Generic Cloud (OpenStack) image
+# An Ansible playbook that configures a Generic Cloud (Cloud-init) image
 ---
-- name: AlmaLinux Generic Cloud
-  hosts: default
+- name: AlmaLinux OS Generic Cloud Image
+  hosts: all
   become: true
 
   roles:

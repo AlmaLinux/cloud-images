@@ -1,123 +1,81 @@
 ---
-- name: Remove firewall and linux-firmware
-  dnf:
-    name:
-      - firewalld
-      - firewalld-filesystem
-      - ipset
-      - ipset-libs
-      - iptables
-      - python3-firewall
-      - python3-slip
-      - libnftnl
-      - libnfnetlink
-      - linux-firmware
-    state: absent
-
-- name: Install additional software
-  dnf:
-    name:
-      - cockpit-system
-      - cockpit-ws
-      - dnf-utils
-      - gdisk
-      - nfs-utils
-      - rsync
-      - tar
-      - tuned
-      - tcpdump
-
-- name: Find persistent-net.rules
-  find:
-    paths: /etc/udev/rules.d
-    patterns: 70*
-  register: net_rules
-
-- name: Delete persistent-net.rules
-  file:
-    path: "{{ item.path }}"
-    state: absent
-  with_items: "{{ net_rules.files }}"
-
-- name: Configure /etc/sysconfig/network
-  lineinfile:
-    path: /etc/sysconfig/network
-    line: "{{ item }}"
-  with_items:
-    - NETWORKING=yes
-    - NOZEROCONF=yes
-
-- name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
-  copy:
-    src: ifcfg-eth0
-    dest: /etc/sysconfig/network-scripts/ifcfg-eth0
-    owner: root
-    group: root
-    mode: 0644
-
-- name: Disable consistent network device naming
-  file:
-    src: /dev/null
-    dest: /etc/udev/rules.d/80-net-name-slot.rules
-    owner: root
-    group: root
-    state: link
-
-- name: Disable virtual terminals allocation by logind
-  replace:
-    path: '/etc/systemd/logind.conf'
-    regexp: '^#?NAutoVTs=\d+'
-    replace: 'NAutoVTs=0'
-
-- name: Configure NetworkManager default DHCP timeout
-  community.general.ini_file:
-    path: /etc/NetworkManager/conf.d/dhcp.conf
-    section: connection
-    option: ipv4.dhcp-timeout
-    value: 300
-    owner: root
-    group: root
-    mode: 0644
-    seuser: system_u
-
 - name: Set default kernel package type to kernel
-  replace:
+  ansible.builtin.replace:
     path: /etc/sysconfig/kernel
-    regexp: '^(DEFAULTKERNEL=).*$'
-    replace: '\1kernel'
+    regexp: "^(DEFAULTKERNEL=).*$"
+    replace: "\\1kernel"
 
 # https://bugzilla.redhat.com/show_bug.cgi?id=1849082#c7
-- name: Enable Xen support
+- name: Enabled Xen Project PVHVM drivers only on x86_64
+  when: ansible_facts['architecture'] == 'x86_64'
   block:
-    - name: Enable xen drivers in dracut
-      lineinfile:
-        path: /etc/dracut.conf.d/xen.conf
+    - name: Create a configuration for dracut
+      ansible.builtin.lineinfile:
+        path: /etc/dracut.conf.d/xen_pvhvm.conf
         line: 'add_drivers+=" xen-netfront xen-blkfront "'
         create: true
         owner: root
         group: root
-        mode: 0644
+        mode: "0644"
 
-    - name: Upgrade initramfs
-      command: dracut -f --regenerate-all
-  when: ansible_facts['architecture'] == 'x86_64'
+    - name: Regenerate all initramfs images
+      ansible.builtin.command:
+        cmd: dracut -f --regenerate-all
+      changed_when: true
 
-- name: Add almalinux user to /etc/sudoers
-  lineinfile:
-    path: /etc/sudoers
-    line: "almalinux\tALL=(ALL)\tNOPASSWD: ALL"
+# Optimizations
+- name: Install additional packages
+  ansible.builtin.dnf:
+    name:
+      - qemu-guest-agent
+      - nfs-utils
+      - rsync
+      - jq
+      - tcpdump
     state: present
 
-- name: Set virtual-guest as default profile for tuned
-  lineinfile:
-    path: /etc/tuned/active_profile
-    line: virtual-guest
-    create: yes
+- name: Install TuneD
+  ansible.builtin.dnf:
+    name: tuned
+    state: present
 
-- name: Regenerate the initramfs
-  command: dracut -f --regenerate-all
+- name: Enable TuneD service
+  ansible.builtin.systemd_service:
+    name: tuned.service
+    enabled: true
+    state: started
+
+- name: Get current TuneD profile
+  ansible.builtin.command:
+    cmd: tuned-adm active
+  register: tuned_adm_active
+  changed_when: false
+
+- name: Test if TuneD profile is active
+  ansible.builtin.assert:
+    that: "tuned_adm_active.stdout == 'Current active profile: virtual-guest'"
+    fail_msg: Configured active profile is not same as current one
+    success_msg: The configured TuneD profile is current
+
+- name: Get status of TuneD settings
+  ansible.builtin.command:
+    cmd: tuned-adm verify
+  register: tuned_adm_verify
+  changed_when: false
+
+- name: Verify if settings on the TuneD profile is applied
+  ansible.builtin.assert:
+    that: "'Verification succeeded, current system settings match the preset profile.' in tuned_adm_verify.stdout"
+    fail_msg: Current system settings does not match current active profile
+    success_msg: Current system settings matches current active profile
+
+- name: Regenerate all initramfs images
+  when: ansible_facts['architecture'] != 'x86_64'
+  ansible.builtin.command:
+    cmd: dracut -f --regenerate-all
+  changed_when: true
 
 - name: Disable root login
-  user:
+  ansible.builtin.user:
     name: root
-    password: '!!'
+    password: "*"
