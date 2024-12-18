@@ -1,4 +1,10 @@
 ---
+- name: Set default kernel package type to kernel
+  ansible.builtin.replace:
+    path: /etc/sysconfig/kernel
+    regexp: "^(DEFAULTKERNEL=).*$"
+    replace: "\\1kernel"
+
 - name: Enable opennebula-addons repositroy
   dnf:
     name: almalinux-release-opennebula-addons
@@ -31,5 +37,57 @@
       - parted
     state: latest
 
-- name: Regenerate the initramfs
-  command: dracut -f --regenerate-all
+- name: Install additional packages
+  ansible.builtin.dnf:
+    name:
+      - qemu-guest-agent
+      - nfs-utils
+      - rsync
+      - jq
+      - tcpdump
+    state: present
+
+- name: Install TuneD
+  ansible.builtin.dnf:
+    name: tuned
+    state: present
+
+- name: Enable TuneD service
+  ansible.builtin.systemd_service:
+    name: tuned.service
+    enabled: true
+    state: started
+
+- name: Get current TuneD profile
+  ansible.builtin.command:
+    cmd: tuned-adm active
+  register: tuned_adm_active
+  changed_when: false
+
+- name: Test if TuneD profile is active
+  ansible.builtin.assert:
+    that: "tuned_adm_active.stdout == 'Current active profile: virtual-guest'"
+    fail_msg: Configured active profile is not same as current one
+    success_msg: The configured TuneD profile is current
+
+- name: Get status of TuneD settings
+  ansible.builtin.command:
+    cmd: tuned-adm verify
+  register: tuned_adm_verify
+  changed_when: false
+
+- name: Verify if settings on the TuneD profile is applied
+  ansible.builtin.assert:
+    that: "'Verification succeeded, current system settings match the preset profile.' in tuned_adm_verify.stdout"
+    fail_msg: Current system settings does not match current active profile
+    success_msg: Current system settings matches current active profile
+
+- name: Regenerate all initramfs images
+  ansible.builtin.command:
+    cmd: dracut -f --regenerate-all
+  changed_when: true
+
+- name: Disable root login
+  ansible.builtin.user:
+    name: root
+    password: "*"
