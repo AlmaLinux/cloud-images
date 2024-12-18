@@ -5,10 +5,7 @@
 # - https://kojihub.stream.centos.org/koji/packageinfo?packageID=3438
 
 
-url --url https://repo.almalinux.org/almalinux/9/BaseOS/s390x/kickstart/
-repo --name=BaseOS --baseurl=https://repo.almalinux.org/almalinux/9/BaseOS/s390x/os/
-repo --name=AppStream --baseurl=https://repo.almalinux.org/almalinux/9/AppStream/s390x/os/
-
+url --url https://repo.almalinux.org/almalinux/9/BaseOS/s390x/os
 text
 skipx
 eula --agreed
@@ -40,102 +37,21 @@ reboot --eject
 
 
 # Packages
-%packages
-@core
-dnf
-kernel
-yum
-nfs-utils
-dnf-utils
-hostname
-
-# pull firmware packages out
--aic94xx-firmware
--alsa-firmware
--alsa-lib
--alsa-tools-firmware
--ivtv-firmware
--iwl1000-firmware
--iwl100-firmware
--iwl105-firmware
--iwl135-firmware
--iwl2000-firmware
--iwl2030-firmware
--iwl3160-firmware
--iwl3945-firmware
--iwl4965-firmware
--iwl5000-firmware
--iwl5150-firmware
--iwl6000-firmware
--iwl6000g2a-firmware
--iwl6000g2b-firmware
--iwl6050-firmware
--iwl7260-firmware
--libertas-sd8686-firmware
--libertas-sd8787-firmware
--libertas-usb8388-firmware
-
-# cloud-init does magical things with EC2 metadata, including provisioning
-# a user account with ssh keys.
-cloud-init
-## Adding a dependency for cloud-init as recommended by tdawson
-python3-jsonschema
-
-# rhevm guest-agent (Not available in CentOS-Stream-9 yet)
-#rhevm-guest-agent-common
-
-# allows the host machine to issue commands to the guest operating system
-qemu-guest-agent
-
-# need this for growpart, because parted doesn't yet support resizepart
-# https://bugzilla.redhat.com/show_bug.cgi?id=966993
-#cloud-utils
-
-#heat-cfntools  # Not available in CentOS-Stream-9 (yet?)
-
-cloud-utils-growpart
-# We need this image to be portable; also, rescue mode isn't useful here.
-dracut-config-generic
-
-# Don't include dracut-config-rescue. It will have dracut generate a
-# "rescue" entry in the grub menu, but that also means there is a
-# rescue kernel and initramfs that get created, which (currently) add
-# about another 40MiB to the /boot/ partition. Also the "rescue" mode
-# is generally not useful in the cloud.
--dracut-config-rescue
-
-# Needed initially, but removed below.
-firewalld
-
-# cherry-pick a few things from @base
+%packages --exclude-weakdeps --inst-langs=en
 tar
-tcpdump
+qemu-guest-agent
+nfs-utils
 rsync
-
-# Some things from @core we can do without in a minimal install
--biosdevname
--plymouth
--iprutils
-
-# Minimal Cockpit web console
-cockpit-ws
-cockpit-system
-#subscription-manager-cockpit
-
-# rh-amazon-rhui-client
-
-# Exclude all langpacks for now
-# TODO: Do not exclude langpacks because of:
-# fontconfig-2.13.92-12.el9.s390x requires font(:lang=en)
--langpacks-*
-
-# The langpacks-en package is pulled in by Anaconda and it seems filtering
-# it out using langpacks-* is not sufficient. It needs to be filtered
-# directly.
--langpacks-en
-
+jq
+tcpdump
+tuned
+cloud-init
+cloud-utils-growpart
+dracut-config-generic
+-*firmware
+-dracut-config-rescue
+-firewalld
 %end
-
 
 # disable kdump service
 %addon com_redhat_kdump --disable
