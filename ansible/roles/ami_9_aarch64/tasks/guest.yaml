@@ -1,28 +1,8 @@
 ---
-- name: Remove firewall and linux-firmware
-  ansible.builtin.dnf:
-    installroot: /rootfs
-    name:
-      - firewalld
-      - firewalld-filesystem
-      - ipset
-      - ipset-libs
-      - iptables
-      - python3-firewall
-      - python3-slip
-      - libnftnl
-      - libnfnetlink
-      - linux-firmware
-    state: absent
-
-- name: Find persistent-net.rules
+- name: Find persistent udev rules
   ansible.builtin.find:
-    paths: /rootfs/etc/udev/rules.d
-
-- name: Find persistent-net.rules
-  ansible.builtin.find:
-    paths: /rootfs/etc/udev/rules.d
-    patterns: 70*
+    paths: /rootfs/etc/udev/rules.d/
+    patterns: "70*"
   register: net_rules
 
 - name: Delete persistent-net.rules
@@ -30,40 +10,6 @@
     path: "{{ item.path }}"
     state: absent
   loop: "{{ net_rules.files }}"
-  loop_control:
-    label: "{{ item.path }}"
-
-- name: Configure /etc/sysconfig/network
-  ansible.builtin.lineinfile:
-    path: /rootfs/etc/sysconfig/network
-    line: "{{ item }}"
-    create: true
-    mode: "0644"
-  loop:
-    - NETWORKING=true
-    - NOZEROCONF=true
-
-- name: Create network-scripts folder
-  ansible.builtin.file:
-    path: /rootfs/etc/sysconfig/network-scripts
-    state: directory
-    mode: "0755"
-
-- name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
-  ansible.builtin.copy:
-    src: files/ifcfg-eth0
-    dest: /rootfs/etc/sysconfig/network-scripts/ifcfg-eth0
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Disable consistent network device naming
-  ansible.builtin.file:
-    src: /dev/null
-    dest: /rootfs/etc/udev/rules.d/80-net-name-slot.rules
-    owner: root
-    group: root
-    state: link
 
 - name: Blacklist nouveau kernel module
   ansible.builtin.lineinfile:
@@ -74,23 +20,6 @@
     group: root
     mode: "0644"
 
-- name: Disable firstboot
-  ansible.builtin.lineinfile:
-    path: /rootfs/etc/sysconfig/firstboot
-    line: RUN_FIRSTBOOT=NO
-    create: true
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Disable root login
-  ansible.builtin.command:
-    cmd: "{{ item }}"
-  loop:
-    - chroot /rootfs passwd -d root
-    - chroot /rootfs passwd -l root
-  changed_when: true
-
 - name: Add Amazon Time Sync Service to chrony config
   ansible.builtin.lineinfile:
     path: /rootfs/etc/chrony.conf
@@ -99,12 +28,6 @@
     - "# Amazon Time Sync Service"
     - server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
 
-- name: Disable virtual terminals allocation by logind
-  ansible.builtin.replace:
-    dest: /rootfs/etc/systemd/logind.conf
-    regexp: ^#?NAutoVTs=\d+
-    replace: NAutoVTs=0
-
 - name: Install additional software
   ansible.builtin.dnf:
     installroot: /rootfs
@@ -112,12 +35,14 @@
     name:
       - cloud-init
       - cloud-utils-growpart
-      - dracut-config-generic
       - gdisk
       - rsync
-      - tar
       - tuned
       - nvme-cli
+      - jq
+      - nfs-utils
+      - sos
+      - tcpdump
     state: present
 
 - name: Install AWS Systems Manager Agent (SSM Agent)
@@ -152,17 +77,6 @@
     - "[Service]"
     - Environment=NM_CLOUD_SETUP_EC2=true
 
-- name: Configure NetworkManager default DHCP timeout
-  community.general.ini_file:
-    path: /rootfs/etc/NetworkManager/conf.d/dhcp.conf
-    section: connection
-    option: ipv4.dhcp-timeout
-    value: 300
-    owner: root
-    group: root
-    mode: "0644"
-    seuser: system_u
-
 - name: Disable SSH password authentication
   ansible.builtin.lineinfile:
     path: /rootfs/etc/ssh/sshd_config
@@ -194,22 +108,6 @@
     dest: /rootfs/etc/cloud/cloud.cfg
     regexp: ^(\s+name:).*$
     replace: \1 ec2-user
-
-- name: Set virtual-guest as default profile for tuned
-  ansible.builtin.lineinfile:
-    path: /rootfs/etc/tuned/active_profile
-    line: virtual-guest
-    create: true
-    mode: "0644"
-
-- name: Enable sgdisk in dracut
-  ansible.builtin.lineinfile:
-    path: /rootfs/etc/dracut.conf.d/sgdisk.conf
-    line: install_items+=" sgdisk "
-    create: true
-    owner: root
-    group: root
-    mode: "0644"
 
 - name: Enable NVME drivers
   ansible.builtin.lineinfile:

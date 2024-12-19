@@ -50,26 +50,22 @@
 - name: Install Base System on chroot
   ansible.builtin.shell:
     cmd: >
-      dnf -y --installroot=/rootfs --nogpgcheck --setopt=cachedir=/var/cache/dnf install
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf install
       langpacks-en
       kernel
       dracut-config-generic
+      dracut-network
+      dracut-squash
       grub2-efi-aa64
       shim-aa64
       efibootmgr
       chrony
       NetworkManager-cloud-setup
+      tar
       @core
-      --exclude="kexec-tools"
-      --exclude="biosdevname"
-      --exclude="open-vm-tools"
-      --exclude="rhn*"
-      --exclude="iprutils"
-      --exclude="iwl*-firmware"
-      --exclude="dnf-plugin-spacewalk"
-      --exclude="plymouth*"
+      --exclude="*firmware"
       --exclude="dracut-config-rescue"
-      --exclude="mdadm"
+      --exclude="firewalld"
   changed_when: true
 
 - name: Get type of database backend of RPM # noqa: command-instead-of-module
