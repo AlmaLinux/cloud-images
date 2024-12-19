@@ -207,6 +207,7 @@ def copy_ami(ami_info, src_region, dst_region, aws_client_token):
         Name=ami_info["Name"],
         SourceImageId=ami_info["ImageId"],
         SourceRegion=src_region,
+        CopyImageTags=True,
     )
     dst_ami_id = resp["ImageId"]
     log.info(f"uploading {dst_ami_id} to {dst_region}")
