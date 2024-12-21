@@ -286,10 +286,10 @@ variable "gencloud_boot_command_9_ppc64le" {
 # Azure
 
 variable "azure_disk_size" {
-  description = "The size in MiB of hard disk of VM"
+  description = "The size in bytes of hard disk of VM"
 
-  type    = number
-  default = 30720
+  type    = string
+  default = "32212254720b"
 }
 
 local "azure_boot_command_8_x86_64" {

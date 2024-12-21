@@ -34,6 +34,7 @@ tar
 -*firmware
 -dracut-config-rescue
 -firewalld
+-qemu-guest-agent
 %end
 
 # disable kdump service

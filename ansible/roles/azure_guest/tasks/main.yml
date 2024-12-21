@@ -4,9 +4,15 @@
     name:
       - hyperv-daemons
       - gdisk
-      - tar
       - yum-utils
       - nvme-cli
+      - jq
+      - tcpdump
+      - rsync
+      - nfs-utils
+      - cifs-utils
+      - sos
+      - tuned
     state: present
 
 - name: Blacklist unnecessary kernel modules
@@ -49,14 +55,6 @@
   loop:
     - nm-cloud-setup.service
     - nm-cloud-setup.timer
-
-- name: Configure /etc/sysconfig/network-scripts/ifcfg-eth0
-  copy:
-    src: ifcfg-eth0
-    dest: /etc/sysconfig/network-scripts/ifcfg-eth0
-    owner: root
-    group: root
-    mode: 0644
 
 - name: Configure NetworkManager default DHCP timeout
   community.general.ini_file:
@@ -110,6 +108,7 @@
     mode: 0644
 
 - name: Generate udev rules for PTP clock source
+  when: ansible_facts['distribution_major_version'] == '8'
   copy:
     src: 99-azure-hyperv-ptp.rules
     dest: /etc/udev/rules.d/99-azure-hyperv-ptp.rules
@@ -120,7 +119,7 @@
 - name: Configure chronyd PTP clock source
   lineinfile:
     path: /etc/chrony.conf
-    line: 'refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0'
+    line: 'refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0 stratum 2'
     state: present
 
 - name: Configure chronyd makestep parameter
