@@ -8,7 +8,7 @@ source "qemu" "almalinux-9-opennebula-x86_64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.gencloud_boot_command_9_x86_64
+  boot_command       = var.gencloud_boot_command_9_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
@@ -40,7 +40,7 @@ source "qemu" "almalinux-9-opennebula-aarch64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.gencloud_boot_command_9_aarch64
+  boot_command       = var.gencloud_boot_command_9_aarch64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   firmware           = var.aavmf_code

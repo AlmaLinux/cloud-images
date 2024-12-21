@@ -8,7 +8,7 @@ source "qemu" "almalinux-9" {
   ssh_username       = var.vagrant_ssh_username
   ssh_password       = var.vagrant_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.vagrant_boot_command_9_x86_64
+  boot_command       = var.vagrant_boot_command_9_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
@@ -40,7 +40,7 @@ source "virtualbox-iso" "almalinux-9" {
   ssh_username         = var.vagrant_ssh_username
   ssh_password         = var.vagrant_ssh_password
   ssh_timeout          = var.ssh_timeout
-  boot_command         = local.vagrant_boot_command_9_x86_64
+  boot_command         = var.vagrant_boot_command_9_x86_64
   boot_wait            = var.boot_wait
   firmware             = "efi"
   disk_size            = var.vagrant_disk_size
@@ -66,7 +66,7 @@ source "hyperv-iso" "almalinux-9" {
   ssh_username          = var.vagrant_ssh_username
   ssh_password          = var.vagrant_ssh_password
   ssh_timeout           = var.ssh_timeout
-  boot_command          = local.vagrant_boot_command_9_x86_64
+  boot_command          = var.vagrant_boot_command_9_x86_64
   boot_wait             = var.boot_wait
   disk_size             = var.vagrant_disk_size
   disk_block_size       = 1
@@ -86,7 +86,7 @@ source "vmware-iso" "almalinux-9" {
   ssh_username                   = var.vagrant_ssh_username
   ssh_password                   = var.vagrant_ssh_password
   ssh_timeout                    = var.ssh_timeout
-  boot_command                   = local.vagrant_boot_command_9_x86_64
+  boot_command                   = var.vagrant_boot_command_9_x86_64
   boot_wait                      = var.boot_wait
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"

@@ -24,7 +24,6 @@ variable "os_ver_9" {
 
 locals {
   os_ver_minor_8 = split(".", var.os_ver_8)[1]
-  os_ver_minor_9 = split(".", var.os_ver_9)[1]
 }
 
 locals {
@@ -222,43 +221,65 @@ local "gencloud_boot_command_8_ppc64le" {
   ]
 }
 
-local "gencloud_boot_command_9_x86_64" {
-  expression = [
-    "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-9-${local.os_ver_minor_9}-x86_64-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64.ks",
-    "<enter>",
-    "initrdefi /images/pxeboot/initrd.img",
-    "<enter>",
-    "boot<enter><wait>",
+variable "gencloud_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 
-local "gencloud_boot_command_9_aarch64" {
-  expression = [
-    "c<wait>",
-    "linux /images/pxeboot/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-9-${local.os_ver_minor_9}-aarch64-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks",
-    "<enter>",
-    "initrd /images/pxeboot/initrd.img<enter>",
-    "boot<enter><wait>",
+variable "gencloud_boot_command_9_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 
-local "gencloud_boot_command_9_ppc64le" {
-  expression = [
-    "c<wait>",
-    "linux /ppc/ppc64/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-9-${local.os_ver_minor_9}-ppc64le-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
-    "<enter>",
-    "initrd /ppc/ppc64/initrd.img<enter>",
-    "boot<enter><wait>",
+variable "gencloud_boot_command_9_ppc64le" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 
@@ -285,17 +306,24 @@ local "azure_boot_command_8_x86_64" {
   ]
 }
 
-local "azure_boot_command_9_x86_64" {
-  expression = [
-    "c<wait>",
-    "linuxefi /images/pxeboot/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-9-${local.os_ver_minor_9}-x86_64-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-x86_64.ks",
-    "<enter>",
-    "initrdefi /images/pxeboot/initrd.img",
-    "<enter>",
-    "boot<enter><wait>",
+variable "azure_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 Azure x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 
@@ -470,18 +498,24 @@ local "vagrant_boot_command_8_x86_64" {
   ]
 }
 
-local "vagrant_boot_command_9_x86_64" {
-  expression = [
-    "c",
-    "<wait>",
-    "linuxefi /images/pxeboot/vmlinuz",
-    " inst.stage2=hd:LABEL=AlmaLinux-9-${local.os_ver_minor_9}-x86_64-dvd ro",
-    " inst.text biosdevname=0 net.ifnames=0",
-    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64.ks",
-    "<enter>",
-    "initrdefi /images/pxeboot/initrd.img",
-    "<enter>",
-    "boot<enter><wait>",
+variable "vagrant_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 Vagrant x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
 
@@ -497,13 +531,21 @@ variable "vagrant_boot_command_9_x86_64_bios" {
 }
 
 variable "vagrant_boot_command_9_aarch64" {
-  description = "Boot command for AArch64"
+  description = "Boot command for AlmaLinux OS 9 Vagrant AArch64"
 
   type = list(string)
   default = [
     "e",
-    "<down><down><end><bs><bs><bs><bs><bs>",
-    "inst.text inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-aarch64.ks",
     "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
