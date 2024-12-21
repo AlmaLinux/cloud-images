@@ -8,7 +8,7 @@ source "qemu" "almalinux-9-azure-x86_64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = local.azure_boot_command_9_x86_64
+  boot_command       = var.azure_boot_command_9_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
