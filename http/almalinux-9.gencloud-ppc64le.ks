@@ -2,7 +2,7 @@
 
 url --url https://repo.almalinux.org/almalinux/9/BaseOS/ppc64le/os
 text
-lang C.UTF-8
+lang en_US.UTF-8
 keyboard us
 timezone UTC --utc
 selinux --enforcing
