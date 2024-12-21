@@ -1,6 +1,23 @@
 ---
-- name: Remove old kernels
-  shell: dnf remove -y $(dnf repoquery --installonly --latest-limit=-1 -q)
+- name: Remove older versions kernel and other packages
+  ansible.builtin.command: dnf -y remove --oldinstallonly
+  register: removeoldoutput
+  changed_when: removeoldoutput.rc == 0
+  ignore_errors: yes
+
+- name: Find persistent net rules
+  ansible.builtin.find:
+    paths: /etc/udev/rules.d
+    patterns: "70*"
+  register: persistnet_rules
+
+- name: Delete found persistent net rules
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ persistnet_rules.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 - name: Delete DNF cache
   command: dnf clean all
