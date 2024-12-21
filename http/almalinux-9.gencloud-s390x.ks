@@ -11,7 +11,7 @@ skipx
 eula --agreed
 firstboot --disabled
 
-lang C.UTF-8
+lang en_US.UTF-8
 keyboard us
 timezone UTC --utc
 
