@@ -184,6 +184,12 @@ See: [How to build UEFI and Secure Boot supported Images](https://github.com/Alm
 ```sh
 packer build -only=qemu.almalinux-8-azure-x86_64 .
 ```
+
+`AArch64`:
+
+```sh
+packer build -only=qemu.almalinux-8-azure-aarch64 .
+```
 #### AlmaLinux OS 9
 
 `x86_64` Unified Boot (BIOS and UEFI):
@@ -194,7 +200,17 @@ See: [How to build UEFI and Secure Boot supported Images](https://github.com/Alm
 packer build -only=qemu.almalinux-9-azure-x86_64 .
 ```
 
+`AArch64`:
 
+```sh
+packer build -only=qemu.almalinux-9-azure-aarch64 .
+```
+
+`AArch64` with with 64k page size kernel:
+
+```sh
+packer build -only=qemu.almalinux_9_azure_aarch64_64k .
+```
 ### Amazon Machine Images (AMI)
 
 #### Requirements
