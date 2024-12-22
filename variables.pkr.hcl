@@ -306,6 +306,20 @@ local "azure_boot_command_8_x86_64" {
   ]
 }
 
+local "azure_boot_command_8_aarch64" {
+  expression = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.azure-aarch64.ks",
+    "<enter>",
+    "initrd /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>"
+  ]
+}
+
 variable "azure_boot_command_9_x86_64" {
   description = "Boot command for AlmaLinux OS 9 Azure x86_64"
 
@@ -327,6 +341,47 @@ variable "azure_boot_command_9_x86_64" {
   ]
 }
 
+variable "azure_boot_command_9_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 Azure AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "azure_boot_command_9_64k_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 Azure with 64k page size kernel AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.azure-64k-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
 # AWS
 
 variable "aws_profile" {
