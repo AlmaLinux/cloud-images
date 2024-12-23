@@ -14,7 +14,7 @@ variable "os_ver_9" {
   description = "AlmaLinux OS 9 version"
 
   type    = string
-  default = "9.4"
+  default = "9.5"
 
   validation {
     condition     = can(regex("9.[0-9]$|9.[1-9][0-9]$", var.os_ver_9))
@@ -489,14 +489,14 @@ variable "aws_source_ami_9_x86_64" {
   description = "AlmaLinux OS 9 x86_64 AMI as source"
 
   type    = string
-  default = "ami-09ec283e9acdfa57e"
+  default = "ami-0dcac383e85adfc33"
 }
 
 variable "aws_source_ami_9_aarch64" {
   description = "AlmaLinux OS 9 AArch64 AMI as source"
 
   type    = string
-  default = "ami-01b09fbeec4dbcc45"
+  default = "ami-05d791113b059bae4"
 }
 
 # Vagrant
