@@ -22,6 +22,13 @@ variable "os_ver_9" {
   }
 }
 
+variable "build_number" {
+  description = "Build number identifier of an image version"
+
+  type    = number
+  default = 0
+}
+
 locals {
   os_ver_minor_8 = split(".", var.os_ver_8)[1]
 }
