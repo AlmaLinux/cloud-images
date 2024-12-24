@@ -48,6 +48,34 @@ locals {
   iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/ppc64le/CHECKSUM"
 }
 
+variable "iso_url_kitten_10_x86_64" {
+  description = "The latest AlmaLinux OS Kitten 10 x86_64 ISO"
+
+  type    = string
+  default = "https://kitten.repo.almalinux.org/10-kitten/isos/x86_64/AlmaLinux-Kitten-10-latest-x86_64-boot.iso"
+}
+
+variable "iso_checksum_kitten_10_x86_64" {
+  description = "The checksum of latest AlmaLinux OS Kitten 10 x86_64 ISO"
+
+  type    = string
+  default = "file:https://kitten.repo.almalinux.org/10-kitten/isos/x86_64/CHECKSUM"
+}
+
+variable "iso_url_kitten_10_aarch64" {
+  description = "The latest AlmaLinux OS Kitten 10 AArch64 ISO"
+
+  type    = string
+  default = "https://kitten.repo.almalinux.org/10-kitten/isos/aarch64/AlmaLinux-Kitten-10-latest-aarch64-boot.iso"
+}
+
+variable "iso_checksum_kitten_10_aarch64" {
+  description = "The checksum of latest AlmaLinux OS Kitten 10 AArch64 ISO"
+
+  type    = string
+  default = "file:https://kitten.repo.almalinux.org/10-kitten/isos/aarch64/CHECKSUM"
+}
+
 # Common
 
 variable "headless" {
@@ -389,6 +417,70 @@ variable "azure_boot_command_9_64k_aarch64" {
     "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
+
+variable "azure_boot_command_kitten_10_x86_64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Azure x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.azure-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "azure_boot_command_kitten_10_aarch64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Azure AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.azure-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "azure_boot_command_kitten_10_64k_aarch64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Azure with 64k page size kernel AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.azure-64k-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
 # AWS
 
 variable "aws_profile" {

@@ -3,7 +3,7 @@
   dnf:
     name:
       - hyperv-daemons
-      - gdisk
+      # - gdisk
       - yum-utils
       - nvme-cli
       - jq
