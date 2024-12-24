@@ -211,6 +211,29 @@ packer build -only=qemu.almalinux-9-azure-aarch64 .
 ```sh
 packer build -only=qemu.almalinux_9_azure_aarch64_64k .
 ```
+
+#### AlmaLinux OS Kitten 10
+
+`x86_64` Unified Boot (BIOS and UEFI):
+
+See: [How to build UEFI and Secure Boot supported Images](https://github.com/AlmaLinux/cloud-images#how-to-build-uefi-and-secure-boot-supported-images)
+
+```sh
+packer build -only=qemu.almalinux_kitten_10_azure_x86_64 .
+```
+
+`AArch64`:
+
+```sh
+packer build -only=qemu.almalinux_kitten_10_azure_aarch64 .
+```
+
+`AArch64` with with 64k page size kernel:
+
+```sh
+packer build -only=qemu.almalinux_kitten_10_azure_aarch64_64k .
+```
+
 ### Amazon Machine Images (AMI)
 
 #### Requirements
