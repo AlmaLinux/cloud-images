@@ -1,0 +1,16 @@
+---
+- name: Disable relabel on boot
+  ansible.builtin.file:
+    path: /rootfs/.autorelabel
+    state: absent
+    force: true
+
+- name: Relabel filesystem
+  ansible.builtin.command:
+    cmd: chroot /rootfs /sbin/fixfiles -f -F relabel
+  changed_when: true
+
+- name: Install SELinux
+  ansible.builtin.command:
+    cmd: dnf --installroot=/rootfs --nogpgcheck -y reinstall selinux-policy-targeted libselinux-utils policycoreutils
+  changed_when: true

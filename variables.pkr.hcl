@@ -570,6 +570,26 @@ local "aws_ami_version_9" {
   expression = "${var.os_ver_9}.${formatdate("YYYYMMDD", timestamp())}"
 }
 
+local "aws_ami_name_x86_64_kitten_10" {
+  expression = "AlmaLinux OS Kitten 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} x86_64"
+}
+
+local "aws_ami_name_aarch64_kitten_10" {
+  expression = "AlmaLinux OS Kitten 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} aarch64"
+}
+
+local "aws_ami_description_x86_64_kitten_10" {
+  expression = "Official AlmaLinux OS Kitten 10 x86_64 Amazon Machine Image"
+}
+
+local "aws_ami_description_aarch64_kitten_10" {
+  expression = "Official AlmaLinux OS Kitten 10 aarch64 Amazon Machine Image"
+}
+
+local "aws_ami_version_kitten_10" {
+  expression = "10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number}"
+}
+
 variable "aws_source_ami_8_x86_64" {
   description = "AlmaLinux OS 8 x86_64 AMI as source"
 
@@ -596,6 +616,20 @@ variable "aws_source_ami_9_aarch64" {
 
   type    = string
   default = "ami-05d791113b059bae4"
+}
+
+variable "aws_source_ami_kitten_10_x86_64" {
+  description = "AlmaLinux OS Kitten 10 x86_64 AMI as source"
+
+  type    = string
+  default = "ami-0bcea1e66829fec5b"
+}
+
+variable "aws_source_ami_kitten_10_aarch64" {
+  description = "AlmaLinux OS Kitten 10 AArch64 AMI as source"
+
+  type    = string
+  default = "ami-0707e89f669cb9128"
 }
 
 # Vagrant
