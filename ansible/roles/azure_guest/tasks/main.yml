@@ -3,7 +3,6 @@
   dnf:
     name:
       - hyperv-daemons
-      - gdisk
       - yum-utils
       - nvme-cli
       - jq
@@ -13,6 +12,12 @@
       - cifs-utils
       - sos
       - tuned
+    state: present
+
+- name: Install disk utils
+  when: ansible_facts['distribution_major_version'] != '10'
+  ansible.builtin.dnf:
+    name: gdisk
     state: present
 
 - name: Blacklist unnecessary kernel modules
