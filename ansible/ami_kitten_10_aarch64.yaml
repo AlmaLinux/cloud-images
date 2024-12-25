@@ -1,0 +1,7 @@
+---
+- name: AlmaLinux OS Kitten 10 AMI AArch64
+  hosts: all
+  become: true
+
+  roles:
+    - ami_kitten_10_aarch64

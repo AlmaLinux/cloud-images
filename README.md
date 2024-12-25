@@ -282,6 +282,12 @@ AlmaLinux OS 9:
 aws ec2 describe-images --owners 764336703387 --query 'sort_by(Images, &CreationDate)[*].[CreationDate,Name,ImageId]' --filters "Name=name,Values=AlmaLinux OS 9*" --region $REGION --output table
 ```
 
+AlmaLinux OS Kitten 10:
+
+```sh
+aws ec2 describe-images --owners 764336703387 --query 'sort_by(Images, &CreationDate)[*].[CreationDate,Name,ImageId]' --filters "Name=name,Values=AlmaLinux OS Kitten 10*" --region $REGION --output table
+```
+
 Use the one of the methods listed below to set input variables:
 
 - Command-line option
@@ -359,6 +365,21 @@ packer build -only=amazon-ebssurrogate.almalinux_9_ami_x86_64 .
 
 ```sh
 packer build -only=amazon-ebssurrogate.almalinux_9_ami_aarch64 .
+```
+
+##### AlmaLinux OS Kitten 10
+
+`x86_64` Unified Boot (BIOS and UEFI):
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_kitten_10_ami_x86_64 .
+```
+
+`AArch64`:
+
+
+```sh
+packer build -only=amazon-ebssurrogate.almalinux_kitten_10_ami_aarch64 .
 ```
 
 #### Customization

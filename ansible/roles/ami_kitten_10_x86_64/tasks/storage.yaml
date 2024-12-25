@@ -1,0 +1,82 @@
+---
+- name: Gather disk information
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- unit MiB print
+  register: parted_output
+  failed_when: '"Error: Could not stat device" in parted_output.stderr'
+  changed_when: false
+
+- name: Show disk information before the operations
+  ansible.builtin.debug:
+    var: parted_output.stdout_lines
+
+- name: Create GPT Partition Table
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- mklabel gpt
+  changed_when: true
+
+- name: Create BIOS boot partition
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- mkpart biosboot 0% 2MiB set 1 bios_grub on
+  changed_when: true
+
+- name: Create ESP partition
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- mkpart '"EFI System Partition"' fat32 2MiB 202MiB set 2 esp on
+  changed_when: true
+
+- name: Create Boot Partition
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- mkpart boot xfs 202MiB 1226MiB
+  changed_when: true
+
+- name: Create Root Partition
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- mkpart root xfs 1226MiB 100%
+  changed_when: true
+
+- name: Format ESP partition as FAT32
+  community.general.filesystem:
+    dev: /dev/nvme1n1p2
+    fstype: vfat
+    state: present
+
+- name: Format Boot partition as XFS
+  community.general.filesystem:
+    dev: /dev/nvme1n1p3
+    fstype: xfs
+    state: present
+
+- name: Format Root partition as XFS
+  community.general.filesystem:
+    dev: /dev/nvme1n1p4
+    fstype: xfs
+    state: present
+
+- name: Gather disk information
+  ansible.builtin.command:
+    cmd: parted -s -a optimal /dev/nvme1n1 -- unit MiB print
+  register: parted_output
+  changed_when: false
+
+- name: Show disk information after the operations
+  ansible.builtin.debug:
+    var: parted_output.stdout_lines
+
+- name: Get UUID of ESP
+  ansible.builtin.command:
+    cmd: blkid /dev/nvme1n1p2 -s UUID -o value
+  register: esp_uuid
+  changed_when: false
+
+- name: Get UUID of Boot
+  ansible.builtin.command:
+    cmd: blkid /dev/nvme1n1p3 -s UUID -o value
+  register: boot_uuid
+  changed_when: false
+
+- name: Get UUID of Root
+  ansible.builtin.command:
+    cmd: blkid /dev/nvme1n1p4 -s UUID -o value
+  register: root_uuid
+  changed_when: false
