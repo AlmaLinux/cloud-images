@@ -128,10 +128,10 @@
     state: absent
 
 - name: Disable root SSH login via password
+  when: ansible_facts['distribution_major_version'] | int >= 9
   file:
     path: /etc/ssh/sshd_config.d/01-permitrootlogin.conf
     state: absent
-  when: ansible_facts['distribution_major_version'] == '9'
 
 - name: Fill free space with zeroes
   shell: dd if=/dev/zero of=/zeroed_file bs=1M oflag=direct || rm -f /zeroed_file
