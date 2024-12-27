@@ -76,6 +76,34 @@ variable "iso_checksum_kitten_10_aarch64" {
   default = "file:https://kitten.repo.almalinux.org/10-kitten/isos/aarch64/CHECKSUM"
 }
 
+variable "iso_url_kitten_10_ppc64le" {
+  description = "The latest AlmaLinux OS Kitten 10 ppc64le ISO"
+
+  type    = string
+  default = "https://kitten.repo.almalinux.org/10-kitten/isos/ppc64le/AlmaLinux-Kitten-10-latest-ppc64le-boot.iso"
+}
+
+variable "iso_checksum_kitten_10_ppc64le" {
+  description = "The checksum of latest AlmaLinux OS Kitten 10 ppc64le ISO"
+
+  type    = string
+  default = "file:https://kitten.repo.almalinux.org/10-kitten/isos/ppc64le/CHECKSUM"
+}
+
+variable "iso_url_kitten_10_x86_64_v2" {
+  description = "The latest AlmaLinux OS Kitten 10 x86_64_v2 ISO"
+
+  type    = string
+  default = "https://kitten.repo.almalinux.org/10-kitten/isos/x86_64_v2/AlmaLinux-Kitten-10-latest-x86_64_v2-boot.iso"
+}
+
+variable "iso_checksum_kitten_10_x86_64_v2" {
+  description = "The checksum of latest AlmaLinux OS Kitten 10 x86_64_v2 ISO"
+
+  type    = string
+  default = "file:https://kitten.repo.almalinux.org/10-kitten/isos/x86_64_v2/CHECKSUM"
+}
+
 # Common
 
 variable "headless" {
@@ -314,6 +342,88 @@ variable "gencloud_boot_command_9_ppc64le" {
     "inst.text",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_kitten_10_x86_64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_kitten_10_aarch64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_kitten_10_ppc64le" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_kitten_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud x86_64_v2"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-x86_64_v2.ks",
     "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
