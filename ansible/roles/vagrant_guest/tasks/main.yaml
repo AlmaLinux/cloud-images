@@ -20,7 +20,18 @@
     state: present
 
 - name: Install Vagrant public SSH key
+  when: ansible_facts['distribution_major_version'] | int <= 9
   ansible.posix.authorized_key:
     user: vagrant
     key: https://raw.githubusercontent.com/hashicorp/vagrant/main/keys/vagrant.pub
+    state: present
+
+# Temporary workaround error on fetching a key from a URL on AlmaLinux OS Kitten 10
+# Error output: Error getting key from
+# See: https://github.com/ansible-collections/ansible.posix/blob/main/plugins/modules/authorized_key.py
+- name: Install Vagrant public SSH key
+  when: ansible_facts['distribution_major_version'] == '10'
+  ansible.posix.authorized_key:
+    user: vagrant
+    key: "{{ lookup('ansible.builtin.file', 'vagrant.pub') }}"
     state: present

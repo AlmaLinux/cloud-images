@@ -9,7 +9,7 @@
   roles:
     - role: unified_boot
       when: is_unified_boot is defined
-    - vagrant
+    - vagrant_guest
     - role: ezamriy.vbox_guest
       when: packer_provider == 'virtualbox-iso'
     - role: vmware_guest
