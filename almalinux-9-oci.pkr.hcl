@@ -1,4 +1,4 @@
-# AlmaLinux OS 9 Packer template for Oracle Cloud Infrastructure images
+# AlmaLinux OS 9 Packer template for Oracle Cloud Infrastructure (OCI) images
 
 source "qemu" "almalinux-9-oci-x86_64" {
   iso_url            = local.iso_url_9_x86_64
@@ -8,7 +8,7 @@ source "qemu" "almalinux-9-oci-x86_64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = var.gencloud_boot_command_9_x86_64
+  boot_command       = var.oci_boot_command_9_x86_64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   disk_interface     = "virtio-scsi"
@@ -40,7 +40,7 @@ source "qemu" "almalinux-9-oci-aarch64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = var.gencloud_boot_command_9_aarch64
+  boot_command       = var.oci_boot_command_9_aarch64
   boot_wait          = var.boot_wait
   accelerator        = "kvm"
   firmware           = var.aavmf_code
