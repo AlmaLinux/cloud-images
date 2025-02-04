@@ -17,6 +17,8 @@
       - tar
       - tuned
       - tcpdump
+      - python3-firewall
+      - firewalld
 
 - name: Find persistent-net.rules
   find:
