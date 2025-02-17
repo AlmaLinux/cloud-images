@@ -936,6 +936,78 @@ variable "parallels_tools_flavor_aarch64" {
   default = "lin-arm"
 }
 
+# Oracle Cloud Infrastructure (OCI)
+
+local "oci_boot_command_8_x86_64" {
+  expression = [
+    "c<wait>",
+    "linuxefi",
+    " /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-x86_64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.oci-x86_64.ks",
+    "<enter>",
+    "initrdefi /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+local "oci_boot_command_8_aarch64" {
+  expression = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.oci-aarch64.ks",
+    "<enter>",
+    "initrd /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+variable "oci_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 OCI x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.oci-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "oci_boot_command_9_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 OCI AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.oci-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
 # DigitalOcean
 
 variable "do_api_token" {

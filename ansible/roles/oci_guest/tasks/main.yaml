@@ -1,0 +1,93 @@
+---
+- name: Set default kernel package type to kernel
+  ansible.builtin.replace:
+    path: /etc/sysconfig/kernel
+    regexp: "^(DEFAULTKERNEL=).*$"
+    replace: "\\1kernel"
+
+- name: Install additional packages
+  ansible.builtin.dnf:
+    name:
+      - qemu-guest-agent
+      - nfs-utils
+      - rsync
+      - jq
+      - tcpdump
+      - tuned
+      - nvme-cli
+    state: present
+
+- name: Install iSCSI tools
+  ansible.builtin.dnf:
+    name:
+      - iscsi-initiator-utils
+      - iscsi-initiator-utils-iscsiuio
+      - device-mapper-multipath
+    state: present
+
+# https://docs.oracle.com/en-us/iaas/Content/Block/Concepts/iscsiinformation.htm#iscsid
+- name: ISCSI optimizations
+  ansible.builtin.lineinfile:
+    path: /etc/iscsi/iscsid.conf
+    regexp: "{{ item.find }}"
+    line: "{{ item.replace }}"
+    state: present
+  loop:
+    - { find: ".*node.startup.*", replace: "node.startup = automatic" }
+    - { find: ".*node.session.timeo.replacement_timeout.*", replace: "node.session.timeo.replacement_timeout = 6000" }
+    - { find: ".*node.conn\\[0\\].timeo.noop_out_interval.*", replace: "node.conn[0].timeo.noop_out_interval = 0" }
+    - { find: ".*node.conn\\[0\\].timeo.noop_out_timeout.*", replace: "node.conn[0].timeo.noop_out_timeout = 0" }
+    - { find: ".*node.conn\\[0\\].iscsi.HeaderDigest.*", replace: "node.conn[0].iscsi.HeaderDigest = None" }
+
+# The public download links of Oracle Cloud Agent are not available anymore
+# - name: Set up Oracle Cloud Agent
+#   block:
+#     - name: Import Oracle Linux 8 GPG Public key
+#       rpm_key:
+#         state: present
+#         key: "{{ ol8_gpg_key_url }}"
+#       when: ansible_facts['distribution_major_version'] == '8'
+#
+#     - name: Install Oracle Cloud Agent
+#       dnf:
+#         name:
+#           - "{{ oracle_cloud_agent_url_x86_64 }}"
+#           - librepo
+#           - python3-librepo
+#         state: present
+#       when:
+#         - ansible_facts['architecture'] == 'x86_64'
+#         - ansible_facts['distribution_major_version'] == '8'
+#
+#     - name: Install Oracle Cloud Agent
+#       dnf:
+#         name:
+#           - "{{ oracle_cloud_agent_url_aarch64 }}"
+#           - librepo
+#           - python3-librepo
+#         state: present
+#       when:
+#         - ansible_facts['architecture'] == 'aarch64'
+#         - ansible_facts['distribution_major_version'] == '8'
+
+- name: Optimizations for initramfs
+  ansible.builtin.lineinfile:
+    path: /etc/dracut.conf.d/99-oci.conf
+    line: "{{ item }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - add_dracutmodules+=" multipath "
+    - add_drivers+=" nvme "
+
+- name: Regenerate the initramfs
+  ansible.builtin.command:
+    cmd: dracut -f --regenerate-all
+  changed_when: true
+
+- name: Disable root login
+  ansible.builtin.user:
+    name: root
+    password: "*"
