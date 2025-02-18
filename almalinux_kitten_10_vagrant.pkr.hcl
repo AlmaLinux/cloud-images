@@ -327,6 +327,7 @@ build {
   }
 
   provisioner "ansible" {
+    user                 = "vagrant"
     galaxy_file          = "./ansible/requirements.yml"
     galaxy_force_install = true
     collections_path     = "./ansible/collections"
