@@ -16,7 +16,7 @@ firewall --disabled
 services --disabled="kdump" --enabled="chronyd,rsyslog,sshd"
 selinux --enforcing
 
-bootloader --timeout=0 --location=mbr --append="loglevel=3 console=tty1 console=ttyS0 earlyprintk=ttyS0 rootdelay=300 no_timer_check net.ifnames=0"
+bootloader --timeout=0 --location=mbr --append="loglevel=3 console=tty1 console=ttyS0 earlyprintk=ttyS0 rootdelay=300 no_timer_check net.ifnames=0 nvme_core.io_timeout=240"
 
 %pre --erroronfail
 
