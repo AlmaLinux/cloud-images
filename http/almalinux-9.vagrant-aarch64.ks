@@ -24,6 +24,7 @@ reboot --eject
 %packages --exclude-weakdeps --inst-langs=en
 dracut-config-generic
 tar
+rsyslog-logrotate
 -*firmware
 -dracut-config-rescue
 -firewalld

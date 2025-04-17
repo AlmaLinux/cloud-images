@@ -62,6 +62,7 @@
       chrony
       NetworkManager-cloud-setup
       tar
+      rsyslog-logrotate
       @core
       --exclude="*firmware"
       --exclude="dracut-config-rescue"

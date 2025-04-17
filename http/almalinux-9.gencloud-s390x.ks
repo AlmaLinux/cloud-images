@@ -48,6 +48,7 @@ tuned
 cloud-init
 cloud-utils-growpart
 dracut-config-generic
+rsyslog-logrotate
 -*firmware
 -dracut-config-rescue
 -firewalld
