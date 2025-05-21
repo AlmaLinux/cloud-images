@@ -9,7 +9,7 @@ selinux --enforcing
 firewall --disabled
 services --enabled=sshd
 
-bootloader --timeout=0 --location=mbr --append="loglevel=3 console=tty1 console=ttyAMA0 earlycon=pl011,0xeffec000 initcall_blacklist=arm_pmu_acpi_init rootdelay=300 no_timer_check net.ifnames=0"
+bootloader --timeout=0 --location=mbr --append="loglevel=3 console=tty1 console=ttyAMA0 earlycon=pl011,0xeffec000 initcall_blacklist=arm_pmu_acpi_init rootdelay=300 no_timer_check net.ifnames=0 nvme_core.io_timeout=240"
 
 zerombr
 clearpart --all --initlabel
