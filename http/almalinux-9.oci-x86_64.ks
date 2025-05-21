@@ -31,6 +31,7 @@ reboot --eject
 dracut-config-generic
 grub2-pc
 tar
+rsyslog-logrotate
 -*firmware
 -dracut-config-rescue
 -firewalld

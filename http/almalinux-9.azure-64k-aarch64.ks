@@ -24,6 +24,7 @@ reboot --eject
 kernel-64k
 dracut-config-generic
 tar
+rsyslog-logrotate
 -kmod-kvdo
 -vdo
 -kernel
