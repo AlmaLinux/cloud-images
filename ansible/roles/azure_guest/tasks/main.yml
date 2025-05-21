@@ -1,6 +1,8 @@
 ---
 - name: Install Hyper-V support and common utils
+  when: ansible_facts['distribution_major_version'] | int >= 9
   dnf:
+    install_weak_deps: false
     name:
       - hyperv-daemons
       - yum-utils

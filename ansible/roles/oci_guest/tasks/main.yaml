@@ -6,7 +6,9 @@
     replace: "\\1kernel"
 
 - name: Install additional packages
+  when: ansible_facts['distribution_major_version'] | int >= 9
   ansible.builtin.dnf:
+    install_weak_deps: false
     name:
       - qemu-guest-agent
       - nfs-utils
@@ -18,7 +20,9 @@
     state: present
 
 - name: Install iSCSI tools
+  when: ansible_facts['distribution_major_version'] | int >= 9
   ansible.builtin.dnf:
+    install_weak_deps: false
     name:
       - iscsi-initiator-utils
       - iscsi-initiator-utils-iscsiuio

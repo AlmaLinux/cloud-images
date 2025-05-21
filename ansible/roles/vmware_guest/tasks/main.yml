@@ -1,5 +1,7 @@
 ---
 - name: Install open-vm-tools
+  when: ansible_facts['distribution_major_version'] | int >= 9
   dnf:
+    install_weak_deps: false
     name: open-vm-tools
     state: latest
