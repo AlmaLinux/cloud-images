@@ -32,6 +32,7 @@
   ansible.builtin.dnf:
     installroot: /rootfs
     disable_gpg_check: true
+    install_weak_deps: false
     name:
       - cloud-init
       - cloud-utils-growpart

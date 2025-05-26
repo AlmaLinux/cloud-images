@@ -25,18 +25,16 @@
 
 # Optimizations
 - name: Install additional packages
+  when: ansible_facts['distribution_major_version'] | int >= 9
   ansible.builtin.dnf:
+    install_weak_deps: false
     name:
       - qemu-guest-agent
       - nfs-utils
       - rsync
       - jq
       - tcpdump
-    state: present
-
-- name: Install TuneD
-  ansible.builtin.dnf:
-    name: tuned
+      - tuned
     state: present
 
 - name: Enable TuneD service

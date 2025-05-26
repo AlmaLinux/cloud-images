@@ -1,6 +1,7 @@
 ---
-- name: Install qemu-guest-agent and rsync
+- name: Install qemu-guest-agent
+  when: ansible_facts['distribution_major_version'] | int >= 9
   dnf:
-    name:
-      - qemu-guest-agent
+    install_weak_deps: false
+    name: qemu-guest-agent
     state: latest
