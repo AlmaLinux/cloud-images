@@ -213,6 +213,13 @@ def copy_ami(ami_info, src_region, dst_region, aws_client_token):
     log.info(f"uploading {dst_ami_id} to {dst_region}")
     waiter = dst_ec2.get_waiter("image_available")
     waiter.wait(ImageIds=[dst_ami_id])
+    image_block_public_access = dst_ec2.get_image_block_public_access_state()
+    if image_block_public_access['ImageBlockPublicAccessState'] != 'unblocked':
+        log.warning(f'{dst_region}:public access for AMIs is blocked on this new region')
+        log.info(f'{dst_region}:unblocking the public access for AMIs')
+        response = dst_ec2.disable_image_block_public_access()
+        if response['ImageBlockPublicAccessState'] == 'unblocked':
+            log.info(f'{dst_region}:unblocked public access for AMIs')
     dst_ec2.modify_image_attribute(
         ImageId=dst_ami_id, LaunchPermission={"Add": [{"Group": "all"}]}
     )
