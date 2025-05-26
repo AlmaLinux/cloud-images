@@ -1,0 +1,2 @@
+---
+ami_10_x86_64_kernel_opts: console=tty0 console=ttyS0,115200n8 net.ifnames=0 rd.blacklist=nouveau nvme_core.io_timeout=4294967295

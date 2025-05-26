@@ -1,0 +1,123 @@
+---
+- name: Find persistent udev rules
+  ansible.builtin.find:
+    paths: /rootfs/etc/udev/rules.d/
+    patterns: "70*"
+  register: net_rules
+
+- name: Delete persistent-net.rules
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ net_rules.files }}"
+
+- name: Blacklist nouveau kernel module
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/modprobe.d/blacklist-nouveau.conf
+    line: blacklist nouveau
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Amazon Time Sync Service to chrony config
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/chrony.conf
+    line: "{{ item }}"
+  loop:
+    - "# Amazon Time Sync Service"
+    - server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
+
+- name: Install additional software
+  ansible.builtin.dnf:
+    installroot: /rootfs
+    disable_gpg_check: true
+    name:
+      - cloud-init
+      - cloud-utils-growpart
+      - rsync
+      - tuned
+      - nvme-cli
+      - jq
+      - nfs-utils
+      - sos
+      - tcpdump
+    state: present
+
+- name: Install AWS Systems Manager Agent (SSM Agent)
+  ansible.builtin.dnf:
+    installroot: /rootfs
+    disable_gpg_check: true
+    name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+    state: present
+
+- name: Install AWS EC2 Instance Connect
+  ansible.builtin.dnf:
+    installroot: /rootfs
+    disable_gpg_check: true
+    name:
+      - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect.rpm
+      - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect-selinux.noarch.rpm
+    state: present
+
+- name: Configure NetworkManager in cloud
+  ansible.builtin.file:
+    path: /rootfs/etc/systemd/system/nm-cloud-setup.service.d
+    state: directory
+    mode: "0755"
+
+- name: Setting NM Cloud provider to AWS
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/systemd/system/nm-cloud-setup.service.d/10-enable-ec2.conf
+    line: "{{ item }}"
+    create: true
+    mode: "0644"
+  loop:
+    - "[Service]"
+    - Environment=NM_CLOUD_SETUP_EC2=true
+
+- name: Disable SSH password authentication
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    validate: sshd -T -f %s
+  loop:
+    - { regexp: ^PasswordAuthentication, line: PasswordAuthentication no }
+    - { regexp: ^ChallengeResponseAuthentication, line: ChallengeResponseAuthentication no }
+
+- name: Enable openssh-server cloud-init amazon-ssm-agent services
+  ansible.builtin.command:
+    cmd: chroot /rootfs systemctl enable {{ item }}
+  loop:
+    - nm-cloud-setup.service
+    - nm-cloud-setup.timer
+    - sshd
+    - chronyd
+    - cloud-config
+    - cloud-init
+    - cloud-init-local
+    - cloud-final
+    - amazon-ssm-agent
+  changed_when: true
+
+- name: Change cloud-init user to ec2-user
+  ansible.builtin.replace:
+    dest: /rootfs/etc/cloud/cloud.cfg
+    regexp: ^(\s+name:).*$
+    replace: \1 ec2-user
+
+- name: Enable Xen and NVME drivers
+  ansible.builtin.lineinfile:
+    path: /rootfs/etc/dracut.conf.d/ec2.conf
+    line: add_drivers+=" nvme xen-netfront xen-blkfront "
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Upgrade initramfs
+  ansible.builtin.command:
+    cmd: chroot /rootfs dracut -f --regenerate-all
+  changed_when: true

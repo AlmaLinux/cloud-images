@@ -22,6 +22,18 @@ variable "os_ver_9" {
   }
 }
 
+variable "os_ver_10" {
+  description = "AlmaLinux OS 10 version"
+
+  type    = string
+  default = "10.0"
+
+  validation {
+    condition     = can(regex("10.[0-9]$|10.[1-9][0-9]$", var.os_ver_10))
+    error_message = "The os_ver_10 value must be one of released or prereleased versions of AlmaLinux OS 10."
+  }
+}
+
 variable "build_number" {
   description = "Build number identifier of an image version"
 
@@ -34,18 +46,26 @@ locals {
 }
 
 locals {
-  iso_url_8_x86_64       = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/x86_64/AlmaLinux-${var.os_ver_8}-x86_64-boot.iso"
-  iso_checksum_8_x86_64  = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/x86_64/CHECKSUM"
-  iso_url_8_aarch64      = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/aarch64/AlmaLinux-${var.os_ver_8}-aarch64-boot.iso"
-  iso_checksum_8_aarch64 = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/aarch64/CHECKSUM"
-  iso_url_8_ppc64le      = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/ppc64le/AlmaLinux-${var.os_ver_8}-ppc64le-boot.iso"
-  iso_checksum_8_ppc64le = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/ppc64le/CHECKSUM"
-  iso_url_9_x86_64       = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/x86_64/AlmaLinux-${var.os_ver_9}-x86_64-boot.iso"
-  iso_checksum_9_x86_64  = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/x86_64/CHECKSUM"
-  iso_url_9_aarch64      = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/aarch64/AlmaLinux-${var.os_ver_9}-aarch64-boot.iso"
-  iso_checksum_9_aarch64 = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/aarch64/CHECKSUM"
-  iso_url_9_ppc64le      = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/ppc64le/AlmaLinux-${var.os_ver_9}-ppc64le-boot.iso"
-  iso_checksum_9_ppc64le = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/ppc64le/CHECKSUM"
+  iso_url_8_x86_64          = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/x86_64/AlmaLinux-${var.os_ver_8}-x86_64-boot.iso"
+  iso_checksum_8_x86_64     = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/x86_64/CHECKSUM"
+  iso_url_8_aarch64         = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/aarch64/AlmaLinux-${var.os_ver_8}-aarch64-boot.iso"
+  iso_checksum_8_aarch64    = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/aarch64/CHECKSUM"
+  iso_url_8_ppc64le         = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/ppc64le/AlmaLinux-${var.os_ver_8}-ppc64le-boot.iso"
+  iso_checksum_8_ppc64le    = "file:https://repo.almalinux.org/almalinux/${var.os_ver_8}/isos/ppc64le/CHECKSUM"
+  iso_url_9_x86_64          = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/x86_64/AlmaLinux-${var.os_ver_9}-x86_64-boot.iso"
+  iso_checksum_9_x86_64     = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/x86_64/CHECKSUM"
+  iso_url_9_aarch64         = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/aarch64/AlmaLinux-${var.os_ver_9}-aarch64-boot.iso"
+  iso_checksum_9_aarch64    = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/aarch64/CHECKSUM"
+  iso_url_9_ppc64le         = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/ppc64le/AlmaLinux-${var.os_ver_9}-ppc64le-boot.iso"
+  iso_checksum_9_ppc64le    = "file:https://repo.almalinux.org/almalinux/${var.os_ver_9}/isos/ppc64le/CHECKSUM"
+  iso_url_10_x86_64         = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/x86_64/AlmaLinux-${var.os_ver_10}-x86_64-boot.iso"
+  iso_checksum_10_x86_64    = "file:https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/x86_64/CHECKSUM"
+  iso_url_10_aarch64        = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/aarch64/AlmaLinux-${var.os_ver_10}-aarch64-boot.iso"
+  iso_checksum_10_aarch64   = "file:https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/aarch64/CHECKSUM"
+  iso_url_10_ppc64le        = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/ppc64le/AlmaLinux-${var.os_ver_10}-ppc64le-boot.iso"
+  iso_checksum_10_ppc64le   = "file:https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/ppc64le/CHECKSUM"
+  iso_url_10_x86_64_v2      = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/x86_64_v2/AlmaLinux-${var.os_ver_10}-x86_64_v2-boot.iso"
+  iso_checksum_10_x86_64_v2 = "file:https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/x86_64_v2/CHECKSUM"
 }
 
 variable "iso_url_kitten_10_x86_64" {
@@ -428,6 +448,87 @@ variable "gencloud_boot_command_kitten_10_x86_64_v2" {
   ]
 }
 
+variable "gencloud_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_10_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_10_ppc64le" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_boot_command_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud x86_64_v2"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
 # Azure
 
 variable "azure_disk_size" {
@@ -591,6 +692,69 @@ variable "azure_boot_command_kitten_10_64k_aarch64" {
   ]
 }
 
+variable "azure_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 Azure x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.azure-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "azure_boot_command_10_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 Azure AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.azure-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "azure_boot_command_10_64k_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 Azure with 64k page size kernel AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.azure-64k-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
 # AWS
 
 variable "aws_profile" {
@@ -639,7 +803,7 @@ variable "aws_instance_type_aarch64" {
   type    = string
   default = "t4g.small"
 }
-
+# AlmaLinux OS 8
 local "aws_ami_name_x86_64_8" {
   expression = "AlmaLinux OS ${var.os_ver_8}.${formatdate("YYYYMMDD", timestamp())} x86_64"
 }
@@ -659,7 +823,7 @@ local "aws_ami_description_aarch64_8" {
 local "aws_ami_version_8" {
   expression = "${var.os_ver_8}.${formatdate("YYYYMMDD", timestamp())}"
 }
-
+# AlmaLinux OS 9
 local "aws_ami_name_x86_64_9" {
   expression = "AlmaLinux OS ${var.os_ver_9}.${formatdate("YYYYMMDD", timestamp())} x86_64"
 }
@@ -679,7 +843,7 @@ local "aws_ami_description_aarch64_9" {
 local "aws_ami_version_9" {
   expression = "${var.os_ver_9}.${formatdate("YYYYMMDD", timestamp())}"
 }
-
+# AlmaLinux OS Kitten 10
 local "aws_ami_name_x86_64_kitten_10" {
   expression = "AlmaLinux OS Kitten 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} x86_64"
 }
@@ -699,7 +863,27 @@ local "aws_ami_description_aarch64_kitten_10" {
 local "aws_ami_version_kitten_10" {
   expression = "10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number}"
 }
+# AlmaLinux OS 10
+local "aws_ami_name_x86_64_10" {
+  expression = "AlmaLinux OS 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} x86_64"
+}
 
+local "aws_ami_name_aarch64_10" {
+  expression = "AlmaLinux OS 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} aarch64"
+}
+
+local "aws_ami_description_x86_64_10" {
+  expression = "Official AlmaLinux OS 10 x86_64 Amazon Machine Image"
+}
+
+local "aws_ami_description_aarch64_10" {
+  expression = "Official AlmaLinux OS 10 aarch64 Amazon Machine Image"
+}
+
+local "aws_ami_version_10" {
+  expression = "10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number}"
+}
+# AlmaLinux OS 8
 variable "aws_source_ami_8_x86_64" {
   description = "AlmaLinux OS 8 x86_64 AMI as source"
 
@@ -713,7 +897,7 @@ variable "aws_source_ami_8_aarch64" {
   type    = string
   default = "ami-099b4f20875da4c84"
 }
-
+# AlmaLinux OS 9
 variable "aws_source_ami_9_x86_64" {
   description = "AlmaLinux OS 9 x86_64 AMI as source"
 
@@ -727,7 +911,7 @@ variable "aws_source_ami_9_aarch64" {
   type    = string
   default = "ami-05d791113b059bae4"
 }
-
+# AlmaLinux OS Kitten 10
 variable "aws_source_ami_kitten_10_x86_64" {
   description = "AlmaLinux OS Kitten 10 x86_64 AMI as source"
 
@@ -741,7 +925,20 @@ variable "aws_source_ami_kitten_10_aarch64" {
   type    = string
   default = "ami-0707e89f669cb9128"
 }
+# AlmaLinux OS 10
+variable "aws_source_ami_10_x86_64" {
+  description = "AlmaLinux OS 10 x86_64 AMI as source"
 
+  type    = string
+  default = "ami-0bcea1e66829fec5b"
+}
+
+variable "aws_source_ami_10_aarch64" {
+  description = "AlmaLinux OS 10 AArch64 AMI as source"
+
+  type    = string
+  default = "ami-0707e89f669cb9128"
+}
 # Vagrant
 
 variable "vagrant_disk_size" {
@@ -911,6 +1108,68 @@ variable "vagrant_boot_command_kitten_10_aarch64" {
   ]
 }
 
+variable "vagrant_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 Vagrant x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.vagrant-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "vagrant_boot_command_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS 10 Vagrant x86_64_v2"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.vagrant-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "vagrant_boot_command_10_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 Vagrant aarch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.vagrant-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
 # Hyper-V
 
 variable "hyperv_switch_name" {
