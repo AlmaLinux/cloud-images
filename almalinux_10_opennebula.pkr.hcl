@@ -57,7 +57,7 @@ source "qemu" "almalinux_10_opennebula_aarch64" {
   memory             = var.memory_aarch64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-10-OpenNebula-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.aarch64.qcow2"
+  vm_name            = "AlmaLinux-10-OpenNebula-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.qcow2"
   cpu_model          = "host"
   cpus               = var.cpus
   qemuargs = [
@@ -89,7 +89,7 @@ source "qemu" "almalinux_10_opennebula_x86_64_v2" {
   memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-10-OpenNebula-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.x86_64_v2.qcow2"
+  vm_name            = "AlmaLinux-10-OpenNebula-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.qcow2"
   cpu_model          = "Nehalem"
   cpus               = var.cpus
   efi_boot           = true
