@@ -44,7 +44,7 @@ source "qemu" "almalinux_10_vagrant_libvirt_x86_64" {
   memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-Vagrant-Libvirt-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.qcow2"
+  vm_name            = "AlmaLinux-10-Vagrant-Libvirt-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.qcow2"
   cpu_model          = "host"
   cpus               = var.cpus
   efi_boot           = true
@@ -91,7 +91,7 @@ source "vmware-iso" "almalinux_10_vagrant_vmware_x86_64" {
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"
   version                        = 21
-  vm_name                        = "AlmaLinux-Vagrant-VMware-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64"
+  vm_name                        = "AlmaLinux-10-Vagrant-VMware-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64"
   firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_x86_64
@@ -160,7 +160,7 @@ source "vmware-iso" "almalinux_10_vagrant_vmware_aarch64" {
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "arm-rhel9-64"
   version                        = 21
-  vm_name                        = "AlmaLinux-Vagrant-VMware-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64"
+  vm_name                        = "AlmaLinux-10-Vagrant-VMware-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64"
   firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_aarch64
@@ -215,7 +215,7 @@ source "qemu" "almalinux_10_vagrant_libvirt_x86_64_v2" {
   memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-Vagrant-Libvirt-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.qcow2"
+  vm_name            = "AlmaLinux-10-Vagrant-Libvirt-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.qcow2"
   cpu_model          = "Nehalem"
   cpus               = var.cpus
   efi_boot           = true
@@ -262,7 +262,7 @@ source "vmware-iso" "almalinux_10_vagrant_vmware_x86_64_v2" {
   disk_size                      = var.vagrant_disk_size
   guest_os_type                  = "centos-64"
   version                        = 21
-  vm_name                        = "AlmaLinux-Vagrant-VMware-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2"
+  vm_name                        = "AlmaLinux-10-Vagrant-VMware-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2"
   firmware                       = "efi"
   cpus                           = var.cpus
   memory                         = var.memory_x86_64
@@ -359,7 +359,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "AlmaLinux-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box"
+      output            = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box"
       only = [
         "hyperv-iso.almalinux_10_vagrant_hyperv_x86_64",
         "virtualbox-iso.almalinux_10_vagrant_virtualbox_x86_64",
@@ -370,13 +370,13 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
-      output               = "AlmaLinux-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box"
+      output               = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box"
       only                 = ["qemu.almalinux_10_vagrant_libvirt_x86_64"]
     }
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "AlmaLinux-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.box"
+      output            = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.box"
       only = [
         "source.parallels-iso.almalinux_10_vagrant_parallels_aarch64",
         "source.virtualbox-iso.almalinux_10_vagrant_virtualbox_aarch64",
@@ -386,7 +386,7 @@ build {
 
     post-processor "vagrant" {
       compression_level = "9"
-      output            = "AlmaLinux-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
+      output            = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
       only = [
         "hyperv-iso.almalinux_10_vagrant_hyperv_x86_64_v2",
         "virtualbox-iso.almalinux_10_vagrant_virtualbox_x86_64_v2",
@@ -397,7 +397,7 @@ build {
     post-processor "vagrant" {
       compression_level    = "9"
       vagrantfile_template = "tpl/vagrant/vagrantfile-libvirt.rb"
-      output               = "AlmaLinux-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
+      output               = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
       only                 = ["qemu.almalinux_10_vagrant_libvirt_x86_64_v2"]
     }
   }

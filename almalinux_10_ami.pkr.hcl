@@ -4,7 +4,7 @@
 /*
 data "amazon-ami" "almalinux_10_x86_64" {
   filters = {
-    name         = "AlmaLinux 10.*"
+    name         = "AlmaLinux OS 10.*"
     architecture = "x86_64"
     is-public    = true
   }
@@ -14,7 +14,7 @@ data "amazon-ami" "almalinux_10_x86_64" {
 
 data "amazon-ami" "almalinux_10_aarch64" {
   filters = {
-    name         = "AlmaLinux 10.*"
+    name         = "AlmaLinux OS 10.*"
     architecture = "arm64"
     is-public    = true
   }
@@ -112,7 +112,7 @@ build {
     playbook_dir  = "./ansible"
     playbook_file = "./ansible/ami_10_x86_64.yaml"
     galaxy_file   = "./ansible/requirements.yml"
-    only          = ["amazon-ebssurrogate.almalinux_10_ami.pkr.hcl"]
+    only          = ["amazon-ebssurrogate.almalinux_10_ami_x86_64"]
   }
 
   provisioner "ansible-local" {
