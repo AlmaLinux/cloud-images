@@ -22,7 +22,7 @@ source "qemu" "almalinux-8-azure-x86_64" {
   memory             = var.memory_x86_64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.raw"
+  vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}${var.build_number}.x86_64.raw"
   cpu_model          = "host"
   cpus               = var.cpus
   efi_boot           = true
@@ -55,7 +55,7 @@ source "qemu" "almalinux-8-azure-aarch64" {
   memory             = var.memory_aarch64
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
-  vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.aarch64.raw"
+  vm_name            = "AlmaLinux-8-Azure-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}${var.build_number}.aarch64.raw"
   cpu_model          = "host"
   cpus               = var.cpus
   qemuargs = [
