@@ -378,9 +378,9 @@ build {
       compression_level = "9"
       output            = "AlmaLinux-Kitten-Vagrant-{{.Provider}}-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.box"
       only = [
-        "source.parallels-iso.almalinux_kitten_10_vagrant_parallels_aarch64",
-        "source.virtualbox-iso.almalinux_kitten_10_vagrant_virtualbox_aarch64",
-        "source.vmware-iso.almalinux_kitten_10_vagrant_vmware_aarch64",
+        "parallels-iso.almalinux_kitten_10_vagrant_parallels_aarch64",
+        "virtualbox-iso.almalinux_kitten_10_vagrant_virtualbox_aarch64",
+        "vmware-iso.almalinux_kitten_10_vagrant_vmware_aarch64",
       ]
     }
 
