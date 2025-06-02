@@ -865,23 +865,23 @@ local "aws_ami_version_kitten_10" {
 }
 # AlmaLinux OS 10
 local "aws_ami_name_x86_64_10" {
-  expression = "AlmaLinux OS 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} x86_64"
+  expression = "AlmaLinux OS ${var.os_ver_10}.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} x86_64"
 }
 
 local "aws_ami_name_aarch64_10" {
-  expression = "AlmaLinux OS 10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} aarch64"
+  expression = "AlmaLinux OS ${var.os_ver_10}.${formatdate("YYYYMMDD", timestamp())}.${var.build_number} aarch64"
 }
 
 local "aws_ami_description_x86_64_10" {
-  expression = "Official AlmaLinux OS 10 x86_64 Amazon Machine Image"
+  expression = "Official AlmaLinux OS ${var.os_ver_10} x86_64 Amazon Machine Image"
 }
 
 local "aws_ami_description_aarch64_10" {
-  expression = "Official AlmaLinux OS 10 aarch64 Amazon Machine Image"
+  expression = "Official AlmaLinux OS ${var.os_ver_10} aarch64 Amazon Machine Image"
 }
 
 local "aws_ami_version_10" {
-  expression = "10.${formatdate("YYYYMMDD", timestamp())}.${var.build_number}"
+  expression = "${var.os_ver_10}.${formatdate("YYYYMMDD", timestamp())}.${var.build_number}"
 }
 # AlmaLinux OS 8
 variable "aws_source_ami_8_x86_64" {
@@ -930,14 +930,14 @@ variable "aws_source_ami_10_x86_64" {
   description = "AlmaLinux OS 10 x86_64 AMI as source"
 
   type    = string
-  default = "ami-0bcea1e66829fec5b"
+  default = "ami-01d87dc7c538eb2b3"
 }
 
 variable "aws_source_ami_10_aarch64" {
   description = "AlmaLinux OS 10 AArch64 AMI as source"
 
   type    = string
-  default = "ami-0707e89f669cb9128"
+  default = "ami-0088cc5c1715837e1"
 }
 # Vagrant
 

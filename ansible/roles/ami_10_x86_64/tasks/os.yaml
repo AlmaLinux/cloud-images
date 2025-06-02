@@ -34,12 +34,19 @@
     cmd: rpm --root=/rootfs --nodeps -ivh https://repo.almalinux.org/almalinux/almalinux-repos-latest-10.x86_64.rpm
   changed_when: true
 
-- name: Update the system # noqa: package-latest
-  ansible.builtin.dnf:
-    installroot: /rootfs
-    disable_gpg_check: true
-    name: "*"
-    state: latest
+# BUG: It uses the host's RPM repositories to install dependencies instead of the installroot's.
+# - name: Update the system # noqa: package-latest
+#   ansible.builtin.dnf:
+#     installroot: /rootfs
+#     disable_gpg_check: true
+#     name: "*"
+#     state: latest
+
+- name: Update the system
+  ansible.builtin.command:
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf upgrade
+  changed_when: true
 
 - name: Creating fstab
   ansible.builtin.template:

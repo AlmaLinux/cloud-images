@@ -28,37 +28,70 @@
     - "# Amazon Time Sync Service"
     - server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
 
-- name: Install additional software
-  ansible.builtin.dnf:
-    installroot: /rootfs
-    disable_gpg_check: true
-    name:
-      - cloud-init
-      - cloud-utils-growpart
-      - rsync
-      - tuned
-      - nvme-cli
-      - jq
-      - nfs-utils
-      - sos
-      - tcpdump
-    state: present
+# BUG: It uses the host's RPM repositories to install dependencies instead of the installroot's.
+# - name: Install additional software
+#   ansible.builtin.dnf:
+#     installroot: /rootfs
+#     disable_gpg_check: true
+#     name:
+#       - cloud-init
+#       - cloud-utils-growpart
+#       - rsync
+#       - tuned
+#       - nvme-cli
+#       - jq
+#       - nfs-utils
+#       - sos
+#       - tcpdump
+#     state: present
+
+- name: Install additional softwares
+  ansible.builtin.command:
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf install
+      cloud-init
+      cloud-utils-growpart
+      rsync
+      tuned
+      nvme-cli
+      jq
+      nfs-utils
+      sos
+      tcpdump
+  changed_when: true
+
+# BUG: It uses the host's RPM repositories to install dependencies instead of the installroot's.
+# - name: Install AWS Systems Manager Agent (SSM Agent)
+#   ansible.builtin.dnf:
+#     installroot: /rootfs
+#     disable_gpg_check: true
+#     name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+#     state: present
 
 - name: Install AWS Systems Manager Agent (SSM Agent)
-  ansible.builtin.dnf:
-    installroot: /rootfs
-    disable_gpg_check: true
-    name: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-    state: present
+  ansible.builtin.command:
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf install
+      https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+  changed_when: true
+
+# BUG: It uses the host's RPM repositories to install dependencies instead of the installroot's.
+# - name: Install AWS EC2 Instance Connect
+#   ansible.builtin.dnf:
+#     installroot: /rootfs
+#     disable_gpg_check: true
+#     name:
+#       - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect.rpm
+#       - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect-selinux.noarch.rpm
+#     state: present
 
 - name: Install AWS EC2 Instance Connect
-  ansible.builtin.dnf:
-    installroot: /rootfs
-    disable_gpg_check: true
-    name:
-      - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect.rpm
-      - https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect-selinux.noarch.rpm
-    state: present
+  ansible.builtin.command:
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf install
+      https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect.rpm
+      https://amazon-ec2-instance-connect-us-west-2.s3.us-west-2.amazonaws.com/latest/linux_amd64/ec2-instance-connect-selinux.noarch.rpm
+  changed_when: true
 
 - name: Configure NetworkManager in cloud
   ansible.builtin.file:
