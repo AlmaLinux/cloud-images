@@ -9,7 +9,7 @@ selinux --enforcing
 firewall --disabled
 services --enabled=sshd
 
-bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0 netroot=iscsi:169.254.0.2:::1:iqn.2015-02.oracle.boot:uefi rd.iscsi.param=node.session.timeo.replacement_timeout=6000 libiscsi.debug_libiscsi_eh=1 nvme_core.shutdown_timeout=10"
+bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0 netroot=iscsi rd.iscsi.firmware=1 rd.iscsi.param=node.session.timeo.replacement_timeout=6000 libiscsi.debug_libiscsi_eh=1 nvme_core.shutdown_timeout=10"
 
 %pre --erroronfail
 parted -s -a optimal /dev/sda -- mklabel gpt
@@ -29,6 +29,7 @@ reboot --eject
 
 %packages --exclude-weakdeps --inst-langs=en
 dracut-config-generic
+dracut-network
 grub2-pc
 tar
 rsyslog-logrotate
