@@ -12,5 +12,9 @@
 
 - name: Install SELinux
   ansible.builtin.command:
-    cmd: dnf --installroot=/rootfs --nogpgcheck -y reinstall selinux-policy-targeted libselinux-utils policycoreutils
+    cmd: >
+      dnf -y --installroot=/rootfs --nogpgcheck --setopt=install_weak_deps=False --setopt=cachedir=/var/cache/dnf reinstall
+      selinux-policy-targeted
+      libselinux-utils
+      policycoreutils
   changed_when: true
