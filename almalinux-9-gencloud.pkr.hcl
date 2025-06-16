@@ -76,6 +76,7 @@ source "qemu" "almalinux-9-gencloud-ppc64le" {
   ssh_timeout        = var.ssh_timeout
   boot_command       = var.gencloud_boot_command_9_ppc64le
   boot_wait          = var.gencloud_boot_wait_ppc64le
+  accelerator        = "none"
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
