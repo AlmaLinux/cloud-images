@@ -1,0 +1,182 @@
+name: build-ami
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '9'
+          type: choice
+          options:
+            - kitten_10
+            - 10
+            - 9
+            - 8
+
+        make_public:
+          description: "Copy AMI to all available AWS regions and make public"
+          required: true
+          type: boolean
+          default: false
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  build-images:
+    name: ${{ matrix.variant }} ${{ matrix.arch }} AMI
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(format('["{0}"]', inputs.version_major )) }}
+        arch:
+          - x86_64
+          - aarch64
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Prepare staff
+      run: |
+        packer_template=amazon-ebssurrogate.almalinux_${{ matrix.variant }}_ami_${{ matrix.arch }}
+        echo "PACKER_TEMPLATE=${packer_template}" >> $GITHUB_ENV
+
+        variant="${{ matrix.variant }}"
+        variant="${variant^}"
+        variant="${variant//_/ }"
+        SOURCE_AMI_ID=$(aws ec2 describe-images --owners 764336703387 --query "Images | max_by(@, &CreationDate) | ImageId" --filters "Name=name,Values=AlmaLinux OS ${variant}*${{ matrix.arch }}" --region ${{ vars.AWS_REGION }} --output text)
+        if [[ "${SOURCE_AMI_ID}" == "" || "${SOURCE_AMI_ID}" == "None" ]]; then
+          echo "[Error] Failed to get AMI ID for AlmaLinux ${variant} ${{ matrix.arch }}."
+          exit 1
+        else
+          echo "[Debug] Source AMI ID: '${SOURCE_AMI_ID}'"
+        fi
+        echo "SOURCE_AMI_ID=${SOURCE_AMI_ID}" >> $GITHUB_ENV
+
+    - name: Update system
+      run: |
+        sudo apt-get -y update
+
+    - name: Add Hashicorp repository
+      run: |
+        wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt-get -y update
+
+    - name: Install packer
+      run: |
+        sudo apt-get -y install packer
+
+    - name: Install ansible
+      run: sudo apt-get -y install ansible
+
+    - name: Initialize packer
+      run: packer init -upgrade .
+
+    - name: Build ${{ matrix.variant }} ${{ matrix.arch }} AMI
+      run: |
+        packer build \
+          -var='aws_source_ami_${{ matrix.variant }}_${{ matrix.arch }}=${{ env.SOURCE_AMI_ID }}' \
+          -var='aws_ami_region=${{ vars.AWS_REGION }}' \
+          -only=${{ env.PACKER_TEMPLATE }} . |& tee ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+
+        exit_code=${PIPESTATUS[0]}
+        if [[ "${exit_code}" != "0" ]]; then
+          exit 1
+        fi
+
+    - uses: actions/upload-artifact@v4
+      name: Store build log as artifact
+      if: always()
+      with:
+        compression-level: 6
+        name: ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+        path: ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+
+    - name: Get AMI ID
+      run: |
+        AMI_ID=$(grep -E '${{ vars.AWS_REGION }}: ami-' ${{ matrix.variant }}_${{ matrix.arch }}_build.log | awk '{print $2}')
+        if [[ "${AMI_ID}" == "" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI ID found in the build log: '${AMI_ID}'"
+        fi
+        echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+
+    - name: Get AMI Name
+      run: |
+        AMI_NAME=$(aws ec2 describe-images --filters "Name=image-id,Values=${{ env.AMI_ID }}" --query 'Images[0].Name' --output text)
+        if [[ "${AMI_NAME}" == "" || "${AMI_NAME}" == "None" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI Name: '${AMI_NAME}'"
+        fi
+        echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+    - name: Print AMI summary
+      uses: actions/github-script@v7
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addHeading('${{ env.AMI_NAME }}', '4')
+              .addHeading('AMI ID: ${{ env.AMI_ID }}', '5')
+              .addHeading('Public: ${{ inputs.make_public && '✅' || '❌'}}', '5')
+              .write()
+
+    - name: Copy an AMI to all available AWS regions and make it public
+      if: inputs.make_public
+      run: |
+        # Lowercase AMI Name, replace spaces and dots with underscores
+        wiki_data_file="${{ env.AMI_NAME }}"
+        wiki_data_file="${wiki_data_file,,}"
+        wiki_data_file="${wiki_data_file// /_}"
+        wiki_data_file="${wiki_data_file//./_}"
+        echo "wiki_data_file=${wiki_data_file}" >> $GITHUB_ENV
+
+        pip3 install markdown_table
+
+        tools/aws_ami_mirror.py \
+          --csv-output ${{ github.workspace }}/${wiki_data_file}.csv \
+          --md-output ${{ github.workspace }}/${wiki_data_file}.md \
+          --ami ${{ env.AMI_ID }}
+
+    - uses: actions/upload-artifact@v4
+      name: Store Wiki's CSV and Markdown data as artifact
+      if: inputs.make_public
+      with:
+        compression-level: 6
+        path: |
+          almalinux*.csv
+          almalinux*.md
+        name: ${{ env.wiki_data_file }}_wiki_data
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          **${{ env.AMI_NAME }}** AWS AMI, generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          :almalinux: **AMI ID**: `${{ env.AMI_ID }}`
+
+          Public: ${{ inputs.make_public && '✅' || '❌'}}
