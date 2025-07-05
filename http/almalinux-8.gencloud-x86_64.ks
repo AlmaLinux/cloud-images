@@ -40,6 +40,7 @@ reboot --eject
 %packages
 @core
 grub2-pc
+pciutils
 -biosdevname
 -open-vm-tools
 -plymouth
