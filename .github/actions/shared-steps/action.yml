@@ -1,0 +1,629 @@
+name: "Cloud Image build, upload and notify"
+
+inputs:
+  type:
+    required: true
+  variant:
+    required: true
+  arch:
+    required: true
+  S3_ACCESS_KEY_ID:
+    required: true
+  S3_SECRET_ACCESS_KEY:
+    required: true
+  AWS_REGION:
+    required: true
+  AWS_S3_BUCKET:
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    required: true
+  MATTERMOST_CHANNEL:
+    required: true
+  HCP_CLIENT_ID:
+    required: true
+  HCP_CLIENT_SECRET:
+    required: true
+  HCP_ORG:
+    required: true
+  vagrant_publish:
+    required: true
+  store_as_artifact:
+    required: true
+  upload_to_s3:
+    required: true
+  notify_mattermost:
+    required: true
+  run_test:
+    required: true
+  runner:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Runner OS, install extra packages
+      shell: bash
+      run: |
+        # Runner OS
+        if [ -e /etc/redhat-release ]; then
+          runner_os=rhel
+          sudo dnf -y -q install unzip wget epel-release
+        elif lsb_release -cs > /dev/null 2>&1; then
+          runner_os=ubuntu
+          sudo apt-get -y update
+          sudo apt-get -y install ovmf rpm unzip
+
+          echo "UBUNTU_CODENAME=$(lsb_release -cs)" >> $GITHUB_ENV
+        else
+          echo "[Debug] Unknown OS"
+          exit 1
+        fi
+        echo "runner_os=${runner_os}" >> $GITHUB_ENV
+
+    - name: Set major version and arch
+      shell: bash
+      run: |
+        # Set major version and arch
+        version_major=${{ inputs.variant }}
+        alma_arch=${{ inputs.arch }}
+        [[ ${version_major} == *'v2'* ]] && alma_arch=x86_64_v2
+        version_major=${version_major%-64k}
+        version_major=${version_major%-v2}
+        echo "version_major=${version_major}" >> $GITHUB_ENV
+        echo "alma_arch=${alma_arch}" >> $GITHUB_ENV
+
+    - name: Prepare staff
+      shell: bash
+      run: |
+        # Prepare staff
+        case ${{ env.runner_os }} in
+          ubuntu)
+            # Packer options
+            packer_opts="-var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
+            ;;
+          rhel)
+            # Packer options
+            packer_opts="-var qemu_binary=/usr/libexec/qemu-kvm"
+            ;;
+        esac
+
+        # Image type e.g. Azure, Vagrant libvirt, ...
+        image_type=${{ inputs.type }}
+        image_type=${image_type//_/ }
+        image_type=${image_type^}
+
+        # Release version
+        if [[ ${version_major} != *'kitten'* ]]; then
+          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${version_major}.${{ env.alma_arch }}.rpm
+          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+        else
+          release=10
+        fi
+
+        # Packer source for image set in .pkr.hcl configs, e.g. almalinux-9-gencloud-x86_64, almalinux-9-azure-x86_64, ...
+        packer_source=almalinux-${version_major}-${{ inputs.type }}-${{ env.alma_arch }}
+
+        # Mask to locate output image file
+        output_mask=${packer_source}/AlmaLinux-${version_major}-*.${{ env.alma_arch }}.qcow2
+
+        # AWS S3 path to store images
+        aws_s3_path=images/${version_major}/${release}/${{ inputs.type }}/${{ env.TIME_STAMP }}
+
+        # Overriding packer source, image mask and S3 path where necessary
+        case "${{ inputs.type }}${version_major}" in
+          azure8|azure9)
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${version_major}_${{ inputs.type }}_64k_${{ env.alma_arch }}"
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.raw
+            packer_source=qemu.${packer_source}
+            ;;
+          azure*kitten*)
+            packer_source=almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="${packer_source}_64k"
+            output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.raw
+            aws_s3_path=images/kitten/10/${{ inputs.type }}/${{ env.TIME_STAMP }}
+            packer_source=qemu.${packer_source}
+            ;;
+          azure10)
+            packer_source=almalinux_${version_major}_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${version_major}_${{ inputs.type }}_64k_${{ env.alma_arch }}"
+            output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.raw
+            packer_source=qemu.${packer_source}
+            ;;
+          digitalocean*)
+            output_mask=output-${packer_source}/AlmaLinux-${version_major}-DigitalOcean-*.${{ env.alma_arch }}.qcow2
+            packer_source=qemu.${packer_source}
+            # TODO: Exclude digitalocean-import post-processor because of lack of DigitalOcean API token
+            # Operating System Version test fails for almaLinux 8.10. Need to refresh from the official repository
+            # https://github.com/digitalocean/marketplace-partners/blob/master/scripts/99-img-check.sh
+            packer_opts="${packer_opts} -except=digitalocean-import"
+            # TODO: Remove pvgrub_config role from ansible playbook as it is not implemented ???
+            sed -i '/role: pvgrub_config/d' ansible/roles/digitalocean_guest/meta/main.yml
+            ;;
+          vagrant_libvirt8)
+            packer_source=qemu.almalinux-${version_major}
+            output_mask=AlmaLinux-${version_major}-Vagrant-*.${{ env.alma_arch }}.libvirt.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_libvirt9)
+            packer_source=qemu.almalinux-${version_major}
+            output_mask=AlmaLinux-${version_major}-Vagrant-libvirt-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_libvirt10*)
+            packer_source=qemu.almalinux_${version_major}_vagrant_libvirt_${{ env.alma_arch }}
+            output_mask=AlmaLinux-${version_major}-Vagrant-libvirt-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_virtualbox8)
+            packer_source=virtualbox-iso.almalinux-${version_major}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-*.${{ env.alma_arch }}.virtualbox.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_virtualbox9)
+            packer_source=virtualbox-iso.almalinux-${version_major}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-virtualbox-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_virtualbox10)
+            packer_source=virtualbox-iso.almalinux_${version_major}_vagrant_virtualbox_${{ env.alma_arch }}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-virtualbox-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_vmware8)
+            packer_source=vmware-iso.almalinux-${version_major}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-*.${{ env.alma_arch }}.vmware.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_vmware9)
+            packer_source=vmware-iso.almalinux-${version_major}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-vmware-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_vmware10)
+            packer_source=vmware-iso.almalinux_${version_major}_vagrant_vmware_${{ env.alma_arch }}
+            packer_opts=
+            output_mask=AlmaLinux-${version_major}-Vagrant-vmware-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/${version_major}/${release}/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_libvirt*kitten*)
+            packer_source=qemu.almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=AlmaLinux-Kitten-Vagrant-libvirt-10-*.${{ env.alma_arch }}*.box
+            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          vagrant_virtualbox*kitten*)
+            packer_source=virtualbox-iso.almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=AlmaLinux-Kitten-Vagrant-virtualbox-10-*.${{ env.alma_arch }}*.box
+            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
+            ;;
+          *kitten*)
+            packer_source=almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.qcow2
+            aws_s3_path=images/kitten/10/${{ inputs.type }}/${{ env.TIME_STAMP }}
+            packer_source=qemu.${packer_source}
+            ;;
+          gencloud10|opennebula10)
+            packer_source=almalinux_${version_major}_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.qcow2
+            packer_source=qemu.${packer_source}
+            ;;
+          *)
+            output_mask=output-${output_mask}
+            packer_source=qemu.${packer_source}
+            ;;
+        esac
+
+        echo "PACKER_OPTS=${packer_opts}" >> $GITHUB_ENV
+
+        echo "IMAGE_TYPE=${image_type}" >> $GITHUB_ENV
+        echo "RELEASE=${release}" >> "$GITHUB_ENV"
+        echo "packer_source=${packer_source}" >> $GITHUB_ENV
+        echo "output_mask=${output_mask}" >> $GITHUB_ENV
+        echo "AWS_S3_PATH=${aws_s3_path}" >> $GITHUB_ENV
+
+    - name: Install KVM
+      if: inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Install KVM
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt-get -y install qemu-kvm
+            sudo adduser "$(id -un)" kvm
+            ;;
+          rhel)
+            sudo dnf -y -q install qemu-kvm
+            sudo usermod --append -G kvm "$(id -un)"
+            ;;
+        esac
+
+    - name: Check nested virtualization support
+      if: inputs.arch == 'x86_64' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Check nested virtualization support
+        echo "[Debug] vmx|svm CPU flags:"
+        egrep -c '(vmx|svm)' /proc/cpuinfo
+        echo "[Debug] KVM modules:"
+        sudo lsmod | grep kvm
+        echo "[Debug] Nested virtualization support:"
+        sudo cat /sys/module/kvm_amd/parameters/nested
+
+    - name: Enable KVM group perms
+      if: inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Enable KVM group perms
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Install VirtualBox from its repository
+      if: inputs.type == 'vagrant_virtualbox'
+      uses: myci-actions/add-deb-repo@10
+      with:
+        repo: deb [arch=amd64] https://download.virtualbox.org/virtualbox/debian ${{ env.UBUNTU_CODENAME }} contrib
+        repo-name: virtualbox
+        keys-asc: https://www.virtualbox.org/download/oracle_vbox_2016.asc
+        update: true
+        install: virtualbox-7.1
+
+    - name: Install VMware
+      if: inputs.type == 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Install VMware
+        export ws_version=17.6.3
+        export ws_build=24583834
+
+        if ! sudo vmware -v 2>/dev/null; then
+          # Find VMware installation bundle at /actions-runner/_work/cloud-images path as its direct download is not available anymore
+          # Assume the AMI includes it
+          [ ! -f ../VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle.tar ] && \
+            wget https://softwareupdate-prod.broadcom.com/cds/vmw-desktop/ws/${ws_version}/${ws_build}/linux/core/VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle.tar || \
+            mv ../VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle.tar .
+          tar xf VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle.tar && rm -f VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle.tar
+          chmod +x VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle
+
+          case ${{ env.runner_os }} in
+            ubuntu)
+              sudo apt-get -y install build-essential linux-headers-generic
+              sudo apt-get -y install libpcsclite1 libxcb-render0 libxcb-shm0 libxi6 libxinerama1 libxcursor1 libxtst6 libxml2-dev libc6-dev pcscd libpulse0 libasound2t64
+              ;;
+            rhel)
+              sudo sh -c "systemctl stop firewalld || true"
+
+              sudo dnf -y install "kernel-headers-$(uname -r)" "kernel-devel-$(uname -r)" automake autoconf gcc-c++ patchutils
+              sudo dnf -y install pcsc-lite pcsc-lite-libs libxcb libxcb-devel libXi libXi-devel libXinerama libXinerama-devel libXcursor libXcursor-devel libXtst libXtst-devel libxml2 libxml2-devel glibc-devel pcsc-lite pcsc-lite-libs pulseaudio-libs pulseaudio-libs-devel alsa-lib GConf2 GConf2-devel
+              ;;
+          esac
+
+          sudo ./VMware-Workstation-Full-${ws_version}-${ws_build}.x86_64.bundle --console --eulas-agreed --required
+        else
+          true
+        fi
+
+    - name: Add Hashicorp repository
+      shell: bash
+      run: |
+        # Add Hashicorp repository
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+            wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${{ env.UBUNTU_CODENAME }} main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+            sudo apt-get -y update
+            ;;
+          rhel)
+            sudo dnf -y -q install dnf-utils
+            sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+            ;;
+        esac
+
+    - name: Install packer
+      shell: bash
+      run: |
+        # Install packer
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install packer
+
+    - name: Install ansible
+      shell: bash
+      run: |
+        # Install ansible
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install ansible
+
+    - name: Initialize packer
+      shell: bash
+      run: sudo /usr/bin/packer init -upgrade .
+
+    - name: Build ${{ inputs.type }} image
+      shell: bash
+      run: |
+        # Build ${{ inputs.type }} image
+        # PACKER_LOG=1
+        sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
+
+    - name: Locate image file, generate checksum
+      shell: bash
+      run: |
+        # Locate image file, generate checksum
+        ls -la $(dirname '${{ env.output_mask }}')
+        image_file=$(ls -1 ${{ env.output_mask }} | head -n 1)
+        [ "x${image_file}" = "x" ] && false
+        cd $(dirname ${image_file})
+        sudo sh -c "sha256sum $(basename ${image_file}) > $(basename ${image_file}).sha256sum"
+
+        echo "IMAGE_FILE=${image_file}" >> $GITHUB_ENV
+        echo "IMAGE_NAME=$(basename ${image_file})" >> $GITHUB_ENV
+
+    # - name: Setup tmate session
+    #   uses: mxschmitt/action-tmate@v3
+
+    - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
+      # Skip testing for vagrant_virtualbox on GH runner because 'vugrant up' fails to connect to the newly created VM via ssh:
+      # kex_exchange_identification: read: Connection reset by peer
+      if: ( inputs.type == 'vagrant_libvirt' || inputs.type == 'vagrant_vmware' || ( inputs.type == 'vagrant_virtualbox' && inputs.runner == 'self_hosted' ) ) && inputs.run_test == 'true'
+      shell: bash
+      run: |
+        # Test ${{ inputs.type }} ${{ inputs.variant }} image
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install vagrant >/dev/null
+        sudo vagrant plugin install vagrant-scp
+
+        sudo vagrant box add ${{ inputs.type }}-${{ inputs.variant }} ${{ env.IMAGE_FILE }} --force
+        # sudo vagrant init ${{ inputs.type }}-${{ inputs.variant }}
+        cat <<'EOF'>Vagrantfile
+        Vagrant.configure("2") do |config|
+          config.vm.box = "${{ inputs.type }}-${{ inputs.variant }}"
+          config.vm.provider "libvirt" do |libvirt|
+            libvirt.memory = 2048
+            libvirt.cpus = 2
+          end
+          config.vm.provider "virtualbox" do |vb|
+            vb.memory = 2048
+            vb.cpus = 2
+          end
+          config.vm.provider "vmware_desktop" do |v|
+            v.memory = 2048
+            v.cpus = 2
+          end
+        end
+        EOF
+        case ${{ inputs.type }} in
+          vagrant_virtualbox*)
+            sudo vagrant up --provider=virtualbox
+            ;;
+          vagrant_vmware*)
+            vagrant_vmware_utility_version=1.0.23
+            vagrant_vmware_utility_release=1
+            vagrant_vmware_utility_url=https://releases.hashicorp.com/vagrant-vmware-utility/${vagrant_vmware_utility_version}
+            case ${{ env.runner_os }} in
+              ubuntu)
+                wget ${vagrant_vmware_utility_url}/vagrant-vmware-utility_${vagrant_vmware_utility_version}-${vagrant_vmware_utility_release}_amd64.deb
+                sudo dpkg -i vagrant-vmware-utility_${vagrant_vmware_utility_version}-${vagrant_vmware_utility_release}_amd64.deb
+                vagrant_vmware_utility_service=/usr/lib/systemd/system/vagrant-vmware-utility.service
+                ;;
+              rhel)
+                sudo dnf -q -y install ${vagrant_vmware_utility_url}/vagrant-vmware-utility-${vagrant_vmware_utility_version}-${vagrant_vmware_utility_release}.x86_64.rpm
+                [ ! -f /etc/systemd/system/vagrant-vmware-utility.service ] && \
+                  sudo /opt/vagrant-vmware-desktop/bin/vagrant-vmware-utility service install
+                vagrant_vmware_utility_service=/etc/systemd/system/vagrant-vmware-utility.service
+            esac
+            # To solve https://github.com/hashicorp/vagrant-vmware-desktop/issues/91
+            sudo sed -i \
+              's/ExecStart=.*$/ExecStart=\/opt\/vagrant-vmware-desktop\/bin\/vagrant-vmware-utility api -config-file=\/opt\/vagrant-vmware-desktop\/config\/service.hcl -license-override professional/g' \
+              ${vagrant_vmware_utility_service}
+            sudo systemctl daemon-reload
+            sudo systemctl restart vagrant-vmware-utility.service
+
+            sudo vagrant plugin install vagrant-vmware-desktop
+            sudo vagrant up --provider=vmware_desktop
+            ;;
+          vagrant_libvirt*)
+            [ "${{ env.runner_os }}" = "ubuntu" ] && \
+              sudo apt-get -y install libvirt-daemon-system libvirt-dev ebtables libguestfs-tools >/dev/null
+            sudo vagrant plugin install vagrant-libvirt
+            sudo vagrant up --provider=libvirt
+            ;;
+        esac
+        # Do simple checking
+        sudo vagrant ssh default -c "cat /etc/almalinux-release | grep 'AlmaLinux release ${{ env.version_major }}'"
+        sudo vagrant ssh default -c "rpm -q --qf='%{ARCH}\n' almalinux-release"
+        sudo vagrant ssh default -c "sudo dnf check-update"
+        # Get installed packages list
+        sudo vagrant ssh default -c "rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
+        sudo vagrant scp default:${{ env.IMAGE_FILE }}.txt ./${{ env.IMAGE_FILE }}.txt
+        # Cleanup Vagrant VM and box
+        sudo vagrant destroy $(vagrant global-status | grep default | awk '{print $1}') --force || true
+        sudo vagrant box remove ${{ inputs.type }}-${{ inputs.variant }} --force || true
+        sudo rm -f Vagrantfile || true
+
+        [ -f ${{ env.IMAGE_FILE }}.txt ] \
+          && echo "got_pkgs_list=true" >> $GITHUB_ENV \
+          || echo "got_pkgs_list=false" >> $GITHUB_ENV
+
+    - uses: actions/upload-artifact@v4
+      name: Store image as artifact
+      id: image-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 1
+        name: ${{ env.IMAGE_NAME }}
+        path: ${{ env.IMAGE_FILE }}
+
+    - uses: actions/upload-artifact@v4
+      name: Store checksum as artifact
+      id: checksum-artifact
+      if: inputs.store_as_artifact  == 'true'
+      with:
+        compression-level: 1
+        name: ${{ env.IMAGE_NAME }}.sha256sum
+        path: ${{ env.IMAGE_FILE }}.sha256sum
+
+    - uses: actions/upload-artifact@v4
+      name: Store packages list as artifact
+      id: pkglist-artifact
+      if: inputs.store_as_artifact  == 'true' && env.got_pkgs_list == 'true'
+      with:
+        compression-level: 1
+        name: ${{ env.IMAGE_NAME }}.txt
+        path: ${{ env.IMAGE_FILE }}.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4.0.2
+      if: inputs.upload_to_s3  == 'true'
+      with:
+        aws-access-key-id: ${{ inputs.S3_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ inputs.S3_SECRET_ACCESS_KEY }}
+        aws-region: ${{ inputs.AWS_REGION }}
+
+    - name: Install aws CLI
+      if: inputs.upload_to_s3 == 'true'
+      shell: bash
+      run: |
+        # Install aws CLI
+        if ! aws --version 2>/dev/null; then
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-${{ inputs.arch }}.zip" -o "awscliv2.zip"
+          unzip -qq awscliv2.zip
+          sudo ./aws/install
+        else
+          true
+        fi
+
+    - name: Publish to S3 Bucket and put object tagging with aws CLI
+      if: inputs.upload_to_s3 == 'true'
+      shell: bash
+      run: |
+        # Publish to S3 Bucket and put object tagging with aws CLI
+        cd $(dirname ${{ env.IMAGE_FILE }})
+        for object in ${{ env.IMAGE_NAME }} ${{ env.IMAGE_NAME }}.sha256sum  ${{ env.IMAGE_NAME }}.txt; do
+          [ ! -f ${object} ] && continue
+          aws s3 cp ${object} s3://${{ inputs.AWS_S3_BUCKET }}/${{ env.AWS_S3_PATH }}/
+          aws s3api put-object-tagging --bucket ${{ inputs.AWS_S3_BUCKET }} --key ${{ env.AWS_S3_PATH }}/${object} --tagging 'TagSet={Key=public,Value=yes}'
+        done
+
+    - name: Put S3 Bucket download URLs
+      if: inputs.upload_to_s3 == 'true'
+      uses: actions/github-script@v7
+      env:
+        got_pkgs_list: ${{ env.got_pkgs_list || 'false' }}
+      with:
+        result-encoding: string
+        script: |
+          const summary = core.summary
+            .addHeading('S3 Bucket download URLs', '4')
+            .addLink('${{ env.IMAGE_NAME }}.sha256sum', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum')
+            .addBreak()
+            .addLink('${{ env.IMAGE_NAME }}', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}');;
+
+          if (process.env.got_pkgs_list === 'true') {
+            summary
+              .addBreak()
+              .addLink('${{ env.IMAGE_NAME }}.txt', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.txt');
+          }
+
+          summary.write();
+
+    - name: Send notification to Mattermost (Artifacts)
+      uses: mattermost/action-mattermost-notify@master
+      if: ${{ inputs.store_as_artifact == 'true' && inputs.notify_mattermost == 'true' && inputs.upload_to_s3 == 'false' }}
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** Cloud Images `${{ env.TIME_STAMP }}` generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          :almalinux: **${{ env.IMAGE_TYPE }}**
+
+          - CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})
+
+          - Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})
+
+          ${{ env.got_pkgs_list == 'true' && format('- Packages list [zipped]: [{0}.txt]({1})', env.IMAGE_NAME, steps.pkglist-artifact.outputs.artifact-url) || ''}}
+
+    - name: Send notification to Mattermost (AWS S3 links)
+      uses: mattermost/action-mattermost-notify@master
+      if: ${{ inputs.upload_to_s3 == 'true' && inputs.notify_mattermost == 'true' }}
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** Cloud Images `${{ env.TIME_STAMP }}` generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          :almalinux: **${{ env.IMAGE_TYPE }}**
+
+          - CHECKSUM(SHA256): [${{ env.IMAGE_NAME }}.sha256sum](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum)
+
+          - Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})
+
+          ${{ env.got_pkgs_list == 'true' && format('- Packages list: [{0}.txt](https://{1}.s3-accelerate.dualstack.amazonaws.com/{2}/{3}.txt)', env.IMAGE_NAME, inputs.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || ''}}
+
+    - name: Vagrant cloud publish
+      if: inputs.vagrant_publish == 'true' && contains( inputs.type, 'vagrant' )
+      shell: bash
+      run: |
+        # Vagrant cloud publish
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install hcp vagrant
+
+        box_name=${{ env.version_major }}
+        provider=${{ inputs.type }}; provider=${provider#"vagrant_"}
+        [[ ${{ inputs.type }} == *"vmware"* ]] && provider=vmware_desktop
+        [ ${{ inputs.arch }} = "x86_64" ] && arch=amd64
+        [ ${{ inputs.arch }} = "aarch64" ] && arch=arm64
+        checksum="$(sha256sum ${{ env.IMAGE_FILE }} | awk '{ print $1 }')"
+        echo "[Debug] provider=${provider} box_name=${box_name} checksum=${checksum} IMAGE_FILE=${{ env.IMAGE_FILE }}"
+
+        hcp auth login --client-id=${{ inputs.HCP_CLIENT_ID }} --client-secret=${{ inputs.HCP_CLIENT_SECRET }}
+        export VAGRANT_CLOUD_TOKEN="$(hcp auth print-access-token)"
+        vagrant cloud publish \
+          -C sha256 \
+          -c ${checksum} \
+          --release \
+          -a ${arch} \
+          --direct-upload \
+          --debug \
+          -f \
+          "${{ inputs.HCP_ORG }}/${box_name}" \
+          ${{ env.RELEASE }}.${{ env.DATE_STAMP }} \
+          ${provider} \
+          ${{ env.IMAGE_FILE }}
+
+        echo "VAGRANT_BOX_NAME=${box_name}" >> $GITHUB_ENV
+        echo "VAGRANT_PROVIDER=${provider}" >> $GITHUB_ENV
+
+    - name: Put Hashicorp Vagrant registry URL
+      if: inputs.vagrant_publish == 'true' && contains( inputs.type, 'vagrant' )
+      uses: actions/github-script@v7
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addHeading('Hashicorp Vagrant ${{ env.VAGRANT_PROVIDER }} image (version:  ${{ env.RELEASE }}.${{ env.DATE_STAMP }}):', '4')
+              .addLink('${{ inputs.HCP_ORG }}/${{ env.VAGRANT_BOX_NAME }}', 'https://portal.cloud.hashicorp.com/vagrant/discover/${{ inputs.HCP_ORG }}/${{ env.VAGRANT_BOX_NAME }}/versions/${{ env.RELEASE }}.${{ env.DATE_STAMP }}')
+              .write()
+
+    - name: Send notification to Mattermost (Hashicorp Vagrant registry)
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.vagrant_publish == 'true' && inputs.notify_mattermost == 'true' && contains( inputs.type, 'vagrant' )
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** Cloud Images `${{ env.TIME_STAMP }}` generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          :almalinux: **${{ env.IMAGE_TYPE }}**
+
+          - Image: ['${{ inputs.HCP_ORG }}/${{ env.VAGRANT_BOX_NAME }}](https://portal.cloud.hashicorp.com/vagrant/discover/${{ inputs.HCP_ORG }}/${{ env.VAGRANT_BOX_NAME }}/versions/${{ env.RELEASE }}.${{ env.DATE_STAMP }}) (version:  ${{ env.RELEASE }}.${{ env.DATE_STAMP }})
