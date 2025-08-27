@@ -1,0 +1,10 @@
+[
+    {
+        "ChangeType": "AddDeliveryOptions",
+        "Entity": {
+            "Type": "AmiProduct@1.0",
+            "Identifier": "{{ .product_id }}"
+        },
+        "Details": "{\"Version\": {\"VersionTitle\": \"{{ .version }}\", \"ReleaseNotes\": \"{{ .release_notes }}\"}, \"DeliveryOptions\": [{\"Details\": {\"AmiDeliveryOptionDetails\": {\"AmiSource\": {\"AmiId\": \"{{ .ami_id }}\", \"AccessRoleArn\": \"{{ .access_role_arn }}\", \"OperatingSystemName\": \"OTHERLINUX\", \"OperatingSystemVersion\": \"{{ .os_release }}\", \"UserName\": \"ec2-user\"}, \"RecommendedInstanceType\": \"{{ .instance_type }}\", \"SecurityGroups\": [{\"IpProtocol\": \"tcp\", \"FromPort\": 22, \"ToPort\": 22, \"IpRanges\": [\"0.0.0.0/0\"]}], \"UsageInstructions\": \"1. Launch an instance and select a key pair.\\n2. Use SSH client software with the private key from your key pair to connect to the instance:\\n- Username: ec2-user\\n- Port: TCP/22 (default)\"}}}]}"
+    }
+]
