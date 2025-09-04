@@ -260,17 +260,15 @@ runs:
             ;;
         esac
 
-    - name: Check nested virtualization support
-      if: inputs.arch == 'x86_64' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware' && inputs.runner != 'aws-ec2'
+    - name: Check virtualization support
+      if: inputs.arch == 'x86_64' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
       shell: bash
       run: |
-        # Check nested virtualization support
+        # Check virtualization support
         echo "[Debug] vmx|svm CPU flags:"
         egrep -c '(vmx|svm)' /proc/cpuinfo
         echo "[Debug] KVM modules:"
         sudo lsmod | grep kvm
-        echo "[Debug] Nested virtualization support:"
-        sudo cat /sys/module/kvm_amd/parameters/nested
 
     - name: Enable KVM group perms
       if: inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'

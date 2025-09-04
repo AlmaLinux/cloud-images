@@ -175,7 +175,8 @@ jobs:
     name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
-    runs-on: ubuntu-24.04
+    # runs-on: ubuntu-24.04
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=c5n.metal/image=ubuntu24-full-x64', github.run_id) || 'ubuntu-24.04' }}"
     strategy:
       fail-fast: false
       matrix:
@@ -233,8 +234,8 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: true # Do image simple testing and generate installed packages list (vagrant_* only)
-          # runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
-          runner: gh_hosted
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+          # runner: gh_hosted
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
