@@ -29,6 +29,7 @@ reboot --eject
 
 %packages
 @core
+tar
 -biosdevname
 -open-vm-tools
 -plymouth
