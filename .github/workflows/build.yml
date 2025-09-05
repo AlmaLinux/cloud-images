@@ -1,4 +1,4 @@
-name: build-images
+name: Build Cloud and Vagrant Images
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
             - NONE
             - ALL
             - azure
-            - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
+            # - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
             - gencloud
             - oci
             - opennebula
@@ -139,11 +139,9 @@ jobs:
             VARIANTS_GH+=("vagrant_libvirt-x86_64")
           fi
           if [ "${{ inputs.vagrant_type }}" = "vagrant_virtualbox" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
-            [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && \
               VARIANTS_GH+=("vagrant_virtualbox-x86_64") # tests aren't work on GitHub runners, use self-hosted to run tests
           fi
           if [ "${{ inputs.vagrant_type }}" = "vagrant_vmware" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
-            [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && \
               VARIANTS_SH+=("vagrant_vmware-x86_64") # VMware has networking issues on GitHub runners, so we use self-hosted runner
           fi
 
@@ -188,6 +186,7 @@ jobs:
             variant: '10-kitten-v2'
           - matrix_gh: 'oci-x86_64'
             variant: '10-kitten-v2'
+          # Kitten x86_64_v2 Vagrant for VirtualBox stuck on "Waiting for SSH to become available"
           - matrix_gh: 'vagrant_virtualbox-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'digitalocean-x86_64'
@@ -234,7 +233,10 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: true # Do image simple testing and generate installed packages list (vagrant_* only)
+          # runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
           runner: gh_hosted
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
   start-self-hosted-runner:
     name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} runner
@@ -244,13 +246,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && inputs.version_major == '10' ) && '10", "10-v2' || inputs.version_major ) ) )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major ) ) )) }}
         matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
         exclude:
           - matrix_sh: 'oci-aarch64'
             variant: '10-kitten'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10'
           - matrix_sh: 'oci-aarch64'
             variant: '9-64k'
           - matrix_sh: 'oci-aarch64'
@@ -279,7 +279,7 @@ jobs:
 
     steps:
     - name: Setup and start runner
-      if: inputs.self_hosted_runner == 'aws-ec2'
+      if: inputs.self_hosted_runner == 'aws-ec2' && github.repository_owner != 'AlmaLinux'
       uses: NextChapterSoftware/ec2-action-builder@v1.10
       with:
         github_token: ${{ secrets.GIT_HUB_TOKEN }}
@@ -307,17 +307,15 @@ jobs:
     name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} image
     if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
     needs: [init-data, start-self-hosted-runner]
-    runs-on: ${{ inputs.self_hosted_runner == 'aws-ec2' && github.run_id || matrix.matrix_sh }}
+    runs-on: ${{ github.repository_owner == 'AlmaLinux' && ( contains(matrix.matrix_sh, 'x86_64') && format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64 ) || format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id) ) || ( inputs.self_hosted_runner == 'aws-ec2' && github.run_id || matrix.matrix_sh ) }}
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && inputs.version_major == '10' ) && '10", "10-v2' || inputs.version_major ) ) )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major ) ) )) }}
         matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
         exclude:
           - matrix_sh: 'oci-aarch64'
             variant: '10-kitten'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10'
           - matrix_sh: 'oci-aarch64'
             variant: '9-64k'
           - matrix_sh: 'oci-aarch64'
@@ -383,4 +381,6 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: true # Do image simple testing and generate installed packages list (vagrant_* only)
-          runner: self_hosted
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'self_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
