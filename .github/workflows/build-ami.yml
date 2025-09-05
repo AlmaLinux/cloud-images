@@ -1,4 +1,4 @@
-name: build-ami
+name: AWS AMI Build
 
 on:
   workflow_dispatch:
