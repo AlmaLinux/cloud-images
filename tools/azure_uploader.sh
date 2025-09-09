@@ -488,8 +488,7 @@ main() {
   # convert input image to fixed VHD blob with size rounded to 1 MB
   local -r blob_size="$(get_rounded_size "${INPUT_IMAGE}")"
   # Get actual image size in bytes
-  local actual_size
-  actual_size=$(qemu-img info -f raw --output json "${INPUT_IMAGE}" | jq '.["virtual-size"]')
+  local -r actual_size="$(qemu-img info -f raw --output json "${INPUT_IMAGE}" | jq '.["virtual-size"]')"
 
   # Only resize if needed
   if [ "$actual_size" -ne "$blob_size" ]; then
