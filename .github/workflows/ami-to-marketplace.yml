@@ -1,4 +1,4 @@
-name: ami-to-marketplace
+name: AWS AMI to Marketplace release
 
 on:
   workflow_dispatch:

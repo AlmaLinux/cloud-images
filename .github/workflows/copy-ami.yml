@@ -1,4 +1,4 @@
-name: copy-ami
+name: AWS AMI copy to Regions, make Public
 
 on:
   workflow_dispatch:
