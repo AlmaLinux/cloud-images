@@ -487,7 +487,16 @@ main() {
   local -r blob_name="${image_name}.vhd"
   # convert input image to fixed VHD blob with size rounded to 1 MB
   local -r blob_size="$(get_rounded_size "${INPUT_IMAGE}")"
-  execute qemu-img resize -q -f raw "${INPUT_IMAGE}" "${blob_size}"
+  # Get actual image size in bytes
+  local -r actual_size="$(qemu-img info -f raw --output json "${INPUT_IMAGE}" | jq '.["virtual-size"]')"
+
+  # Only resize if needed
+  if [ "$actual_size" -ne "$blob_size" ]; then
+    execute qemu-img resize -q -f raw "${INPUT_IMAGE}" "${blob_size}"
+  else
+    echo "Image already aligned to $blob_size, skipping resize."
+  fi
+
   execute qemu-img convert -f raw -o subformat=fixed,force_size -O vpc \
     "${INPUT_IMAGE}" "${blob_name}"
   local -r blob_md5="$(get_blob_md5 "${blob_name}")"
