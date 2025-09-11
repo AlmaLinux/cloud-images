@@ -1,0 +1,219 @@
+name: Azure image to Gallery release
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        url_type:
+          description: 'The Image format'
+          required: true
+          default: 'RAW at AWS S3'
+          type: choice
+          options:
+            - 'RAW at AWS S3'
+            - 'VHD blob at Azure'
+
+        image_url:
+          description: "The Image URL"
+          required: true
+          default: ''
+
+        dry-run-mode:
+          description: "Dry-run mode"
+          required: true
+          type: boolean
+          default: true
+
+        public_gallery:
+          description: "Release to public Gallery"
+          required: true
+          type: boolean
+          default: false
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release-image-to-gallery:
+    name: "Release ${{ inputs.image_url }} to Gallery"
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Prepare environment
+      run: |
+        echo "IMAGE_FILE=$(basename ${{ inputs.image_url }})" >> $GITHUB_ENV
+
+        sudo apt-get update
+        sudo apt-get install -y curl qemu-utils
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Download the image .raw file
+      if: ${{ inputs.url_type == 'RAW at AWS S3' }}
+      run: |
+        # Download to the /mnt directory as it has ~70Gb of disk space
+        sudo chmod o+wx /mnt
+        curl -s ${{ inputs.image_url }} -o /mnt/${{ env.IMAGE_FILE }}
+        test -e /mnt/${{ env.IMAGE_FILE }}
+
+    - name: Read the image info
+      run: |
+        # Capture version, timestamp and architecture
+        case '${{ inputs.url_type }}' in
+          RAW*)
+            regex='-([0-9]+\.?[0-9]*)-([0-9]{8,9}(\.[0-9])?).*\.(x86_64|aarch64)'
+            if [[ ${{ env.IMAGE_FILE }} =~ $regex ]]; then
+              release_version="${BASH_REMATCH[1]}"
+              timestamp="${BASH_REMATCH[2]}"
+              arch="${BASH_REMATCH[4]}"
+            else
+              echo "[Error] Could not parse '${{ env.IMAGE_FILE }}' file name!"
+              exit 1
+            fi
+            ;;
+
+          VHD*)
+            regex_azure='-([0-9]+\.?[0-9]*)-([0-9]{8,9}(\.[0-9])?).*\.(x86_64|aarch64|arm64)'
+            regex_simple='almalinux-([0-9]+\.[0-9]+)-(x86_64|aarch64|arm64)\.([0-9]{8})'
+
+            # Modern .vhd files like AlmaLinux-10-Azure-10.0-20250529.0-64k.aarch64.vhd
+            if [[ ${{ env.IMAGE_FILE }} =~ $regex_azure ]]; then
+              release_version="${BASH_REMATCH[1]}"
+              timestamp="${BASH_REMATCH[2]}"
+              arch="${BASH_REMATCH[4]}"
+
+            # Legacy .vhd files like almalinux-9.6-arm64.20250522-01.vhd
+            elif [[ ${{ env.IMAGE_FILE }} =~ $regex_simple ]]; then
+              release_version="${BASH_REMATCH[1]}"
+              arch="${BASH_REMATCH[2]}"
+              timestamp="${BASH_REMATCH[3]}"
+
+            else
+              echo "[Error] Could not parse '${{ env.IMAGE_FILE }}' file name!"
+              exit 1
+            fi
+            ;;
+        esac
+
+        # AlmaLinux release string
+        case $release_version in
+          10) release_string="AlmaLinux Kitten OS $release_version $arch" ;;
+          *) release_string="AlmaLinux OS $release_version $arch" ;;
+        esac
+
+        # Azure Gallery image type
+        case $arch in
+          x86_64) image_type="default" ;;
+          aarch64|arm64)
+            image_type="arm64"
+            [[ ${{ env.IMAGE_FILE }} == *-64k* ]] && image_type="arm64-64k"
+          ;;
+          *) echo "[Error] Unknown architecture: $arch" ; exit 1 ;;
+        esac
+
+        echo "RELEASE_VERSION=$release_version" >> $GITHUB_ENV
+        echo "TIMESTAMP=$timestamp" >> $GITHUB_ENV
+        echo "RELEASE_STRING=$release_string" >> $GITHUB_ENV
+        echo "IMAGE_TYPE=$image_type" >> $GITHUB_ENV
+
+    - name: Release the image to a Gallery
+      id: release
+      run: |
+        # copy azure_uploader.sh to /mnt and run it there
+        sudo chmod o+wx /mnt
+        cp -a tools/azure_uploader.sh /mnt/
+        chmod +x /mnt/azure_uploader.sh
+        cd /mnt
+
+        # Prepare the options for the azure_uploader.sh script
+        release_options='-d ${{ env.RELEASE_VERSION }} -t ${{ env.IMAGE_TYPE }}'
+
+        # Use -i option if .raw image url, or -u option if .vhd blob url is provided
+        case '${{ inputs.url_type }}' in
+          RAW*)
+            release_options+=' -i ${{ env.IMAGE_FILE }}'
+            ;;
+          VHD*)
+            release_options+=' -u ${{ inputs.image_url }}'
+            ;;
+        esac
+
+        # If dry-run-mode is false, then pass the -f option to upload to the Gallery
+        [[ ${{ inputs.dry-run-mode }} == false ]] && \
+          release_options+=' -f'
+
+        # If public_gallery is true, then upload to 'almalinux' public Gallery
+        [[ ${{ inputs.public_gallery }} == true ]] && \
+          release_options+=' -g almalinux'
+
+        ./azure_uploader.sh ${release_options} \
+          |& tee ./azure_uploader.log
+
+    - name: Prepare summary
+      if: ${{ inputs.dry-run-mode == false }}
+      run: |
+        # Read the log file to get the relevant information
+        test -f /mnt/azure_uploader.log
+
+        # Read uploaded image blob URL
+        case '${{ inputs.url_type }}' in
+          RAW*)
+            {
+              echo 'IMAGE_URI_SUMMARY<<EOF'
+              cat /mnt/azure_uploader.log | grep 'Image URI:'
+              echo EOF
+            } >> "$GITHUB_ENV"
+            ;;
+          VHD*)
+            echo "IMAGE_URI_SUMMARY=Image URI: ${{ inputs.image_url }}" >> "$GITHUB_ENV"
+            ;;
+        esac
+
+        # Image definition version
+        {
+          echo 'IMAGE_INFO_SUMMARY<<EOF'
+          cat /mnt/azure_uploader.log | grep 'Created almalinux' | sed 's/Created/- Created/g'
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Print job summary
+      run: |
+        {
+          echo "**${{ env.RELEASE_STRING }}** \`${{ env.TIMESTAMP }}\`:"
+          echo "- Image file: ${{ env.IMAGE_FILE }}"
+          [[ ${{ inputs.dry-run-mode }} == 'false' ]] \
+            && echo "- ${{ env.IMAGE_URI_SUMMARY }}" || true
+          [[ ${{ inputs.dry-run-mode }} == 'false' ]] \
+            && echo "${{ env.IMAGE_INFO_SUMMARY }}" || true
+          echo "- Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅' }}"
+          echo "- The Gallery is public: ${{ inputs.public_gallery && '✅' || '❌' }}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.RELEASE_STRING }}** `${{ env.TIMESTAMP }}` Azure image, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - Image file: `${{ env.IMAGE_FILE }}`
+          - ${{ inputs.dry-run-mode == 'false' && env.IMAGE_URI_SUMMARY || '' }}
+          ${{ inputs.dry-run-mode == 'false' && env.IMAGE_INFO_SUMMARY || '' }}
+          - Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅'}}
+          - The Gallery is public: ${{ inputs.public_gallery && '✅' || '❌'}}
