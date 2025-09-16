@@ -144,7 +144,7 @@ variable "cpus" {
   description = "The number of virtual cpus"
 
   type    = number
-  default = 2
+  default = 4
 }
 
 variable "memory_x86_64" {
@@ -536,6 +536,127 @@ variable "azure_disk_size" {
 
   type    = string
   default = "32212254720b"
+}
+
+variable "gcp_disk_size" {
+  description = "The size in GB of hard disk of VM"
+
+  type    = string
+  default = "20G"
+}
+
+local "gcp_boot_command_8_x86_64" {
+  expression = [
+    "c<wait>",
+    "linuxefi /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-x86_64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gcp-x86_64.ks",
+    " console=ttyS0",
+    "<enter>",
+    "initrdefi /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+local "gcp_boot_command_8_aarch64" {
+  expression = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gcp-aarch64.ks",
+    "<enter>",
+    "initrd /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>"
+  ]
+}
+
+variable "gcp_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 GCP x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gcp-x86_64.ks",
+    " console=ttyS0",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gcp_boot_command_9_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 GCP AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gcp-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gcp_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 GCP x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gcp-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gcp_boot_command_10_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 GCP AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gcp-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
 }
 
 local "azure_boot_command_8_x86_64" {

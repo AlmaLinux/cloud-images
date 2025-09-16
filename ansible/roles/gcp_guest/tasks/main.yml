@@ -1,0 +1,28 @@
+---
+- name: Install GCP guest packages
+  dnf:
+    name:
+      - google-compute-engine
+      - google-osconfig-agent
+      - gce-disk-expand
+    state: present
+
+- name: Install google-cloud-cli
+  dnf:
+    name: google-cloud-cli
+    state: present
+  when: ansible_distribution_major_version | int >= 10
+
+- name: Disable root login via SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+
+- name: Disable password authentication via SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+    state: present
