@@ -1,0 +1,18 @@
+---
+- name: Install GCP guest packages
+  dnf:
+    name:
+      - google-compute-engine
+      - google-osconfig-agent
+      - gce-disk-expand
+    state: present
+
+- name: Disable root login via SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+    state: present
+
+# - name: set root password
+#   shell: echo "almalinux" | passwd --stdin root

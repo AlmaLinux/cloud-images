@@ -41,6 +41,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - uses: runs-on/action@v2
+      # only in the AlmaLinux namespace where we are using runs-on
+      if: github.repository_owner == 'AlmaLinux'
+      with:
+        metrics: cpu,network,memory,disk,io
 
     - name: Runner OS, install extra packages
       shell: bash
@@ -77,10 +82,11 @@ runs:
       shell: bash
       run: |
         # Prepare staff
+        packer_opts=
         case ${{ env.runner_os }} in
           ubuntu)
             # Packer options
-            packer_opts="-var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
+            packer_opts="-var qemu_binary=/usr/bin/qemu-system-${{ inputs.arch }} -var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
             ;;
           rhel)
             # Packer options
@@ -113,6 +119,10 @@ runs:
 
         # AWS S3 path to store images
         aws_s3_path=images/${{ env.version_major }}/${release}/${{ inputs.type }}/${{ env.TIME_STAMP }}
+
+        # tell packer we can use more cpu/ram if we're in the almalinux namespace
+        # which means we're using runs-on with metal instances
+        [[ ${{ github.repository_owner }} == 'AlmaLinux' ]] && packer_opts="${packer_opts} -var cpus=$(($(nproc)-4)) -var memory_${{ env.alma_arch }}=32768"
 
         # Overriding packer source, image mask and S3 path where necessary
         case "${{ inputs.type }}${{ env.version_major }}" in
@@ -228,6 +238,10 @@ runs:
             output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.qcow2
             packer_source=qemu.${packer_source}
             ;;
+          gcp8|gcp9)
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
+            packer_source=qemu.${packer_source}
+            ;;
           *)
             output_mask=output-${output_mask}
             packer_source=qemu.${packer_source}
@@ -260,8 +274,24 @@ runs:
             ;;
         esac
 
+    - name: Remove KVM
+      if: inputs.type == 'vagrant_virtualbox' || inputs.type == 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Remove KVM
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt-get -y remove qemu-kvm
+            ;;
+          rhel)
+            sudo dnf -y -q remove qemu-kvm
+            ;;
+        esac
+        sudo rmmod kvm || true
+        sudo rmmod kvm_amd || true
+
     - name: Check nested virtualization support
-      if: inputs.arch == 'x86_64' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware' && inputs.runner != 'aws-ec2'
+      if: inputs.arch == 'x86_64' && env.RUNS_ON_VERSION == '' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
       shell: bash
       run: |
         # Check nested virtualization support
@@ -365,6 +395,7 @@ runs:
       run: |
         # Build ${{ inputs.type }} image
         # PACKER_LOG=1
+        sudo systemctl start libvirtd
         sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
 
     - name: Locate image file, generate checksum
@@ -380,8 +411,89 @@ runs:
         echo "IMAGE_FILE=${image_file}" >> $GITHUB_ENV
         echo "IMAGE_NAME=$(basename ${image_file})" >> $GITHUB_ENV
 
-    # - name: Setup tmate session
-    #   uses: mxschmitt/action-tmate@v3
+    - id: 'google-auth-dev-images'
+      if: env.IMAGE_TYPE == 'gcp'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/443728870479/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-cloud-images@almalinux-dev-images-469421.iam.gserviceaccount.com'
+    
+    - name: 'Set up Google Cloud SDK'
+      if: env.IMAGE_TYPE == 'gcp'
+      uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+    - name: 'Upload output to GCP storage bucket'
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: gcloud storage cp ${{ env.IMAGE_FILE }} gs://almalinux-images-dev/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d')/root.tar.gz
+
+    # - name: Create image on GCP
+    #   if: env.IMAGE_TYPE == 'gcp'
+    #   shell: bash
+    #   run: |
+    #     # Create image on GCP
+    #     gcloud --project almalinux-dev-images-469421 compute images create                                              \
+    #       almalinux-${{ env.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d')        \
+    #       --description="AlmaLinux, AlmaLinux, ${{ env.version_major }}, ${{ inputs.arch }} built on $(date +'%Y%m%d')" \
+    #       --source-uri gs://almalinux-images-dev/${{ env.IMAGE_NAME }}                                                  \
+    #       --guest-os-features=GVNIC,UEFI_COMPATIBLE,VIRTIO_SCSI_MULTIQUEUE,SEV_CAPABLE,SEV_LIVE_MIGRATABLE,IDPF         \
+    #       --family almalinux-${{ env.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}                  \
+    #       --architecture=${{ inputs.arch == 'x86_64' && 'X86_64' || 'ARM64' }}                                          \
+    #       --labels=public-image=true
+
+    - name: Create image on GCP
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: |
+        wget https://storage.googleapis.com/compute-image-tools/release/linux/gce_image_publish
+        chmod +x gce_image_publish
+        ./gce_image_publish \
+          -skip_confirmation \
+          -rollout_rate=0 \
+          -publish_project="almalinux-dev-images-469421" \
+          -work_project="almalinux-dev-images-469421" \
+          -replace \
+          -source_gcs_path="gs://almalinux-images-dev/" \
+          almalinux_${version_major}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
+
+    # - id: 'google-auth-image-testing'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   uses: 'google-github-actions/auth@v2'
+    #   with:
+    #     workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+    #     service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+    
+    # - name: 'Set up Google Cloud SDK'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+    # - name: 'Clone Google cloud-image-testing repo'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   uses: actions/checkout@v3
+    #   with:
+    #     path: cloud-image-tests
+    #     repository: GoogleCloudPlatform/cloud-image-tests
+
+    # - name: 'Build Google cloud-image-testing docker image'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   shell: bash
+    #   run: |
+    #     cd cloud-image-tests
+    #     docker build -t cloud-image-tests -f Dockerfile .
+
+    # - name: 'Run Google cloud-image-testing tests'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   shell: bash
+    #   run: |
+    #     cd cloud-image-tests
+    #     docker run -v ${{env.GOOGLE_APPLICATION_CREDENTIALS}}:/creds/credentials.json \
+    #       -e GOOGLE_APPLICATION_CREDENTIALS=/creds/credentials.json \
+    #       cloud-image-tests \
+    #       -project almalinux-image-testing-469421 \
+    #       -zone us-central1-a \
+    #       -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|lssd|disk|packagevalidation|ssh|metadata|vmspec)$' \
+    #       -images 'projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ env.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}' \
+    #       -parallel_stagger 1s -parallel_count 20
 
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
       # Skip testing for vagrant_virtualbox on GH runner because 'vugrant up' fails to connect to the newly created VM via ssh:
