@@ -174,12 +174,12 @@ jobs:
           RAW*)
             {
               echo 'IMAGE_URI_SUMMARY<<EOF'
-              cat /mnt/azure_uploader.log | grep 'Image URI:'
+              cat /mnt/azure_uploader.log | grep 'Image URI:' | sed 's/Image/- Image/g'
               echo EOF
             } >> "$GITHUB_ENV"
             ;;
           VHD*)
-            echo "IMAGE_URI_SUMMARY=Image URI: ${{ inputs.image_url }}" >> "$GITHUB_ENV"
+            echo "IMAGE_URI_SUMMARY=- Image URI: ${{ inputs.image_url }}" >> "$GITHUB_ENV"
             ;;
         esac
 
@@ -196,7 +196,7 @@ jobs:
           echo "**${{ env.RELEASE_STRING }}** \`${{ env.TIMESTAMP }}\`:"
           echo "- Image file: ${{ env.IMAGE_FILE }}"
           [[ ${{ inputs.dry-run-mode }} == 'false' ]] \
-            && echo "- ${{ env.IMAGE_URI_SUMMARY }}" || true
+            && echo "${{ env.IMAGE_URI_SUMMARY }}" || true
           [[ ${{ inputs.dry-run-mode }} == 'false' ]] \
             && echo "${{ env.IMAGE_INFO_SUMMARY }}" || true
           echo "- Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅' }}"
@@ -213,7 +213,7 @@ jobs:
         TEXT: |
           :almalinux: **${{ env.RELEASE_STRING }}** `${{ env.TIMESTAMP }}` Azure image, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           - Image file: `${{ env.IMAGE_FILE }}`
-          - ${{ inputs.dry-run-mode == 'false' && env.IMAGE_URI_SUMMARY || '' }}
-          ${{ inputs.dry-run-mode == 'false' && env.IMAGE_INFO_SUMMARY || '' }}
+          ${{ inputs.dry-run-mode && '' || env.IMAGE_URI_SUMMARY }}
+          ${{ inputs.dry-run-mode && '' || env.IMAGE_INFO_SUMMARY }}
           - Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅'}}
           - The Gallery is public: ${{ inputs.public_gallery && '✅' || '❌'}}
