@@ -1,0 +1,18 @@
+---
+- name: Copy repo metadata dump script
+  ansible.builtin.copy:
+    src: files/dump_repo_metadata.py
+    dest: /dev/shm/dump_repo_metadata.py
+
+- name: Dump repo metadata for SBOMs
+  ansible.builtin.shell: python3 /dev/shm/dump_repo_metadata.py > /dev/shm/repo-metadata.txt
+  register: dump_repo_metadata
+  failed_when: false
+
+- name: Write repo metadata for SBOMs to artifact file
+  ansible.builtin.fetch:
+    src: /dev/shm/repo-metadata.txt
+    dest: /tmp/repo-metadata-{{ packer_build_name }}.txt
+    flat: true
+  become: false
+  when: dump_repo_metadata.changed
