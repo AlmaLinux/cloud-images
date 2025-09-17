@@ -270,6 +270,23 @@ def ami_architecture(ami_info):
         if tag["Key"] == "Architecture":
             return tag["Value"]
 
+def ami_name(ami_info):
+    """
+    Finds source AMI Name tag.
+
+    Parameters
+    ----------
+    ami_info : dict
+        AMI information.
+
+    Returns
+    -------
+    string
+        Name of source AMI.
+    """
+    for tag in ami_info["Tags"]:
+        if tag["Key"] == "Name":
+            return tag["Value"]
 
 def main(sys_args):
     parser = init_arg_parser()
@@ -283,6 +300,7 @@ def main(sys_args):
     ami_info = get_ami_info(ec2, src_ami_id)
     version = ami_version(ami_info)
     architecture = ami_architecture(ami_info)
+    name = ami_name(ami_info)
     regions = [r for r in iter_regions(ec2) if r != src_region]
     public_amis = {src_region: ami_info["ImageId"]}
     aws_client_token = args.aws_client_token or src_ami_id
@@ -313,7 +331,13 @@ def main(sys_args):
     with open(args.csv_output, "w") as csv_fd:
         csv_writer = csv.writer(csv_fd, dialect="unix")
         for dst_region, dst_ami_id in sorted(public_amis.items()):
-            row = ("AlmaLinux OS", version, dst_region, dst_ami_id, architecture)
+            row = (
+                "AlmaLinux OS Kitten" if 'kitten' in name.lower() else "AlmaLinux OS",
+                version,
+                dst_region,
+                dst_ami_id,
+                architecture
+            )
             csv_writer.writerow(row)
             md_rows.append(row)
     with open(args.md_output, "w") as fd:
