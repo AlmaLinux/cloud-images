@@ -1,0 +1,9 @@
+# An Ansible playbook that configures an AlmaLinux OS GCP image
+---
+- name: AlmaLinux GCP
+  hosts: default
+  become: true
+
+  roles:
+    - gcp_guest
+    - cleanup_vm
