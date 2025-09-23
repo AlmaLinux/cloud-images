@@ -15,6 +15,12 @@ on:
             - 9
             - 8
 
+        test_ami:
+          description: "Test built AMI"
+          required: true
+          type: boolean
+          default: true
+
         notify_mattermost:
           description: "Send notification to Mattermost"
           required: true
@@ -23,12 +29,16 @@ on:
 
 env:
   ALMALINUX_AWS_ACCOUNT_ID: 764336703387
+  ALMALINUX_AWS_INFRA_ACCOUNT_ID: 383541928683
   PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
 jobs:
-  build-images:
-    name: ${{ matrix.variant }} ${{ matrix.arch }} AMI
+  build-ami:
+    name: Build ${{ matrix.variant }} ${{ matrix.arch }} AMI
     runs-on: ubuntu-24.04
+    outputs:
+      ami_x86_64: ${{ steps.get-ami-id.outputs.ami_x86_64 }}
+      ami_aarch64: ${{ steps.get-ami-id.outputs.ami_aarch64 }}
     strategy:
       fail-fast: false
       matrix:
@@ -105,6 +115,7 @@ jobs:
         path: ${{ matrix.variant }}_${{ matrix.arch }}_build.log
 
     - name: Get AMI ID
+      id: get-ami-id
       run: |
         AMI_ID=$(grep -E '${{ vars.AWS_REGION }}: ami-' ${{ matrix.variant }}_${{ matrix.arch }}_build.log | awk '{print $2}')
         if [[ "${AMI_ID}" == "" ]]; then
@@ -113,6 +124,7 @@ jobs:
           echo "[Debug] AMI ID found in the build log: '${AMI_ID}'"
         fi
         echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+        echo "ami_${{ matrix.arch }}=${AMI_ID}" >> $GITHUB_OUTPUT
 
     - name: Get AMI Name
       run: |
@@ -123,6 +135,10 @@ jobs:
           echo "[Debug] AMI Name: '${AMI_NAME}'"
         fi
         echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+    - name: Launch permission for the AMI to Infra account
+      run: |
+        aws ec2 modify-image-attribute --image-id ${{ env.AMI_ID }} --launch-permission "Add=[{UserId=${{ env.ALMALINUX_AWS_INFRA_ACCOUNT_ID }}}]"
 
     - name: Print AMI summary
       uses: actions/github-script@v7
@@ -145,3 +161,76 @@ jobs:
           :almalinux: **${{ env.AMI_NAME }}** AWS AMI, built by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
           **AMI ID**: `${{ env.AMI_ID }}`
+
+  test-ami:
+    name: Test ${{ inputs.version_major }} ${{ matrix.arch }} AMI
+    if: inputs.test_ami
+    needs: [build-ami]
+    runs-on: ${{ format('runs-on={0}/family={1}/ami={2}/region={3}', github.run_id, contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium', contains(matrix.arch, 'aarch64') && needs.build-ami.outputs.ami_aarch64 || needs.build-ami.outputs.ami_x86_64, vars.AWS_REGION )}}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - aarch64
+          - x86_64
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.0.2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install aws CLI
+        run: |
+          # Install aws CLI
+          sudo dnf install -y -q unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+          unzip -qq awscliv2.zip
+          sudo ./aws/install
+
+      - name: Get AMI ID
+        run: |
+          AMI_ID=${{ matrix.arch == 'x86_64' && needs.build-ami.outputs.ami_x86_64 || needs.build-ami.outputs.ami_aarch64 }}
+          echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+
+      - name: Get AMI architecture
+        run: |
+          AMI_ARCH=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Tags' | jq -r '.[] | select(.Key == "Architecture") | .Value')
+          if [[ "${AMI_ARCH}" == "" || "${AMI_ARCH}" == "None" ]]; then
+            exit 1
+          else
+            echo "[Debug] AMI Arch: '${AMI_ARCH}'"
+          fi
+          echo "AMI_ARCH=${AMI_ARCH}" >> $GITHUB_ENV
+
+      - name: Get AlmaLinux versions
+        id: ami-version
+        run: |
+          AMI_VERSION=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Tags' | jq -r '.[] | select(.Key == "Version") | .Value')
+          if [[ "${AMI_VERSION}" == "" || "${AMI_VERSION}" == "None" ]]; then
+            exit 1
+          else
+            echo "[Debug] AMI Version: '${AMI_VERSION}'"
+          fi
+          echo "AMI_VERSION=${AMI_VERSION}" >> $GITHUB_ENV
+          echo "OS_VERSION=$(echo $AMI_VERSION | sed 's/\.[0-9]\{8\}.*$//g')" >> $GITHUB_ENV
+
+      - name: Test AMI
+        run: |
+          case "${{ env.OS_VERSION }}" in
+            10)
+              OS_RELEASE="AlmaLinux Kitten release ${{ env.OS_VERSION }}"
+              ;;
+            *)
+              OS_RELEASE="AlmaLinux release ${{ env.OS_VERSION }}"
+              ;;
+          esac
+
+          echo "[Debug] AlmaLinux release:"
+          grep "${OS_RELEASE}" /etc/almalinux-release || exit 1
+          echo "[Debug] System architecture:"
+          rpm -q --qf='%{ARCH}\n' $(rpm -qf /etc/almalinux-release) | grep '${{ env.AMI_ARCH }}' || exit 1
+          echo "[Debug] Check for updates:"
+          dnf check-update || exit 1
