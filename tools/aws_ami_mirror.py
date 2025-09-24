@@ -342,6 +342,7 @@ def main(sys_args):
             md_rows.append(row)
     with open(args.md_output, "w") as fd:
         fd.write(str(markdown_table.Table(md_header, md_rows)))
+        fd.write("\n")
 
 
 if __name__ == "__main__":
