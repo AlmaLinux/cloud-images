@@ -74,10 +74,9 @@ jobs:
       if: inputs.make_public
       run: |
         # Lowercase AMI Name, replace spaces and dots with underscores
-        wiki_data_file="${{ env.AMI_NAME }}"
-        wiki_data_file="${wiki_data_file// /_}"
-        wiki_data_file="${wiki_data_file//./_}"
-        echo "wiki_data_file=${wiki_data_file,,}" >> $GITHUB_ENV
+        # to get file name for wiki data, like "AlmaLinux OS 9.6.20250522 x86_64" and almalinux_os_9_6_20250522_x86_64
+        wiki_data_file=$(echo "${{ env.AMI_NAME }}" | tr '[:upper:]' '[:lower:]' | tr -s ' .' '_')
+        echo "wiki_data_file=${wiki_data_file}" >> $GITHUB_ENV
 
         pip3 install markdown_table
 
