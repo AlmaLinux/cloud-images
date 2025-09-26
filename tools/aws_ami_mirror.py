@@ -304,7 +304,8 @@ def main(sys_args):
     regions = [r for r in iter_regions(ec2) if r != src_region]
     public_amis = {src_region: ami_info["ImageId"]}
     aws_client_token = args.aws_client_token or src_ami_id
-    with ThreadPoolExecutor(max_workers=len(regions) + 1) as executor:
+    # Use only 10 threads to avoid hitting AWS API rate limits
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for dst_region in regions:
             futures.append(
@@ -317,11 +318,15 @@ def main(sys_args):
                 )
             )
         for future in as_completed(futures):
-            dst_ami_id, dst_snap_id, dst_region = future.result()
-            log.info(
-                f"mirrored {dst_ami_id} : {dst_snap_id} AMI to {dst_region} region"
-            )
-            public_amis[dst_region] = dst_ami_id
+            try:
+                dst_ami_id, dst_snap_id, dst_region = future.result()
+                log.info(
+                    f"mirrored {dst_ami_id} : {dst_snap_id} AMI to {dst_region} region"
+                )
+                public_amis[dst_region] = dst_ami_id
+            except Exception as e:
+                # Log the specific error and continue
+                log.error(f"Failed to copy AMI to a region: {e}")
     try:
         make_src_ami_public(ec2, src_region, src_ami_id)
     except:
