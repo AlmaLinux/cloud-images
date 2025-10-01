@@ -30,6 +30,7 @@ on:
             - ALL
             - azure
             # - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
+            - gcp
             - gencloud
             - oci
             - opennebula
@@ -114,6 +115,10 @@ jobs:
             VARIANTS_GH+=("azure-x86_64")
             VARIANTS_SH+=("azure-aarch64")
           fi
+          if [ "${{ inputs.image_type }}" = "gcp" -o "${{ inputs.image_type }}" = "ALL" ]; then
+            VARIANTS_GH+=("gcp-x86_64")
+            VARIANTS_SH+=("gcp-aarch64")
+          fi
           if [ "${{ inputs.image_type }}" = "digitalocean" -o "${{ inputs.image_type }}" = "ALL" ]; then
             if [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && [[ "${{ inputs.version_major }}" != *"10"  ]]; then
               VARIANTS_GH+=("digitalocean-x86_64")
@@ -145,6 +150,14 @@ jobs:
               VARIANTS_SH+=("vagrant_vmware-x86_64") # VMware has networking issues on GitHub runners, so we use self-hosted runner
           fi
 
+          # Add SH values to matrix_gh if using runs-on
+          if [ "${{ github.repository_owner }}" == 'AlmaLinux' ]; then
+            for sh in "${VARIANTS_SH[@]}"; do
+              VARIANTS_GH+=("$sh")
+            done
+            unset VARIANTS_SH
+          fi
+
           [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
           matrix_gh=${matrix_gh%,}  # Remove the trailing comma
           echo matrix_gh=$(jq -c <<< [${matrix_gh}]) >> $GITHUB_OUTPUT
@@ -173,18 +186,24 @@ jobs:
 
   build-gh-hosted:
     name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
+    permissions:
+      id-token: write
+      contents: read
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
-    runs-on: ubuntu-24.04
+    # use runs-on runners if within the almalinux org, otherwise GH runners"
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-{2}', github.run_id, matrix.variant, contains(matrix.matrix_gh, 'aarch64') && 'arm64' || 'x64') || 'ubuntu-24.04' }}"
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10-kitten' || inputs.version_major == '10' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( (inputs.version_major == '10-kitten' || inputs.version_major == '10') && !(contains(needs.init-data.outputs.matrix_gh, 'aarch64') ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_gh) }}
         exclude:
           - matrix_gh: 'azure-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'oci-x86_64'
+            variant: '10-kitten-v2'
+          - matrix_gh: 'gcp-x86_64'
             variant: '10-kitten-v2'
           # Kitten x86_64_v2 Vagrant for VirtualBox stuck on "Waiting for SSH to become available"
           - matrix_gh: 'vagrant_virtualbox-x86_64'
@@ -192,6 +211,8 @@ jobs:
           - matrix_gh: 'digitalocean-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'azure-x86_64'
+            variant: '10-v2'
+          - matrix_gh: 'gcp-x86_64'
             variant: '10-v2'
           - matrix_gh: 'oci-x86_64'
             variant: '10-v2'
@@ -211,7 +232,7 @@ jobs:
           echo "ARCH=$arch" >> $GITHUB_ENV
 
       - name: Checkout ${{ github.action_repository }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - uses: ./.github/actions/shared-steps
         name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
@@ -232,15 +253,25 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: true # Do image simple testing and generate installed packages list (vagrant_* only)
+          run_test: true # Do image simple testing and generate installed packages list (vagrant_* and GCP only)
           # runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
           runner: gh_hosted
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
+
+
+
+
+
+
+
+### Everything below is for self-hosted runners only ###
+
   start-self-hosted-runner:
     name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} runner
-    if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
+    # If we're in the almalinux org we use runs-on for self-hosted
+    if: ${{ github.repository_owner != 'AlmaLinux' && inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
     runs-on: ubuntu-24.04
     needs: [init-data]
     strategy:
@@ -316,6 +347,8 @@ jobs:
         exclude:
           - matrix_sh: 'oci-aarch64'
             variant: '10-kitten'
+          - matrix_sh: 'oci-aarch64'
+            variant: '10'
           - matrix_sh: 'oci-aarch64'
             variant: '9-64k'
           - matrix_sh: 'oci-aarch64'

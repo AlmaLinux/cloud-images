@@ -1,0 +1,269 @@
+name: GCP cloud-image-tests
+
+on:
+  workflow_dispatch:
+      inputs:
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+        arch:
+          description: 'Architecture to test'
+          required: true
+          default: 'ALL'
+          type: choice
+          options:
+            - ALL
+            - x86_64
+            - aarch64
+        image_override:
+          description: 'Image to test, overrides version_major to test a direct image instead.  Architecture must be set properly for the image being passed.  This must be a full path to a GCP image, for example, projects/almalinux-dev-images-469421/global/images/almalinux-9-v20230920'
+          required: false
+          default: ''
+        # notify_mattermost:
+        #   description: "Send notification to Mattermost"
+        #   required: true
+        #   type: boolean
+        #   default: false
+
+jobs:
+  init-data:
+    runs-on: ubuntu-latest
+    outputs:
+      image_path: ${{ steps.determine_image.outputs.image_path }}
+    steps:
+    - name: Determine image to test
+      id: determine_image
+      run: |
+        if [ -n "${{ inputs.image_override }}" ]; then
+            echo "Using image override: ${{ inputs.image_override }}"
+            image_path="${{ inputs.image_override }}"
+        elif [ "${{ inputs.arch == 'ALL' }}" ]; then
+            echo "Using version major: ${{ inputs.version_major }}"
+            echo "Using all architectures"
+            image_path="projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ inputs.version_major }}"
+        else
+            echo "Using version major: ${{ inputs.version_major }}"
+            echo "Using arch: ${{ inputs.arch }}"
+            image_path="projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ inputs.version_major }}"
+        fi
+        echo "Determined image path: ${image_path}"
+        echo "image_path=${image_path}" >> $GITHUB_OUTPUT
+    
+#   # this initial test does the generic suite of tests not assigned to any specific shape - letting the test system
+#   # choose its own shapes and sizes.  This is run first to catch any major issues before running the per-shape tests
+#   # which take a long time and use a lot of resources.  Think of this as a smoke test to catch major issues early.
+#   test-gcp-initialtest:
+#     name: AlmaLinux ${{ inputs.image_override || format('{0} {1}', inputs.version_major, matrix.arch) }} Generic Full Run
+#     needs: init-data
+#     permissions:
+#       id-token: write
+#       contents: read
+#     runs-on: ubuntu-24.04
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         # this sets the arch matrix based on the input
+#         # if input is ALL, then set to both x86_64 and aarch64
+#         # otherwise set to the selected arch
+#         arch: ${{ fromJSON(inputs.arch == 'ALL' && '["x86_64","aarch64"]' || format('["{0}"]', inputs.arch)) }}
+#     steps:
+#     # we don't need the checked out files, but this is required for the google auth action to work
+#     - uses: 'actions/checkout@v5'
+
+#     - id: 'google-auth-image-testing'
+#       uses: 'google-github-actions/auth@v2'
+#       with:
+#         workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+#         service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+    
+#     - name: 'Set up Google Cloud SDK'
+#       uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+#     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
+#       shell: bash
+#       run: |
+#         docker run \
+#           -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
+#           -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
+#           gcr.io/compute-image-tools/cloud-image-tests:latest  \
+#           -project almalinux-image-testing-469421              \
+#           -parallel_stagger 10s                                \
+#           -parallel_count 20                                   \
+#           -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata|disk|lssd|vmspec)$' \
+#           -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
+
+  test-gcp-pershape-x86_64:
+    name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} x86_64 ${{ matrix.shape }}
+    #needs: [init-data, test-gcp-initialtest]
+    needs: init-data
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
+    if: inputs.arch == 'ALL' || inputs.arch == 'x86_64'
+    strategy:
+      fail-fast: false
+      matrix:
+        shape:
+        - n4-standard-2
+        - n4-standard-80
+        - n2-standard-2
+        - n2-standard-128
+        - n2d-standard-2
+        - n2d-standard-224
+        - n1-standard-1
+        - n1-standard-96
+        - c4-standard-2
+        # can never get capacity for 288 so using 192
+        - c4-standard-192
+        # all lssd shapes fail
+        # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/345
+        # - c4-standard-4-lssd
+        # - c4-standard-288-lssd
+        # never has capacity anywhere
+        # - c4-standard-288-metal
+        - c4d-standard-2
+        # can never get capacity for 384 so using 192
+        - c4d-standard-192
+        # - c4d-standard-8-lssd
+        # - c4d-standard-384-lssd
+        - c3-standard-4
+        - c3-standard-176
+        # never any metal capacity available
+        # - c3-standard-192-metal
+        # - c3-standard-4-lssd
+        # - c3-standard-176-lssd
+        - c3d-standard-4
+        - c3d-standard-360
+        # - c3d-standard-8-lssd
+        # - c3d-standard-360-lssd
+        - e2-standard-2
+        - e2-standard-32
+        - e2-medium
+        - t2d-standard-1
+        - t2d-standard-60
+        # h4d tests fail
+        # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/346
+        # - h4d-standard-192
+        # - h4d-highmem-192-lssd
+        # can never get capacity for this shape
+        # - h3-standard-88
+        - c2-standard-4
+        - c2-standard-60
+        - c2d-standard-2
+        - c2d-standard-112
+        # m4, x4, m3, m2 disabled due to no quotas
+        # - m4-megamem-28
+        # - m4-megamem-224
+        # - x4-megamem-960-metal
+        # - x4-megamem-1920-metal
+        # - m3-megamem-64
+        # - m2-megamem-416
+        # m1 quota too low
+        # - m1-megamem-96
+        # z3 tests fail
+        # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/346
+        # z3 tests not needed, basically c3 with lots of lssd, so covered by c3-lssd tests
+        # - z3-highmem-14-standardlssd
+        # things with special zone requirements or other special needs
+        # include:
+            # only available in us-central1-b
+            # disabled, never any capacity available
+            # - shape: c4d-standard-384-metal
+            #   zone: us-central1-b
+
+    steps:
+    # we don't need the checked out files, but this is required for the google auth action to work
+    - uses: 'actions/checkout@v5'
+
+    - id: 'google-auth-image-testing'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+    
+    - name: 'Set up Google Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+    - name: Runner OS specific configuration
+      shell: bash
+      run: |
+        # Runner OS specific configuration
+        if [ -e /etc/redhat-release ]; then
+          sudo setenforce 0
+          sudo dnf -y install podman
+          runner_user=$USER
+          sudo loginctl enable-linger $runner_user
+          docker_cmd=podman
+        elif lsb_release -cs > /dev/null 2>&1; then
+          docker_cmd=docker
+        else
+          echo "[Debug] Unknown OS"
+          exit 1
+        fi
+        echo "docker_cmd=${docker_cmd}" >> $GITHUB_ENV
+
+    - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
+      shell: bash
+      run: |
+        ${{ env.docker_cmd }} run \
+          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
+          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
+          gcr.io/compute-image-tools/cloud-image-tests:latest  \
+          -project almalinux-image-testing-469421              \
+          -x86_shape ${{ matrix.shape }}                       \
+          -parallel_count ${{ github.run_attempt > 1 && '5' || '1' }} \
+          ${{ matrix.zone && format('-zone {0}', matrix.zone) || '' }} \
+          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
+          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
+
+  test-gcp-pershape-aarch64:
+    name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}
+    #needs: [init-data, test-gcp-initialtest]
+    needs: init-data
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    if: inputs.arch == 'ALL' || inputs.arch == 'aarch64'
+    strategy:
+      fail-fast: false
+      matrix:
+        shape:
+        - c4a-standard-1
+        - c4a-standard-72
+        - c4a-standard-4-lssd
+        - c4a-standard-72-lssd
+        - t2a-standard-1
+        - t2a-standard-48
+    steps:
+    # we don't need the checked out files, but this is required for the google auth action to work
+    - uses: 'actions/checkout@v5'
+
+    - id: 'google-auth-image-testing'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+    
+    - name: 'Set up Google Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+    - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
+      shell: bash
+      run: |
+        docker run \
+          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
+          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
+          gcr.io/compute-image-tools/cloud-image-tests:latest  \
+          -project almalinux-image-testing-469421              \
+          -arm64_shape ${{ matrix.shape }}                     \
+          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
+          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
