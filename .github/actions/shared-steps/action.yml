@@ -273,6 +273,14 @@ runs:
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
 
+    - name: Unload KVM modules
+      if: inputs.type == 'vagrant_virtualbox' && inputs.runner == 'aws-ec2'
+      shell: bash
+      run: |
+        # Unload KVM modules
+        sudo lsmod | grep kvm
+        sudo modprobe -r kvm_intel kvm || sudo modprobe -r kvm_amd kvm
+
     - name: Install VirtualBox from its repository
       if: inputs.type == 'vagrant_virtualbox'
       uses: myci-actions/add-deb-repo@10
@@ -435,6 +443,7 @@ runs:
             sudo vagrant up --provider=vmware_desktop
             ;;
           vagrant_libvirt*)
+            [[ "${{ inputs.runner }}" = "aws-ec2" ]] && sudo systemctl restart libvirtd
             [ "${{ env.runner_os }}" = "ubuntu" ] && \
               sudo apt-get -y install libvirt-daemon-system libvirt-dev ebtables libguestfs-tools >/dev/null
             sudo vagrant plugin install vagrant-libvirt
