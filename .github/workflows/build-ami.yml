@@ -182,10 +182,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Install aws CLI
+      - name: Install aws CLI and necessary packages
         run: |
-          # Install aws CLI
-          sudo dnf install -y -q unzip
+          sudo dnf install -y -q unzip jq
           curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
           unzip -qq awscliv2.zip
           sudo ./aws/install
