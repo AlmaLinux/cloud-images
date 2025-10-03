@@ -1,0 +1,181 @@
+name: Vagrant Cloud publish
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        image_url:
+          description: "The box image file URL"
+          required: true
+          default: ''
+
+        dry-run-mode:
+          description: "Dry-run mode"
+          required: true
+          type: boolean
+          default: true
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: false
+
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  publish-box-on-vagrant-cloud:
+    name: "Publish box on Vagrant Cloud"
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Prepare environment
+      run: |
+        image_file=$(basename ${{ inputs.image_url }})
+
+        # Regex for the modern and "Kitten" filename formats.
+        REGEX_MODERN="^AlmaLinux-(Kitten|[0-9]+)-Vagrant-([a-z]+)-([0-9\.]+)-([0-9\.]+)\.(aarch64|x86_64)(_v2)?\.box$"
+
+        # Regex for the legacy (AlmaLinux 8) filename format.
+        REGEX_LEGACY="^AlmaLinux-([0-9]+)-Vagrant-([0-9\.]+)-([0-9]+)\.(aarch64|x86_64)(_v2)?\.(.+)\.box$"
+
+        # Attempt to match the Modern/Kitten pattern first
+        if [[ "$image_file" =~ $REGEX_MODERN ]]; then
+          major_or_kitten="${BASH_REMATCH[1]}"
+          provider="${BASH_REMATCH[2]}"
+          release_version="${BASH_REMATCH[3]}"
+          date_stamp="${BASH_REMATCH[4]}"
+          architecture="${BASH_REMATCH[5]}"
+
+          if [[ "$major_or_kitten" == "Kitten" ]]; then
+            major_version="10" # Kitten is based on version 10
+            kitten_suffix="-kitten"
+            # The date stamp for Kitten keeps its trailing digit, so we do nothing.
+          else
+            major_version="$major_or_kitten"
+            # *** THE FIX IS HERE ***
+            # For non-Kitten files, remove the trailing .<digit> from the date stamp.
+            date_stamp="${date_stamp%.*}"
+          fi
+
+          # Check if the optional "_v2" group was captured
+          if [[ -n "${BASH_REMATCH[6]}" ]]; then
+            is_v2_suffix="-x86_64_v2"
+          fi
+
+        # Fall back to the Legacy pattern
+        elif [[ "$image_file" =~ $REGEX_LEGACY ]]; then
+          major_version="${BASH_REMATCH[1]}"
+          release_version="${BASH_REMATCH[2]}"
+          date_stamp="${BASH_REMATCH[3]}" # Legacy dates are already correct.
+          architecture="${BASH_REMATCH[4]}"
+          provider="${BASH_REMATCH[6]}"
+
+          # Check if the optional "_v2" group was captured
+          if [[ -n "${BASH_REMATCH[5]}" ]]; then
+            is_v2_suffix="-x86_64_v2"
+          fi
+
+        else
+          echo "[Error]: No pattern matched for '$image_file'" && exit 1
+          continue
+        fi
+
+        # Remap "vmware" to the correct Vagrant provider name "vmware_desktop"
+        if [[ "$provider" == "vmware" ]]; then
+          provider="vmware_desktop"
+        fi
+
+        # Construct the final complex major version string as requested
+        version_major="${major_version}${kitten_suffix}${is_v2_suffix}"
+
+        # AlmaLinux distro release string
+        [[ $version_major == *kitten* ]] && release_string="AlmaLinux OS Kitten $major_version $architecture" \
+          || release_string="AlmaLinux OS $major_version $architecture"
+
+        # Set corresponded environment variables
+        echo "version_major=${version_major}" >> $GITHUB_ENV
+        echo "vagrant_provider=${provider}" >> $GITHUB_ENV
+        echo "architecture=${architecture}" >> $GITHUB_ENV
+        echo "release_version=${release_version}" >> $GITHUB_ENV
+        echo "release_string=${release_string}" >> $GITHUB_ENV
+        echo "date_stamp=${date_stamp}" >> $GITHUB_ENV
+        echo "image_file=${image_file}" >> $GITHUB_ENV
+
+    - name: Download the box image file from ${{ inputs.image_url }}
+      run: |
+        # Download to the /mnt directory as it has ~70Gb of disk space
+        sudo chmod o+wx /mnt
+        if [[ ${{ inputs.dry-run-mode }} != "true" ]]; then
+          curl -s ${{ inputs.image_url }} -o /mnt/${{ env.image_file }}
+          test -e /mnt/${{ env.image_file }}
+        fi
+
+    - name: Add Hashicorp Ubuntu repository
+      run: |
+        # Add Hashicorp repository
+        ubuntu_codename="$(lsb_release -cs)"
+
+        sudo rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${ubuntu_codename} main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt-get -y update
+        sudo apt-get -y install hcp vagrant
+
+    - name: Publish the box
+      run: |
+        # Vagrant cloud publish
+        cd /mnt
+
+        [ ${{ env.architecture }} = "x86_64" ] && arch=amd64
+        [ ${{ env.architecture }} = "aarch64" ] && arch=arm64
+        [[ ${{ inputs.dry-run-mode }} = "true" ]] && checksum="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+          || checksum="$(sha256sum ${{ env.image_file }} | awk '{ print $1 }')"
+        echo "[Debug] provider=${{ env.vagrant_provider }} box_name=${{ env.version_major }} checksum=${checksum} image_file=${{ env.image_file }}"
+
+        hcp auth login --client-id=${{ secrets.HCP_CLIENT_ID }} --client-secret=${{ secrets.HCP_CLIENT_SECRET }}
+        export VAGRANT_CLOUD_TOKEN="$(hcp auth print-access-token)"
+        [[ ${{ inputs.dry-run-mode }} = "true" ]] && cmd="echo " \
+          || cmd=''
+        ${cmd}vagrant cloud publish \
+          -C sha256 \
+          -c ${checksum} \
+          --release \
+          -a ${arch} \
+          --direct-upload \
+          --debug \
+          -f \
+          "${{ vars.HCP_ORG }}/${{ env.version_major }}" \
+          ${{ env.release_version }}.${{ env.date_stamp }} \
+          ${{ env.vagrant_provider }} \
+          ${{ env.image_file }}
+
+    - name: The job summary
+      uses: actions/github-script@v7
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addRaw('**${{ env.release_string }}** Vagrant box cloud publishing\n')
+              .addRaw('Vagrant box for **${{ env.vagrant_provider }}** version: `${{ env.release_version }}.${{ env.date_stamp }}`\n')
+              .addRaw('The box name: ')
+              .addLink('${{ vars.HCP_ORG }}/${{ env.version_major }}', 'https://portal.cloud.hashicorp.com/vagrant/discover/${{ vars.HCP_ORG }}/${{ env.version_major }}/versions/${{ env.release_version }}.${{ env.date_stamp }}')
+              .addRaw('Published to the Cloud: ${{ inputs.dry-run-mode && '❌' || '✅' }}')
+              .write()
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.release_string }}** Vagrant box cloud publishing, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          Vagrant box for **${{ env.vagrant_provider }}** version: `${{ env.release_version }}.${{ env.date_stamp }}`
+
+          The box name: [${{ vars.HCP_ORG }}/${{ env.version_major }}](https://portal.cloud.hashicorp.com/vagrant/discover/${{ vars.HCP_ORG }}/${{ env.version_major }}/versions/${{ env.release_version }}.${{ env.date_stamp }})
+
+          Published to the Cloud: ${{ inputs.dry-run-mode && '❌' || '✅' }}
