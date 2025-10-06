@@ -84,6 +84,8 @@ on:
           required: true
           type: boolean
           default: false
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
 jobs:
   init-data:
@@ -107,11 +109,12 @@ jobs:
             VARIANTS_GH+=("azure-x86_64")
             VARIANTS_SH+=("azure-aarch64")
           fi
-          if [ "${{ inputs.image_type }}" = "digitalocean" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            if [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && [[ "${{ inputs.version_major }}" != *"10"  ]]; then
-              VARIANTS_GH+=("digitalocean-x86_64")
-            fi
-          fi
+          # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
+          # if [ "${{ inputs.image_type }}" = "digitalocean" -o "${{ inputs.image_type }}" = "ALL" ]; then
+          #   if [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && [[ "${{ inputs.version_major }}" != *"10"  ]]; then
+          #     VARIANTS_GH+=("digitalocean-x86_64")
+          #   fi
+          # fi
           if [ "${{ inputs.image_type }}" = "gencloud" -o "${{ inputs.image_type }}" = "ALL" ]; then
             VARIANTS_GH+=("gencloud-x86_64")
             VARIANTS_SH+=("gencloud-aarch64")
@@ -168,7 +171,7 @@ jobs:
     name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
-    runs-on: ubuntu-24.04
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64', github.run_id) || 'ubuntu-24.04' }}"
     strategy:
       fail-fast: false
       matrix:
@@ -178,9 +181,6 @@ jobs:
           - matrix_gh: 'azure-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'oci-x86_64'
-            variant: '10-kitten-v2'
-          # Kitten x86_64_v2 Vagrant for VirtualBox stuck on "Waiting for SSH to become available"
-          - matrix_gh: 'vagrant_virtualbox-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'digitalocean-x86_64'
             variant: '10-kitten-v2'
@@ -222,8 +222,7 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: ${{ inputs.run_test }} # Do image simple testing and generate installed packages list (vagrant_* only)
-          # runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
-          runner: gh_hosted
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
@@ -258,13 +257,6 @@ jobs:
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-64k'
-          # Metal runners can't run in parallel, so we exclude 64k images
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '9-64k'
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '10-kitten-64k'
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '10-64k'
 
     steps:
     - name: Setup and start runner
@@ -323,13 +315,6 @@ jobs:
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-64k'
-          # Metal runners can't run in parallel, so we exclude 64k images
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '9-64k'
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '10-kitten-64k'
-          # - matrix_sh: 'azure-aarch64'
-          #   variant: '10-64k'
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
