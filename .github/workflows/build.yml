@@ -221,7 +221,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: ${{ inputs.run_test }} # Do image simple testing and generate installed packages list (vagrant_* only)
+          run_test: ${{ contains(env.type, 'vagrant') && inputs.run_test && 'true' || 'false' }} # Do image simple testing and generate installed packages list (vagrant_* only)
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -350,7 +350,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: ${{ inputs.run_test }} # Do image simple testing and generate installed packages list (vagrant_* only)
+          run_test: ${{ contains(env.type, 'vagrant') && inputs.run_test && 'true' || 'false' }} # Do image simple testing and generate installed packages list (vagrant_* only)
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'self_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
