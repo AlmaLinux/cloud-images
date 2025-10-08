@@ -80,10 +80,8 @@ runs:
             ;;
         esac
 
-        # Image type e.g. Azure, Vagrant libvirt, ...
-        image_type=${{ inputs.type }}
-        image_type=${image_type//_/ }
-        image_type=${image_type^}
+        # Image type e.g. Azure, Vagrant Libvirt, ...
+        image_type=$(echo ${{ inputs.type }} | sed -E 's/_/ /g;s/\b(.)/\u\1/g')
 
         # Release string and version
         if [[ ${{ env.version_major }} != *'kitten'* ]]; then
@@ -228,7 +226,7 @@ runs:
 
         echo "PACKER_OPTS=${packer_opts}" >> $GITHUB_ENV
 
-        echo "IMAGE_TYPE=${image_type}" >> $GITHUB_ENV
+        echo "IMAGE_TYPE=${image_type}${{ contains(inputs.variant, '64k') && ' 64k' || '' }}" >> $GITHUB_ENV
         echo "RELEASE=${release}" >> "$GITHUB_ENV"
         echo "packer_source=${packer_source}" >> $GITHUB_ENV
         echo "output_mask=${output_mask}" >> $GITHUB_ENV
@@ -371,7 +369,6 @@ runs:
       shell: bash
       run: |
         # Locate image file, generate checksum
-        ls -la $(dirname '${{ env.output_mask }}')
         image_file=$(ls -1 ${{ env.output_mask }} | head -n 1)
         [ "x${image_file}" = "x" ] && false
         cd $(dirname ${image_file})
@@ -384,9 +381,7 @@ runs:
     #   uses: mxschmitt/action-tmate@v3
 
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
-      # Skip testing for vagrant_virtualbox on GH runner because 'vugrant up' fails to connect to the newly created VM via ssh:
-      # kex_exchange_identification: read: Connection reset by peer
-      if: ( inputs.type == 'vagrant_libvirt' || inputs.type == 'vagrant_vmware' || ( inputs.type == 'vagrant_virtualbox' && inputs.runner == 'self_hosted' ) ) && inputs.run_test == 'true'
+      if: inputs.run_test == 'true'
       shell: bash
       run: |
         # Test ${{ inputs.type }} ${{ inputs.variant }} image
@@ -412,9 +407,11 @@ runs:
           end
         end
         EOF
+        # Run 'vagrant up' with specific provider
+        box_up=true
         case ${{ inputs.type }} in
           vagrant_virtualbox*)
-            sudo vagrant up --provider=virtualbox
+            sudo vagrant up --provider=virtualbox || box_up=false
             ;;
           vagrant_vmware*)
             vagrant_vmware_utility_version=1.0.23
@@ -440,27 +437,34 @@ runs:
             sudo systemctl restart vagrant-vmware-utility.service
 
             sudo vagrant plugin install vagrant-vmware-desktop
-            sudo vagrant up --provider=vmware_desktop
+            sudo vagrant up --provider=vmware_desktop || box_up=false
             ;;
           vagrant_libvirt*)
             [[ "${{ inputs.runner }}" = "aws-ec2" ]] && sudo systemctl restart libvirtd
             [ "${{ env.runner_os }}" = "ubuntu" ] && \
               sudo apt-get -y install libvirt-daemon-system libvirt-dev ebtables libguestfs-tools >/dev/null
             sudo vagrant plugin install vagrant-libvirt
-            sudo vagrant up --provider=libvirt
+            # TODO: 'vagrant up' may fail to connect to the newly created VM via ssh. The error is:
+            # kex_exchange_identification: read: Connection reset by peer
+            sudo vagrant up --provider=libvirt || box_up=false
             ;;
         esac
-        echo "[Debug] Do simple checking"
-        sudo vagrant ssh default -c "cat /etc/almalinux-release | grep '${{ env.RELEASE_STRING }}'"
-        sudo vagrant ssh default -c "rpm -q --qf='%{ARCH}\n' ${{ env.RELEASE_PACKAGE }}"
-        sudo vagrant ssh default -c "sudo dnf check-update"
-        # Get installed packages list
-        sudo vagrant ssh default -c "rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
-        sudo vagrant scp default:${{ env.IMAGE_FILE }}.txt ./${{ env.IMAGE_FILE }}.txt
-        # Cleanup Vagrant VM and box
-        sudo vagrant destroy $(vagrant global-status | grep default | awk '{print $1}') --force || true
-        sudo vagrant box remove ${{ inputs.type }}-${{ inputs.variant }} --force || true
-        sudo rm -f Vagrantfile || true
+
+        if [ "${box_up}" = "true" ]; then
+          echo "[Debug] AlmaLinux release:"
+          sudo vagrant ssh default -c "grep '${{ env.RELEASE_STRING }}' /etc/almalinux-release"
+          echo "[Debug] System architecture:"
+          sudo vagrant ssh default -c "rpm -q --qf='%{ARCH}\n' ${{ env.RELEASE_PACKAGE }} | grep '${{ env.alma_arch }}'"
+          echo "[Debug] Check for updates:"
+          sudo vagrant ssh default -c "sudo dnf check-update"
+          # Get installed packages list
+          sudo vagrant ssh default -c "rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
+          sudo vagrant scp default:${{ env.IMAGE_FILE }}.txt ./${{ env.IMAGE_FILE }}.txt
+          # Cleanup Vagrant VM and box
+          sudo vagrant destroy $(vagrant global-status | grep default | awk '{print $1}') --force || true
+          sudo vagrant box remove ${{ inputs.type }}-${{ inputs.variant }} --force || true
+          sudo rm -f Vagrantfile || true
+        fi
 
         [ -f ${{ env.IMAGE_FILE }}.txt ] \
           && echo "got_pkgs_list=true" >> $GITHUB_ENV \
@@ -526,60 +530,60 @@ runs:
           aws s3api put-object-tagging --bucket ${{ inputs.AWS_S3_BUCKET }} --key ${{ env.AWS_S3_PATH }}/${object} --tagging 'TagSet={Key=public,Value=yes}'
         done
 
-    - name: Put S3 Bucket download URLs
-      if: inputs.upload_to_s3 == 'true'
+    - name: Print workflow summary
       uses: actions/github-script@v7
       env:
         got_pkgs_list: ${{ env.got_pkgs_list || 'false' }}
+        upload_to_s3: ${{ inputs.upload_to_s3 || 'false' }}
       with:
         result-encoding: string
         script: |
           const summary = core.summary
-            .addHeading('S3 Bucket download URLs', '4')
-            .addLink('${{ env.IMAGE_NAME }}.sha256sum', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum')
-            .addBreak()
-            .addLink('${{ env.IMAGE_NAME }}', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}');;
-
-          if (process.env.got_pkgs_list === 'true') {
+            .addRaw('**AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
+          if (process.env.upload_to_s3 === 'true') {
             summary
-              .addBreak()
+              .addRaw('S3 Bucket download URLs:\n')
+              .addLink('${{ env.IMAGE_NAME }}', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}')
+              .addLink('${{ env.IMAGE_NAME }}.sha256sum', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum');
+          }
+          if (process.env.got_pkgs_list === 'true' && process.env.upload_to_s3 === 'true') {
+            summary
               .addLink('${{ env.IMAGE_NAME }}.txt', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.txt');
           }
-
+          {
+            summary
+              .addRaw('Tests ${{ inputs.run_test == 'true' && 'passed ✅' || 'N/A ⚠️' }}');
+          }
           summary.write();
 
-    - name: Send notification to Mattermost (Artifacts)
+    - name: Prepare Mattermost notification message
+      if: ${{ inputs.notify_mattermost == 'true' }}
+      shell: bash
+      run: |
+        {
+          echo 'MATTERMOST_NOTIFICATION_MESSAGE<<EOF'
+
+          echo ":almalinux: **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [ "${{ inputs.store_as_artifact }}" = "true" -a "${{ inputs.upload_to_s3 }}" = "false" ]; then
+            echo "- CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})"
+            echo "- Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})"
+            echo "${{ env.got_pkgs_list == 'true' && format('- Packages list [zipped]: [{0}.txt]({1})', env.IMAGE_NAME, steps.pkglist-artifact.outputs.artifact-url) || ''}}"
+          fi
+          if [ "${{ inputs.upload_to_s3 }}" = "true" ]; then
+            echo "- CHECKSUM(SHA256): [${{ env.IMAGE_NAME }}.sha256sum](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum)"
+            echo "- Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})"
+            echo "${{ env.got_pkgs_list == 'true' && format('- Packages list: [{0}.txt](https://{1}.s3-accelerate.dualstack.amazonaws.com/{2}/{3}.txt)', env.IMAGE_NAME, inputs.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || ''}}"
+          fi
+          echo "- Tests ${{ inputs.run_test == 'true' && 'passed ✅' || 'N/A ⚠️' }}"
+
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Send notification to Mattermost
       uses: mattermost/action-mattermost-notify@master
-      if: ${{ inputs.store_as_artifact == 'true' && inputs.notify_mattermost == 'true' && inputs.upload_to_s3 == 'false' }}
+      if: ${{ inputs.notify_mattermost == 'true' }}
       with:
         MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
         MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
         MATTERMOST_USERNAME: ${{ github.triggering_actor }}
-        TEXT: |
-          **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** Cloud Images `${{ env.TIME_STAMP }}` generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-          :almalinux: **${{ env.IMAGE_TYPE }}**
-
-          - CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})
-
-          - Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})
-
-          ${{ env.got_pkgs_list == 'true' && format('- Packages list [zipped]: [{0}.txt]({1})', env.IMAGE_NAME, steps.pkglist-artifact.outputs.artifact-url) || ''}}
-
-    - name: Send notification to Mattermost (AWS S3 links)
-      uses: mattermost/action-mattermost-notify@master
-      if: ${{ inputs.upload_to_s3 == 'true' && inputs.notify_mattermost == 'true' }}
-      with:
-        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
-        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
-        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
-        TEXT: |
-          **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** Cloud Images `${{ env.TIME_STAMP }}` generated by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-          :almalinux: **${{ env.IMAGE_TYPE }}**
-
-          - CHECKSUM(SHA256): [${{ env.IMAGE_NAME }}.sha256sum](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum)
-
-          - Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})
-
-          ${{ env.got_pkgs_list == 'true' && format('- Packages list: [{0}.txt](https://{1}.s3-accelerate.dualstack.amazonaws.com/{2}/{3}.txt)', env.IMAGE_NAME, inputs.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || ''}}
+        TEXT: ${{ env.MATTERMOST_NOTIFICATION_MESSAGE }}
