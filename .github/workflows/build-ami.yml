@@ -175,6 +175,9 @@ jobs:
           - x86_64
 
     steps:
+      - name: Get list of installed packages
+        run: rpm -qa --queryformat '%{NAME}\n' | sort > pkgs.list
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
@@ -221,11 +224,17 @@ jobs:
           case "${{ env.OS_VERSION }}" in
             10)
               OS_RELEASE="AlmaLinux Kitten release ${{ env.OS_VERSION }}"
+              PKGS_LIST_FILE="AlmaLinux_OS_Kitten_${{ env.AMI_VERSION }}_${{ env.AMI_ARCH }}.ami.txt"
               ;;
             *)
               OS_RELEASE="AlmaLinux release ${{ env.OS_VERSION }}"
+              PKGS_LIST_FILE="AlmaLinux_OS_${{ env.AMI_VERSION }}_${{ env.AMI_ARCH }}.ami.txt"
               ;;
           esac
+
+          # Prepare packages list file
+          mv pkgs.list ${PKGS_LIST_FILE}
+          echo "PKGS_LIST_FILE=${PKGS_LIST_FILE}" >> $GITHUB_ENV
 
           echo "[Debug] AlmaLinux release:"
           grep "${OS_RELEASE}" /etc/almalinux-release || exit 1
@@ -233,3 +242,10 @@ jobs:
           rpm -q --qf='%{ARCH}\n' $(rpm -qf /etc/almalinux-release) | grep '${{ env.AMI_ARCH }}' || exit 1
           echo "[Debug] Check for updates:"
           dnf check-update || exit 1
+
+      - uses: actions/upload-artifact@v4
+        name: Store packages list as artifact
+        with:
+          compression-level: 1
+          name: ${{ env.PKGS_LIST_FILE }}
+          path: ${{ env.PKGS_LIST_FILE }}
