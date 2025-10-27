@@ -787,7 +787,7 @@ variable "aws_volume_size" {
   description = "Volume size for AMI in GiB"
 
   type    = number
-  default = 4
+  default = 5
 }
 
 variable "aws_instance_type_x86_64" {
