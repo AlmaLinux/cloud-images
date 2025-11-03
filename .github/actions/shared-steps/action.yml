@@ -380,6 +380,59 @@ runs:
     # - name: Setup tmate session
     #   uses: mxschmitt/action-tmate@v3
 
+    - name: List installed packages in ${{ env.IMAGE_FILE }} cloud image
+      if: ${{ ! contains(inputs.type, 'vagrant') }}
+      shell: bash
+      run: |
+        # List installed packages in ${{ env.IMAGE_FILE }} image
+
+        # Partition number with root file-system
+        case ${{ inputs.arch }} in
+          x86_64*) partition=4 ;;
+          aarch64*) partition=3 ;;
+          *) false ;;
+        esac
+
+        # Image file format: raw or qcow2
+        case ${{ inputs.type }} in
+          oci|gencloud|opennebula) format=qcow2 ;;
+          azure) format=raw ;;
+          *) false ;;
+        esac
+        rootfs_path=/mnt/rootfs
+        sudo mkdir -p ${rootfs_path}
+
+        # Install qemu-utils
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} \
+          -y install \
+          ${{ env.runner_os == 'ubuntu' && 'qemu-utils' || 'qemu-img' }}
+
+        # Load nbd kernel module
+        sudo modprobe nbd max_part=8
+
+        # Make a copy of the image file
+        sudo cp ${{ env.IMAGE_FILE }} $(dirname ${rootfs_path})
+
+        # Attach the image file to the nbd device
+        sudo qemu-nbd \
+          --read-only \
+          --format=${format} \
+          --connect=/dev/nbd0 \
+          $(dirname ${rootfs_path})/$(basename ${{ env.IMAGE_FILE }}) \
+          && sleep 10 || false
+
+        # Mount need partition
+        sudo fdisk -l /dev/nbd0
+        sudo mount /dev/nbd0p${partition} ${rootfs_path} \
+          && sleep 10 || false
+
+        # Get installed packages list
+        sudo sh -c "rpm --dbpath=${rootfs_path}/var/lib/rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
+
+        [ -f ${{ env.IMAGE_FILE }}.txt ] \
+          && echo "got_pkgs_list=true" >> $GITHUB_ENV \
+          || echo "got_pkgs_list=false" >> $GITHUB_ENV
+
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
       if: inputs.run_test == 'true'
       shell: bash
@@ -539,7 +592,7 @@ runs:
         result-encoding: string
         script: |
           const summary = core.summary
-            .addRaw('**AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
+            .addRaw('**${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
           if (process.env.upload_to_s3 === 'true') {
             summary
               .addRaw('S3 Bucket download URLs:\n')
@@ -563,7 +616,7 @@ runs:
         {
           echo 'MATTERMOST_NOTIFICATION_MESSAGE<<EOF'
 
-          echo ":almalinux: **AlmaLinux OS ${{ env.RELEASE }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          echo ":almalinux: **${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           if [ "${{ inputs.store_as_artifact }}" = "true" -a "${{ inputs.upload_to_s3 }}" = "false" ]; then
             echo "- CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})"
             echo "- Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})"
