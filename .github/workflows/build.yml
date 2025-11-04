@@ -31,6 +31,7 @@ on:
             - azure
             # - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
             - gencloud
+            - hyperv
             - oci
             - opennebula
 
@@ -128,6 +129,9 @@ jobs:
           if [ "${{ inputs.image_type }}" = "opennebula" -o "${{ inputs.image_type }}" = "ALL" ]; then
             VARIANTS_GH+=("opennebula-x86_64")
             VARIANTS_SH+=("opennebula-aarch64")
+          fi
+          if [ "${{ inputs.image_type }}" = "hyperv" -o "${{ inputs.image_type }}" = "ALL" ]; then
+            VARIANTS_GH+=("hyperv-x86_64")
           fi
 
           # Vagrant Images

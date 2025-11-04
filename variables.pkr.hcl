@@ -1179,6 +1179,131 @@ variable "hyperv_switch_name" {
   default = null
 }
 
+variable "hyperv_boot_command_8_x86_64" {
+  description = "Boot command for AlmaLinux OS 8 Hyper-V x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.hyperv-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "hyperv_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 Hyper-V x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.vagrant-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "hyperv_boot_command_kitten_10_x86_64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Hyper-V x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.vagrant-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "hyperv_boot_command_kitten_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Hyper-V x86_64_v2"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.vagrant-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "hyperv_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 Hyper-V x86_64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.vagrant-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "hyperv_boot_command_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS 10 Hyper-V x86_64_v2"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.vagrant-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
 # Parallels
 
 variable "parallels_tools_flavor_x86_64" {

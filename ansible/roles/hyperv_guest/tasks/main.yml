@@ -15,3 +15,8 @@
     - hypervvssd
     - hypervkvpd
     - hypervfcopyd
+
+- name: Delete qemu-guest-agent package
+  ansible.builtin.dnf:
+    name: qemu-guest-agent
+    state: absent

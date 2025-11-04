@@ -78,6 +78,37 @@ source "hyperv-iso" "almalinux-8" {
   headless              = var.headless
 }
 
+source "qemu" "almalinux-8-hyperv-x86_64" {
+  iso_url            = local.iso_url_8_x86_64
+  iso_checksum       = local.iso_checksum_8_x86_64
+  http_directory     = var.http_directory
+  shutdown_command   = var.vagrant_shutdown_command
+  ssh_username       = var.vagrant_ssh_username
+  ssh_password       = var.vagrant_ssh_password
+  ssh_timeout        = var.ssh_timeout
+  boot_command       = var.hyperv_boot_command_8_x86_64
+  boot_wait          = var.boot_wait
+  accelerator        = "kvm"
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.vagrant_disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  format             = "raw"
+  headless           = var.headless
+  machine_type       = "q35"
+  memory             = var.memory_x86_64
+  net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
+  vm_name            = "almalinux-8-hyperv-x86_64.raw"
+  cpu_model          = "host"
+  cpus               = var.cpus
+  efi_boot           = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
+  efi_drop_efivars   = true
+}
+
 source "vmware-iso" "almalinux-8" {
   iso_url                        = local.iso_url_8_x86_64
   iso_checksum                   = local.iso_checksum_8_x86_64
@@ -129,6 +160,7 @@ build {
     "source.qemu.almalinux-8",
     "source.virtualbox-iso.almalinux-8",
     "source.hyperv-iso.almalinux-8",
+    "source.qemu.almalinux-8-hyperv-x86_64",
     "source.vmware-iso.almalinux-8",
     "source.parallels-iso.almalinux-8",
   ]
@@ -177,10 +209,34 @@ build {
     only = ["hyperv-iso.almalinux-8"]
   }
 
+  provisioner "ansible" {
+    user                 = "vagrant"
+    use_proxy            = false
+    galaxy_file          = "./ansible/requirements.yml"
+    galaxy_force_install = true
+    collections_path     = "./ansible/collections"
+    roles_path           = "./ansible/roles"
+    playbook_file        = "./ansible/hyperv.yml"
+    ansible_env_vars = [
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+    ]
+    extra_arguments = [
+      "--extra-vars",
+      "packer_provider=${source.type} ansible_ssh_pass=vagrant is_unified_boot=true",
+    ]
+    only = ["qemu.almalinux-8-hyperv-x86_64"]
+  }
+
   provisioner "shell" {
     expect_disconnect = true
     inline            = ["sudo rm -fr /etc/ssh/*host*key*"]
-    only              = ["hyperv-iso.almalinux-8"]
+    only              = [
+      "hyperv-iso.almalinux-8",
+      "qemu.almalinux-8-hyperv-x86_64",
+    ]
   }
 
   provisioner "ansible" {
@@ -219,6 +275,32 @@ build {
         "vmware-iso.almalinux-8",
         "parallels-iso.almalinux-8",
       ]
+    }
+
+    # The shell-local post-processor creates the box file for the Hyper-V, with the following content:
+    # - Virtual Machines/box.xml, copied from the templated file
+    # - Virtual Hard Disks/almalinux.vhdx, converted with qemu-img from the raw image
+    # - Vagrantfile, empty file
+    # - metadata.json, with the architecture and provider information
+    #
+    # These files are packed by the tar+gzip to match Hyper-V box file format
+    #
+    # The predefined vagrant post-processor is not used, because it skips 'Virtual Machines' and 'Virtual Hard Disks' directories.
+    #
+    # The raw image is not used by the Hyper-V, but it is kept for the GitHub Actions workflow to extract packages list from it
+    #
+    post-processor "shell-local" {
+      inline = [
+        "mkdir -p '${source.name}/Virtual Machines' '${source.name}/Virtual Hard Disks'",
+        "touch ${source.name}/Vagrantfile",
+        "echo '{\"architecture\":\"amd64\",\"provider\":\"hyperv\"}' > ${source.name}/metadata.json",
+        "cp -a ./tpl/vagrant/hyperv/box.xml '${source.name}/Virtual Machines/box.xml'",
+        "qemu-img convert -f raw -O vhdx output-${source.name}/${source.name}.raw '${source.name}/Virtual Hard Disks/almalinux.vhdx'",
+        "cd ${source.name}",
+        "tar --use-compress-program='gzip -9' -cvf ../AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.box .",
+        "mv ../output-${source.name}/${source.name}.raw ../AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.raw"
+      ]
+      only = ["qemu.almalinux-8-hyperv-x86_64"]
     }
   }
 }
