@@ -21,6 +21,37 @@ source "hyperv-iso" "almalinux_10_vagrant_hyperv_x86_64" {
   headless              = var.headless
 }
 
+source "qemu" "almalinux_10_vagrant_hyperv_x86_64" {
+  iso_url            = local.iso_url_10_x86_64
+  iso_checksum       = local.iso_checksum_10_x86_64
+  http_directory     = var.http_directory
+  shutdown_command   = var.vagrant_shutdown_command
+  ssh_username       = var.vagrant_ssh_username
+  ssh_password       = var.vagrant_ssh_password
+  ssh_timeout        = var.ssh_timeout
+  boot_command       = var.hyperv_boot_command_10_x86_64
+  boot_wait          = var.boot_wait
+  accelerator        = "kvm"
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.vagrant_disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  format             = "raw"
+  headless           = var.headless
+  machine_type       = "q35"
+  memory             = var.memory_x86_64
+  net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
+  vm_name            = "almalinux_10_vagrant_hyperv_x86_64.raw"
+  cpu_model          = "host"
+  cpus               = var.cpus
+  efi_boot           = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
+  efi_drop_efivars   = true
+}
+
 source "qemu" "almalinux_10_vagrant_libvirt_x86_64" {
   iso_url            = local.iso_url_10_x86_64
   iso_checksum       = local.iso_checksum_10_x86_64
@@ -192,6 +223,37 @@ source "hyperv-iso" "almalinux_10_vagrant_hyperv_x86_64_v2" {
   headless              = var.headless
 }
 
+source "qemu" "almalinux_10_vagrant_hyperv_x86_64_v2" {
+  iso_url            = local.iso_url_10_x86_64_v2
+  iso_checksum       = local.iso_checksum_10_x86_64_v2
+  http_directory     = var.http_directory
+  shutdown_command   = var.vagrant_shutdown_command
+  ssh_username       = var.vagrant_ssh_username
+  ssh_password       = var.vagrant_ssh_password
+  ssh_timeout        = var.ssh_timeout
+  boot_command       = var.hyperv_boot_command_10_x86_64_v2
+  boot_wait          = var.boot_wait
+  accelerator        = "kvm"
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.vagrant_disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  format             = "raw"
+  headless           = var.headless
+  machine_type       = "q35"
+  memory             = var.memory_x86_64
+  net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
+  vm_name            = "almalinux_10_vagrant_hyperv_x86_64_v2.raw"
+  cpu_model          = "host"
+  cpus               = var.cpus
+  efi_boot           = true
+  efi_firmware_code  = var.ovmf_code
+  efi_firmware_vars  = var.ovmf_vars
+  efi_drop_efivars   = true
+}
+
 source "qemu" "almalinux_10_vagrant_libvirt_x86_64_v2" {
   iso_url            = local.iso_url_10_x86_64_v2
   iso_checksum       = local.iso_checksum_10_x86_64_v2
@@ -281,6 +343,7 @@ source "vmware-iso" "almalinux_10_vagrant_vmware_x86_64_v2" {
 build {
   sources = [
     "source.hyperv-iso.almalinux_10_vagrant_hyperv_x86_64",
+    "source.qemu.almalinux_10_vagrant_hyperv_x86_64",
     "source.qemu.almalinux_10_vagrant_libvirt_x86_64",
     "source.virtualbox-iso.almalinux_10_vagrant_virtualbox_x86_64",
     "source.vmware-iso.almalinux_10_vagrant_vmware_x86_64",
@@ -288,6 +351,7 @@ build {
     "source.virtualbox-iso.almalinux_10_vagrant_virtualbox_aarch64",
     "source.vmware-iso.almalinux_10_vagrant_vmware_aarch64",
     "source.hyperv-iso.almalinux_10_vagrant_hyperv_x86_64_v2",
+    "source.qemu.almalinux_10_vagrant_hyperv_x86_64_v2",
     "source.qemu.almalinux_10_vagrant_libvirt_x86_64_v2",
     "source.virtualbox-iso.almalinux_10_vagrant_virtualbox_x86_64_v2",
     "source.vmware-iso.almalinux_10_vagrant_vmware_x86_64_v2",
@@ -317,12 +381,38 @@ build {
     ]
   }
 
+  provisioner "ansible" {
+    user                 = "vagrant"
+    use_proxy            = false
+    galaxy_file          = "./ansible/requirements.yml"
+    galaxy_force_install = true
+    collections_path     = "./ansible/collections"
+    roles_path           = "./ansible/roles"
+    playbook_file        = "./ansible/hyperv.yml"
+    ansible_env_vars = [
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
+      "ANSIBLE_HOST_KEY_CHECKING=False",
+    ]
+    extra_arguments = [
+      "--extra-vars",
+      "packer_provider=${source.type} ansible_ssh_pass=vagrant",
+    ]
+    only = [
+      "qemu.almalinux_10_vagrant_hyperv_x86_64",
+      "qemu.almalinux_10_vagrant_hyperv_x86_64_v2",
+    ]
+  }
+
   provisioner "shell" {
     expect_disconnect = true
     inline            = ["sudo rm -fr /etc/ssh/*host*key*"]
     only = [
       "hyperv-iso.almalinux_10_vagrant_hyperv_x86_64",
       "hyperv-iso.almalinux_10_vagrant_hyperv_x86_64_v2",
+      "qemu.almalinux_10_vagrant_hyperv_x86_64",
+      "qemu.almalinux_10_vagrant_hyperv_x86_64_v2",
     ]
   }
 
@@ -400,5 +490,36 @@ build {
       output               = "AlmaLinux-10-Vagrant-{{.Provider}}-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
       only                 = ["qemu.almalinux_10_vagrant_libvirt_x86_64_v2"]
     }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64"
+      ]
+      only = ["qemu.almalinux_10_vagrant_hyperv_x86_64"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2"
+      ]
+      only = ["qemu.almalinux_10_vagrant_hyperv_x86_64_v2"]
+    }
+
+    post-processor "artifice" {
+      files = [
+        "AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box",
+        "AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.raw",
+      ]
+      only = ["qemu.almalinux_10_vagrant_hyperv_x86_64"]
+    }
+
+    post-processor "artifice" {
+      files = [
+        "AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box",
+        "AlmaLinux-10-Vagrant-hyperv-${var.os_ver_10}-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.raw",
+      ]
+      only = ["qemu.almalinux_10_vagrant_hyperv_x86_64_v2"]
+    }
+
   }
 }

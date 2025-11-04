@@ -111,6 +111,28 @@ runs:
             output_mask=output-${packer_source}/AlmaLinux-*${{ env.version_major }}*.${{ env.alma_arch }}.raw
             packer_source=qemu.${packer_source}
             ;;
+          hyperv8)
+            packer_source=almalinux-${{ env.version_major }}-hyperv-${{ env.alma_arch }}
+            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.hyperv.box
+            packer_source=qemu.${packer_source}
+            ;;
+          hyperv9)
+            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
+            packer_source=qemu.${packer_source}
+            ;;
+          hyperv10)
+            packer_source=almalinux_10_vagrant_hyperv_${{ env.alma_arch }}
+            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
+            packer_source=qemu.${packer_source}
+            ;;
+          hyperv*kitten*)
+            packer_source=almalinux_kitten_10_vagrant_hyperv_${{ env.alma_arch }}
+            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=AlmaLinux-Kitten-Vagrant-hyperv-10-*.${{ env.alma_arch }}.box
+            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
+            packer_source=qemu.${packer_source}
+            ;;
           azure*kitten*)
             packer_source=almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
             [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
@@ -394,9 +416,20 @@ runs:
         esac
 
         # Image file format: raw or qcow2
+        # Image file name is redefined for the Hyper-V, as it is build using Qemu and converted to .box file
         case ${{ inputs.type }} in
-          oci|gencloud|opennebula) format=qcow2 ;;
-          azure) format=raw ;;
+          oci|gencloud|opennebula)
+            format=qcow2
+            image_file=${{ env.IMAGE_FILE }}
+            ;;
+          hyperv)
+            format=raw
+            image_file=$(echo ${{ env.IMAGE_FILE }} | sed 's/\.box$/.raw/')
+            ;;
+          azure)
+            format=raw
+            image_file=${{ env.IMAGE_FILE }}
+            ;;
           *) false ;;
         esac
         rootfs_path=/mnt/rootfs
@@ -411,14 +444,14 @@ runs:
         sudo modprobe nbd max_part=8
 
         # Make a copy of the image file
-        sudo cp ${{ env.IMAGE_FILE }} $(dirname ${rootfs_path})
+        sudo cp ${image_file} $(dirname ${rootfs_path})
 
         # Attach the image file to the nbd device
         sudo qemu-nbd \
           --read-only \
           --format=${format} \
           --connect=/dev/nbd0 \
-          $(dirname ${rootfs_path})/$(basename ${{ env.IMAGE_FILE }}) \
+          $(dirname ${rootfs_path})/$(basename ${image_file}) \
           && sleep 10 || false
 
         # Mount need partition
