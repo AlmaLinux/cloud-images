@@ -19,6 +19,20 @@
   loop_control:
     label: "{{ item.path }}"
 
+- name: Find NetworkManager system connection files
+  ansible.builtin.find:
+    paths: /etc/NetworkManager/system-connections
+    patterns: "*.nmconnection"
+  register: networkmanager_system_connection_files
+
+- name: Delete found NetworkManager system connection files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ networkmanager_system_connection_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
 - name: Delete DNF cache
   command: dnf clean all
 
