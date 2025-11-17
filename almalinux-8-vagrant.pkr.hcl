@@ -277,30 +277,20 @@ build {
       ]
     }
 
-    # The shell-local post-processor creates the box file for the Hyper-V, with the following content:
-    # - Virtual Machines/box.xml, copied from the templated file
-    # - Virtual Hard Disks/almalinux.vhdx, converted with qemu-img from the raw image
-    # - Vagrantfile, empty file
-    # - metadata.json, with the architecture and provider information
-    #
-    # These files are packed by the tar+gzip to match Hyper-V box file format
-    #
-    # The predefined vagrant post-processor is not used, because it skips 'Virtual Machines' and 'Virtual Hard Disks' directories.
-    #
-    # The raw image is not used by the Hyper-V, but it is kept for the GitHub Actions workflow to extract packages list from it
-    #
     post-processor "shell-local" {
       inline = [
-        "mkdir -p '${source.name}/Virtual Machines' '${source.name}/Virtual Hard Disks'",
-        "touch ${source.name}/Vagrantfile",
-        "echo '{\"architecture\":\"amd64\",\"provider\":\"hyperv\"}' > ${source.name}/metadata.json",
-        "cp -a ./tpl/vagrant/hyperv/box.xml '${source.name}/Virtual Machines/box.xml'",
-        "qemu-img convert -f raw -O vhdx output-${source.name}/${source.name}.raw '${source.name}/Virtual Hard Disks/almalinux.vhdx'",
-        "cd ${source.name}",
-        "tar --use-compress-program='gzip -9' -cvf ../AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.box .",
-        "mv ../output-${source.name}/${source.name}.raw ../AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.raw"
+        "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv"
       ]
       only = ["qemu.almalinux-8-hyperv-x86_64"]
     }
+
+    post-processor "artifice" {
+      files = [
+        "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.box",
+        "AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv.raw",
+      ]
+      only = ["qemu.almalinux-8-hyperv-x86_64"]
+    }
+
   }
 }

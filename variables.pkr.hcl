@@ -1195,7 +1195,7 @@ variable "hyperv_boot_command_8_x86_64" {
     "<spacebar>",
     "inst.text",
     "<spacebar>",
-    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.hyperv-x86_64.ks",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.vagrant-x86_64.ks",
     "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
