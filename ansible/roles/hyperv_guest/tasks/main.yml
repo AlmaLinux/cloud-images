@@ -15,3 +15,14 @@
     - hypervvssd
     - hypervkvpd
     - hypervfcopyd
+
+- name: Delete qemu-guest-agent package
+  ansible.builtin.dnf:
+    name: qemu-guest-agent
+    state: absent
+
+- name: Upgrade initramfs with hv_netvsc and hv_storvsc included
+  ansible.builtin.shell:
+    cmd: dracut -fv --add-drivers " hv_netvsc hv_storvsc " --kver $(rpm -q --queryformat "%{VERSION}-%{RELEASE}.%{ARCH}\n" kernel-core)
+  changed_when: true
+  when: ansible_facts['distribution_major_version'] | int == 8
