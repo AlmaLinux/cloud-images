@@ -108,8 +108,8 @@ jobs:
         # Download to the /mnt directory as it has ~70Gb of disk space
         sudo chmod o+wx /mnt
         if [[ ${{ inputs.dry-run-mode }} != "true" ]]; then
-          curl -s ${{ inputs.image_url }} -o /mnt/${{ env.image_file }}
-          test -e /mnt/${{ env.image_file }}
+          curl --fail -s ${{ inputs.image_url }} -o /mnt/${{ env.image_file }}
+          gzip -t /mnt/${{ env.image_file }} || exit 1
         fi
 
     - name: Add Hashicorp Ubuntu repository
