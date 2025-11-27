@@ -380,7 +380,7 @@ runs:
     # - name: Setup tmate session
     #   uses: mxschmitt/action-tmate@v3
 
-    - name: List installed packages in ${{ env.IMAGE_FILE }} cloud image
+    - name: Test/check release and architecture, list installed packages in ${{ env.IMAGE_FILE }} cloud image
       if: ${{ ! contains(inputs.type, 'vagrant') }}
       shell: bash
       run: |
@@ -425,6 +425,12 @@ runs:
         sudo fdisk -l /dev/nbd0
         sudo mount /dev/nbd0p${partition} ${rootfs_path} \
           && sleep 10 || false
+
+        echo "[Debug] AlmaLinux release:"
+        grep '${{ env.RELEASE_STRING }}' ${rootfs_path}/etc/almalinux-release
+
+        echo "[Debug] System architecture:"
+        rpm --dbpath=${rootfs_path}/var/lib/rpm -q --qf='%{ARCH}\n' ${{ env.RELEASE_PACKAGE }} | grep '${{ env.alma_arch }}'
 
         # Get installed packages list
         sudo sh -c "rpm --dbpath=${rootfs_path}/var/lib/rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
