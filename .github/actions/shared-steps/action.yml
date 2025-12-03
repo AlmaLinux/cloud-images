@@ -33,6 +33,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - uses: runs-on/action@v2
+      # only when in runs-on environment
+      if: env.RUNS_ON_VERSION != ''
+      with:
+        metrics: cpu,network,memory,disk,io
 
     - name: Runner OS, install extra packages
       shell: bash
@@ -65,14 +70,15 @@ runs:
         echo "version_major=${version_major}" >> $GITHUB_ENV
         echo "alma_arch=${alma_arch}" >> $GITHUB_ENV
 
-    - name: Prepare staff
+    - name: Prepare stuff
       shell: bash
       run: |
-        # Prepare staff
+        # Prepare stuff
+        packer_opts=
         case ${{ env.runner_os }} in
           ubuntu)
             # Packer options
-            packer_opts="-var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
+            packer_opts="-var qemu_binary=/usr/bin/qemu-system-${{ inputs.arch }} -var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
             ;;
           rhel)
             # Packer options
@@ -103,6 +109,10 @@ runs:
 
         # AWS S3 path to store images
         aws_s3_path=images/${{ env.version_major }}/${release}/${{ inputs.type }}/${{ env.TIME_STAMP }}
+
+        # tell packer we can use more cpu/ram if we're using runs-on
+        # which means we're using runs-on with metal instances
+        [[ ${{ env.RUNS_ON_VERSION }} != '' ]] && packer_opts="${packer_opts} -var cpus=$(($(nproc)-4)) -var memory_${{ env.alma_arch }}=32768"
 
         # Overriding packer source, image mask and S3 path where necessary
         case "${{ inputs.type }}${{ env.version_major }}" in
@@ -218,6 +228,17 @@ runs:
             output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.qcow2
             packer_source=qemu.${packer_source}
             ;;
+          gcp8|gcp9)
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
+            packer_source=qemu.${packer_source}
+            ;;
+          gcp10)
+            packer_source=almalinux_${{ env.version_major }}_${{ inputs.type }}_${{ env.alma_arch }}
+            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_${{ inputs.type }}_64k_${{ env.alma_arch }}"
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
+            packer_source=qemu.${packer_source}
+            ;;
           *)
             output_mask=output-${output_mask}
             packer_source=qemu.${packer_source}
@@ -250,8 +271,24 @@ runs:
             ;;
         esac
 
+    - name: Remove KVM
+      if: inputs.type == 'vagrant_virtualbox' || inputs.type == 'vagrant_vmware'
+      shell: bash
+      run: |
+        # Remove KVM
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt-get -y remove qemu-kvm
+            ;;
+          rhel)
+            sudo dnf -y -q remove qemu-kvm
+            ;;
+        esac
+        sudo rmmod kvm_amd || sudo rmmod kvm_intel || true
+        sudo rmmod kvm || true
+
     - name: Check nested virtualization support
-      if: inputs.arch == 'x86_64' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware' && inputs.runner != 'aws-ec2'
+      if: inputs.arch == 'x86_64' && env.RUNS_ON_VERSION == '' && inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'
       shell: bash
       run: |
         # Check nested virtualization support
@@ -363,6 +400,7 @@ runs:
       run: |
         # Build ${{ inputs.type }} image
         # PACKER_LOG=1
+        sudo systemctl start libvirtd
         sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
 
     - name: Locate image file, generate checksum
@@ -377,11 +415,70 @@ runs:
         echo "IMAGE_FILE=${image_file}" >> $GITHUB_ENV
         echo "IMAGE_NAME=$(basename ${image_file})" >> $GITHUB_ENV
 
-    # - name: Setup tmate session
-    #   uses: mxschmitt/action-tmate@v3
+        # don't fail if this doesn't exist, we may not always generate it
+        sudo mv repo-metadata-*.txt $(basename ${image_file}).repo-metadata.txt || true
+
+    - id: 'google-auth-dev-images'
+      if: env.IMAGE_TYPE == 'gcp'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        workload_identity_provider: 'projects/443728870479/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-cloud-images@almalinux-dev-images-469421.iam.gserviceaccount.com'
+    
+    - name: 'Set up Google Cloud SDK'
+      if: env.IMAGE_TYPE == 'gcp'
+      uses: 'google-github-actions/setup-gcloud@v3.0.0'
+
+    - name: 'Upload output to GCP storage bucket'
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: gcloud storage cp ${{ env.IMAGE_FILE }} gs://almalinux-images-dev/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d')/root.tar.gz
+
+    - name: Clone gce_image_publish repo
+      if: env.IMAGE_TYPE == 'gcp'
+      uses: actions/checkout@v5
+      with:
+        path: compute-image-tools
+        repository: GoogleCloudPlatform/compute-image-tools
+        ref: "20250916.00"
+
+    - name: Build gce_image_publish tool
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: |
+        # we need golang
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt update
+            sudo apt-get -y install golang-go
+            ;;
+          rhel)
+            sudo dnf -y -q install golang
+            ;;
+        esac
+        # print golang version for reference
+        go version
+        # Build gce_image_publish tool
+        cd compute-image-tools/cli_tools/gce_image_publish
+        go mod tidy
+        go install
+
+    - name: Create test image on GCP
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: |
+        /home/$USER/go/bin/gce_image_publish \
+          -var:environment=test \
+          -skip_confirmation \
+          -rollout_rate=0 \
+          -publish_project="almalinux-dev-images-469421" \
+          -work_project="almalinux-dev-images-469421" \
+          -replace \
+          -source_gcs_path="gs://almalinux-images-dev/" \
+          vm-scripts/gcp/almalinux_${version_major}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
 
     - name: Test/check release and architecture, list installed packages in ${{ env.IMAGE_FILE }} cloud image
-      if: ${{ ! contains(inputs.type, 'vagrant') }}
+      if: ${{ ! contains(inputs.type, 'vagrant') && ! contains(inputs.type, 'gcp') }}
       shell: bash
       run: |
         # List installed packages in ${{ env.IMAGE_FILE }} image
@@ -440,7 +537,7 @@ runs:
           || echo "got_pkgs_list=false" >> $GITHUB_ENV
 
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
-      if: inputs.run_test == 'true'
+      if: inputs.run_test == 'true' && contains(inputs.type, 'vagrant')
       shell: bash
       run: |
         # Test ${{ inputs.type }} ${{ inputs.variant }} image
@@ -539,6 +636,15 @@ runs:
         path: ${{ env.IMAGE_FILE }}
 
     - uses: actions/upload-artifact@v4
+      name: Store repo metadata as artifact
+      id: repo-meta-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 9
+        name: ${{ env.IMAGE_NAME }}.repo-metadata.txt
+        path: ${{ env.IMAGE_FILE }}.repo-metadata.txt
+
+    - uses: actions/upload-artifact@v4
       name: Store checksum as artifact
       id: checksum-artifact
       if: inputs.store_as_artifact  == 'true'
@@ -552,7 +658,7 @@ runs:
       id: pkglist-artifact
       if: inputs.store_as_artifact  == 'true' && env.got_pkgs_list == 'true'
       with:
-        compression-level: 1
+        compression-level: 9
         name: ${{ env.IMAGE_NAME }}.txt
         path: ${{ env.IMAGE_FILE }}.txt
 
