@@ -438,6 +438,12 @@ runs:
         # don't fail if this doesn't exist, we may not always generate it
         sudo mv sbom-data-*.json $(basename ${image_file}).sbom-data.json || true
 
+    - name: Generate SBOM
+      shell: bash
+      run: |
+        echo "Generating SBOM document of ${{ env.IMAGE_FILE }}"
+        sudo .venv-sbom/bin/python3 sbom-tools/sbom_generator.py "${{ env.IMAGE_NAME }}" "${{ env.IMAGE_FILE }}.sbom-data.json" "${{ env.IMAGE_FILE }}.sbom.spdx.json"
+
     - id: 'google-auth-dev-images'
       if: env.IMAGE_TYPE == 'gcp'
       uses: 'google-github-actions/auth@v2'
@@ -449,10 +455,15 @@ runs:
       if: env.IMAGE_TYPE == 'gcp'
       uses: 'google-github-actions/setup-gcloud@v3.0.0'
 
-    - name: 'Upload output to GCP storage bucket'
+    - name: Upload output to GCP storage bucket
       if: env.IMAGE_TYPE == 'gcp'
       shell: bash
       run: gcloud storage cp ${{ env.IMAGE_FILE }} gs://almalinux-images-dev/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d')/root.tar.gz
+
+    - name: Upload SBOM data to GCP storage bucket
+      if: env.IMAGE_TYPE == 'gcp'
+      shell: bash
+      run: gcloud storage cp ${{ env.IMAGE_FILE }}.sbom.spdx.json gs://almalinux-images-dev-sbom/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d').sbom.spdx.json
 
     - name: Clone gce_image_publish repo
       if: env.IMAGE_TYPE == 'gcp'
@@ -496,24 +507,6 @@ runs:
           -replace \
           -source_gcs_path="gs://almalinux-images-dev/" \
           vm-scripts/gcp/almalinux_${version_major}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
-
-    # - name: 'Run Google cloud-image-testing tests (basic suite)'
-    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
-    #   shell: bash
-    #   run: |
-    #     cd cloud-image-tests
-    #     ./bin/manager \
-    #       -local_path bin \
-    #       -project almalinux-image-testing-469421 \
-    #       -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|lssd|disk|packagevalidation|ssh|metadata|vmspec)$' \
-    #       -images 'projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ env.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}' \
-    #       -parallel_stagger 10s -parallel_count 20
-
-    - name: Generate SBOM
-      shell: bash
-      run: |
-        echo "Generating SBOM document of ${{ env.IMAGE_FILE }}"
-        sudo .venv-sbom/bin/python3 sbom-tools/sbom_generator.py "${{ env.IMAGE_NAME }}" "${{ env.IMAGE_FILE }}.sbom-data.json" "${{ env.IMAGE_FILE }}.sbom.spdx.json"
 
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
       if: inputs.run_test == 'true' && contains(inputs.type, 'vagrant')

@@ -96,7 +96,7 @@ jobs:
           -project almalinux-image-testing-469421              \
           -parallel_count 20 \
           -parallel_stagger 1s \
-          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
+          -filter '^(lssd|disk|vmspec)$' \
           -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}' \
           ${{ matrix.arch == '' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}
 
