@@ -391,6 +391,25 @@ runs:
         # Install ansible
         sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install ansible
 
+    - name: Clone SBOM tools
+      shell: bash
+      run: |
+        rm -rf sbom-tools
+        git clone --depth=1 https://github.com/AlmaLinux/cloud-images-sbom-tools.git sbom-tools
+
+    - name: Set up Python and install generator deps
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: sbom-tools/requirements.txt
+
+    - name: Create venv and install
+      shell: bash
+      run: |
+        python -m venv .venv-sbom
+        .venv-sbom/bin/pip install -r sbom-tools/requirements.txt
+
     - name: Initialize packer
       shell: bash
       run: sudo /usr/bin/packer init -upgrade .
@@ -406,7 +425,8 @@ runs:
     - name: Locate image file, generate checksum
       shell: bash
       run: |
-        # Locate image file, generate checksum
+        # Locate image file, generate checksum, rename repo metadata file
+        ls -la $(dirname '${{ env.output_mask }}')
         image_file=$(ls -1 ${{ env.output_mask }} | head -n 1)
         [ "x${image_file}" = "x" ] && false
         cd $(dirname ${image_file})
@@ -416,7 +436,7 @@ runs:
         echo "IMAGE_NAME=$(basename ${image_file})" >> $GITHUB_ENV
 
         # don't fail if this doesn't exist, we may not always generate it
-        sudo mv repo-metadata-*.txt $(basename ${image_file}).repo-metadata.txt || true
+        sudo mv sbom-data-*.json $(basename ${image_file}).sbom-data.json || true
 
     - id: 'google-auth-dev-images'
       if: env.IMAGE_TYPE == 'gcp'
@@ -424,7 +444,7 @@ runs:
       with:
         workload_identity_provider: 'projects/443728870479/locations/global/workloadIdentityPools/github-actions/providers/github'
         service_account: 'github-actions-cloud-images@almalinux-dev-images-469421.iam.gserviceaccount.com'
-    
+
     - name: 'Set up Google Cloud SDK'
       if: env.IMAGE_TYPE == 'gcp'
       uses: 'google-github-actions/setup-gcloud@v3.0.0'
@@ -477,64 +497,23 @@ runs:
           -source_gcs_path="gs://almalinux-images-dev/" \
           vm-scripts/gcp/almalinux_${version_major}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
 
-    - name: Test/check release and architecture, list installed packages in ${{ env.IMAGE_FILE }} cloud image
-      if: ${{ ! contains(inputs.type, 'vagrant') && ! contains(inputs.type, 'gcp') }}
+    # - name: 'Run Google cloud-image-testing tests (basic suite)'
+    #   if: env.IMAGE_TYPE == 'gcp' && inputs.run_test == 'true'
+    #   shell: bash
+    #   run: |
+    #     cd cloud-image-tests
+    #     ./bin/manager \
+    #       -local_path bin \
+    #       -project almalinux-image-testing-469421 \
+    #       -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|lssd|disk|packagevalidation|ssh|metadata|vmspec)$' \
+    #       -images 'projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ env.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}' \
+    #       -parallel_stagger 10s -parallel_count 20
+
+    - name: Generate SBOM
       shell: bash
       run: |
-        # List installed packages in ${{ env.IMAGE_FILE }} image
-
-        # Partition number with root file-system
-        case ${{ inputs.arch }} in
-          x86_64*) partition=4 ;;
-          aarch64*) partition=3 ;;
-          *) false ;;
-        esac
-
-        # Image file format: raw or qcow2
-        case ${{ inputs.type }} in
-          oci|gencloud|opennebula) format=qcow2 ;;
-          azure) format=raw ;;
-          *) false ;;
-        esac
-        rootfs_path=/mnt/rootfs
-        sudo mkdir -p ${rootfs_path}
-
-        # Install qemu-utils
-        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} \
-          -y install \
-          ${{ env.runner_os == 'ubuntu' && 'qemu-utils' || 'qemu-img' }}
-
-        # Load nbd kernel module
-        sudo modprobe nbd max_part=8
-
-        # Make a copy of the image file
-        sudo cp ${{ env.IMAGE_FILE }} $(dirname ${rootfs_path})
-
-        # Attach the image file to the nbd device
-        sudo qemu-nbd \
-          --read-only \
-          --format=${format} \
-          --connect=/dev/nbd0 \
-          $(dirname ${rootfs_path})/$(basename ${{ env.IMAGE_FILE }}) \
-          && sleep 10 || false
-
-        # Mount need partition
-        sudo fdisk -l /dev/nbd0
-        sudo mount /dev/nbd0p${partition} ${rootfs_path} \
-          && sleep 10 || false
-
-        echo "[Debug] AlmaLinux release:"
-        grep '${{ env.RELEASE_STRING }}' ${rootfs_path}/etc/almalinux-release
-
-        echo "[Debug] System architecture:"
-        rpm --dbpath=${rootfs_path}/var/lib/rpm -q --qf='%{ARCH}\n' ${{ env.RELEASE_PACKAGE }} | grep '${{ env.alma_arch }}'
-
-        # Get installed packages list
-        sudo sh -c "rpm --dbpath=${rootfs_path}/var/lib/rpm -qa --queryformat '%{NAME}\n' | sort > ${{ env.IMAGE_FILE }}.txt"
-
-        [ -f ${{ env.IMAGE_FILE }}.txt ] \
-          && echo "got_pkgs_list=true" >> $GITHUB_ENV \
-          || echo "got_pkgs_list=false" >> $GITHUB_ENV
+        echo "Generating SBOM document of ${{ env.IMAGE_FILE }}"
+        sudo .venv-sbom/bin/python3 sbom-tools/sbom_generator.py "${{ env.IMAGE_NAME }}" "${{ env.IMAGE_FILE }}.sbom-data.json" "${{ env.IMAGE_FILE }}.sbom.spdx.json"
 
     - name: Test ${{ inputs.type }} ${{ inputs.variant }} image
       if: inputs.run_test == 'true' && contains(inputs.type, 'vagrant')
@@ -636,13 +615,22 @@ runs:
         path: ${{ env.IMAGE_FILE }}
 
     - uses: actions/upload-artifact@v4
-      name: Store repo metadata as artifact
-      id: repo-meta-artifact
+      name: Store collected sbom data as artifact
+      id: sbom-data-artifact
       if: inputs.store_as_artifact == 'true'
       with:
         compression-level: 9
-        name: ${{ env.IMAGE_NAME }}.repo-metadata.txt
-        path: ${{ env.IMAGE_FILE }}.repo-metadata.txt
+        name: ${{ env.IMAGE_NAME }}.sbom-data.json
+        path: ${{ env.IMAGE_FILE }}.sbom-data.json
+
+    - uses: actions/upload-artifact@v4
+      name: Store SBOM as artifact
+      id: sbom-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 9
+        name: ${{ env.IMAGE_NAME }}.sbom.spdx.json
+        path: ${{ env.IMAGE_FILE }}.sbom.spdx.json
 
     - uses: actions/upload-artifact@v4
       name: Store checksum as artifact

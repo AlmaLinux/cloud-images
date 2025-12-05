@@ -100,10 +100,10 @@ build {
     only = ["qemu.almalinux-9-gcp-aarch64"]
   }
 
-  # copy the repo metadata file into output
+  # copy SBOM metadata file into output
   post-processor "shell-local" {
     inline = [
-      "cp /tmp/repo-metadata-$PACKER_BUILD_NAME.txt output-$PACKER_BUILD_NAME/"
+      "cp /tmp/sbom-data-$PACKER_BUILD_NAME.json output-$PACKER_BUILD_NAME/"
     ]
   }
 

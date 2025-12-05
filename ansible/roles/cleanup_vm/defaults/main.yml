@@ -1,2 +1,3 @@
 ---
 cleanup_ssh_host_keys: true
+collect_sbom_data: true

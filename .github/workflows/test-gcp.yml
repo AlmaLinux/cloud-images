@@ -26,11 +26,11 @@ on:
           description: 'Image to test, overrides version_major to test a direct image instead.  Architecture must be set properly for the image being passed.  This must be a full path to a GCP image, for example, projects/almalinux-dev-images-469421/global/images/almalinux-9-v20230920'
           required: false
           default: ''
-        notify_mattermost:
-          description: "Send notification to Mattermost"
-          required: true
-          type: boolean
-          default: false
+        # notify_mattermost:
+        #   description: "Send notification to Mattermost"
+        #   required: true
+        #   type: boolean
+        #   default: false
 
 jobs:
   init-data:

@@ -5,9 +5,10 @@
   changed_when: removeoldoutput.rc == 0
   ignore_errors: yes
 
-- name: Include repo metadata dump role (for SBOMs)
+- name: Include sbom_data role for SBOM data collection
   include_role:
-    name: dump_repo_metadata
+    name: sbom_data
+  when: collect_sbom_data | bool
 
 - name: Find persistent net rules
   ansible.builtin.find:
