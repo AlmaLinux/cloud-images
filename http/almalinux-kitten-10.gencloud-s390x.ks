@@ -182,8 +182,4 @@ cat /dev/null > /etc/machine-id
 # The system should start out with an empty file.
 truncate -s 0 /etc/resolv.conf
 
-# To fix the OpenSSH version 9.9p1-16.el10 issue:
-# ssh: unexpected packet in response to channel open: <nil>
-dnf -y reinstall openssh-server
-
 %end
