@@ -55,4 +55,8 @@ fi
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
 
+# To fix the OpenSSH version 9.9p1-16.el10 issue:
+# ssh: unexpected packet in response to channel open: <nil>
+dnf -y reinstall openssh-server
+
 %end
