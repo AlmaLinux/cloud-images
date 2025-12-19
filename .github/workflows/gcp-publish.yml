@@ -1,0 +1,84 @@
+name: GCP Image Publish
+
+on:
+  workflow_dispatch:
+      inputs:
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: ''
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+        arch:
+          description: 'Architecture we are publishing'
+          required: true
+          default: ''
+          type: choice
+          options:
+            - x86_64
+            - aarch64
+        image_datetag:
+          description: 'Date tag of the image to publish after the "v" in the image name.  E.g. for almalinux-10-arm64-v20251205 the date tag is "20251205"'
+          required: true
+          default: ''
+
+jobs:
+  publish-image:
+    name: Publish Images to almalinux-cloud GCP Project (prod)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      # we don't need the checked out files, but this is required for the google auth action to work
+      - uses: actions/checkout@v5
+
+      - name: Build image name from inputs
+        id: build-image-name
+        run: |
+          IMAGE_NAME="almalinux-${{ inputs.version_major }}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v${{ inputs.image_datetag }}"
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+
+      - id: google-auth-image-release
+        uses: google-github-actions/auth@v2
+        with:
+            workload_identity_provider: projects/1071098808632/locations/global/workloadIdentityPools/github-actions/providers/github
+            service_account: gh-actions-prod-release@almalinux-image-release.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3.0.0
+
+      - name: Copy image to almalinux-cloud project
+        run: |
+          gcloud storage cp gs://almalinux-images-dev/${{ steps.build-image-name.outputs.image_name }}/root.tar.gz gs://almalinux-images-prod/${{ steps.build-image-name.outputs.image_name }}/root.tar.gz
+
+      - name: Get gce_image_publish tool
+        run: |
+          wget https://storage.googleapis.com/compute-image-tools/release/linux/gce_image_publish
+          chmod +x gce_image_publish
+
+      - name: Create production image on GCP
+        shell: bash
+        run: |
+            ./gce_image_publish \
+            -var:environment=prod \
+            -skip_confirmation \
+            -rollout_rate=60 \
+            -work_project="almalinux-image-release" \
+            -source_gcs_path="gs://almalinux-images-prod/" \
+            -source_version="v${{ inputs.image_datetag }}" \
+            vm-scripts/gcp/almalinux_${{ inputs.version_major }}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
+
+      - name: Get ID of image just created
+        shell: bash
+        run: |
+            IMAGE_ID=$(gcloud compute images describe ${{ steps.build-image-name.outputs.image_name }} --project=almalinux-cloud --format='value(id)')
+            echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
+
+      - name: Copy SBOM data to GCP Bucket
+        run: |
+          gcloud storage cp gs://almalinux-images-dev-sbom/${{ steps.build-image-name.outputs.image_name }}.sbom.spdx.json gs://gce-image-almalinux-cloud-sbom/$IMAGE_ID.json
