@@ -12,6 +12,7 @@
   ansible.builtin.dnf:
     install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
     name:
+      - cloud-init
       - cifs-utils
       - jq
       - nfs-utils
@@ -36,3 +37,19 @@
     user: vagrant
     key: "{{ lookup('ansible.builtin.file', 'vagrant.pub') }}"
     state: present
+
+- name: Enable cloud-init services
+  service:
+    name: "{{ item }}"
+    enabled: true
+  with_items:
+    - cloud-config
+    - cloud-init
+    - cloud-init-local
+    - cloud-final
+
+- name: Change cloud-init user to vagrant
+  replace:
+    dest: /etc/cloud/cloud.cfg
+    regexp: '^(\s+name:).*$'
+    replace: '\1 vagrant'
