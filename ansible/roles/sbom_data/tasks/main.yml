@@ -1,18 +1,27 @@
 ---
+- name: Check if SBOM data collector exists
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../sbom-tools/sbom_data_collector.py"
+  register: sbom_collector_file
+  delegate_to: localhost
+  become: false
+
 - name: Copy SBOM data collector into the system
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../sbom-tools/sbom_data_collector.py"
     dest: /dev/shm/sbom_data_collector.py
-  
+  when: sbom_collector_file.stat.exists
+
 - name: Collect SBOM data from the system
   ansible.builtin.shell: python3 /dev/shm/sbom_data_collector.py -o /dev/shm/sbom-data.json -v
   register: sbom_data_collector
   failed_when: false
-  
+  when: sbom_collector_file.stat.exists
+
 - name: Write SBOM data to artifact file
   ansible.builtin.fetch:
     src: /dev/shm/sbom-data.json
     dest: /tmp/sbom-data-{{ packer_build_name }}.json
     flat: true
   become: false
-  when: sbom_data_collector.changed
+  when: sbom_collector_file.stat.exists and sbom_data_collector.changed

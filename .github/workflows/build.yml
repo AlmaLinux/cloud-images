@@ -146,14 +146,6 @@ jobs:
               VARIANTS_SH+=("vagrant_vmware-x86_64") # VMware has networking issues on GitHub runners, so we use self-hosted runner
           fi
 
-          # Add SH values to matrix_gh if using runs-on
-          if [ "${{ github.repository_owner }}" == 'AlmaLinux' ]; then
-            for sh in "${VARIANTS_SH[@]}"; do
-              VARIANTS_GH+=("$sh")
-            done
-            unset VARIANTS_SH
-          fi
-
           [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
           matrix_gh=${matrix_gh%,}  # Remove the trailing comma
           echo matrix_gh=$(jq -c <<< [${matrix_gh}]) >> $GITHUB_OUTPUT
@@ -188,11 +180,17 @@ jobs:
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
     # use runs-on runners if within the almalinux org, otherwise GH runners"
-    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-{2}', github.run_id, matrix.variant, contains(matrix.matrix_gh, 'aarch64') && 'arm64' || 'x64') || 'ubuntu-24.04' }}"
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( (inputs.version_major == '10-kitten' || inputs.version_major == '10') && !(contains(needs.init-data.outputs.matrix_gh, 'aarch64') ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10-kitten' || inputs.version_major == '10' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_gh) }}
         exclude:
           - matrix_gh: 'azure-x86_64'
@@ -200,9 +198,6 @@ jobs:
           - matrix_gh: 'oci-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'gcp-x86_64'
-            variant: '10-kitten-v2'
-          # Kitten x86_64_v2 Vagrant for VirtualBox stuck on "Waiting for SSH to become available"
-          - matrix_gh: 'vagrant_virtualbox-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'digitalocean-x86_64'
             variant: '10-kitten-v2'
@@ -245,25 +240,16 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: true # Do image simple testing and generate installed packages list (vagrant_* and GCP only)
-          # runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
-          runner: gh_hosted
+          run_test: ${{ contains(env.type, 'vagrant') && inputs.run_test && 'true' || 'false' }} # Do image simple testing and generate installed packages list (vagrant_* only)
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
-
-
-
-
-
-
-
-### Everything below is for self-hosted runners only ###
-
+  # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
+  # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
   start-self-hosted-runner:
     name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} runner
-    # If we're in the almalinux org we use runs-on for self-hosted
-    if: ${{ github.repository_owner != 'AlmaLinux' && inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
+    if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
     runs-on: ubuntu-24.04
     needs: [init-data]
     strategy:
@@ -321,9 +307,35 @@ jobs:
 
   build-self-hosted:
     name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} image
+    permissions:
+      id-token: write
+      contents: read
     if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
     needs: [init-data, start-self-hosted-runner]
-    runs-on: ${{ github.repository_owner == 'AlmaLinux' && ( contains(matrix.matrix_sh, 'x86_64') && format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64 ) || format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id) ) || ( inputs.self_hosted_runner == 'aws-ec2' && github.run_id || matrix.matrix_sh ) }}
+    # If almalinux org, use RunsOn with:
+    # - AlmaLinux 9.x x86_64 specific AWS AMI ID (need to build Vagrant for VMware)
+    # - ubuntu24-full-arm64 for GCP on aarch64
+    #
+    # Otherwise use AWS EC2 Self-Hosted x86_64 or aarch64 runner set up with the 'start-self-hosted-runner' job above
+    #
+    # Or use manually set up runner. Vagrant for VirtualBox x86_64 runner configuration example:
+    # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_virtualbox-x86_64 --labels vagrant_virtualbox-x86_64 --no-default-labels --work _work --runnergroup default --replace
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' && (
+          contains(matrix.matrix_sh, 'x86_64') &&
+            format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64)
+          ||
+          contains(matrix.matrix_sh, 'gcp') &&
+            format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-arm64', github.run_id)
+          ||
+          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id)
+        )
+        ||
+        inputs.self_hosted_runner == 'aws-ec2' && github.run_id
+        ||
+        matrix.matrix_sh
+      }}
     strategy:
       fail-fast: false
       matrix:
