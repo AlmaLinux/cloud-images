@@ -1,0 +1,15 @@
+# An Ansible playbook that configures an AlmaLinux OS Hyper-V image
+---
+- name: AlmaLinux Hyper-V
+  hosts: default
+  become: true
+  collections:
+    - almalinux.ci
+
+  roles:
+    - role: unified_boot
+      vars:
+        unified_boot_kernel_opts: loglevel=3 console=tty1 console=ttyS0 earlyprintk=ttyS0 rootdelay=300 no_timer_check biosdevname=0 net.ifnames=0
+      when: is_unified_boot is defined
+    - vagrant_guest
+    - hyperv_guest

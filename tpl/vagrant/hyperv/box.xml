@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<configuration>
+  <properties>
+    <subtype type="integer">1</subtype>
+    <name type="string">almalinux</name>
+  </properties>
+  <settings>
+    <processors>
+      <count type="integer">2</count>
+    </processors>
+    <memory>
+      <bank>
+        <dynamic_memory_enabled type="bool">True</dynamic_memory_enabled>
+        <limit type="integer">1048576</limit>
+        <reservation type="integer">512</reservation>
+        <size type="integer">3072</size>
+      </bank>
+    </memory>
+  </settings>
+  <AltSwitchName type="string">almalinux</AltSwitchName>
+  <boot>
+    <device0 type="string">HardDrive</device0>
+  </boot>
+  <secure_boot_enabled type="bool">False</secure_boot_enabled>
+  <secure_boot_template type="string">MicrosoftWindows</secure_boot_template>
+  <tpm_enabled type="bool">True</tpm_enabled>
+  <notes type="string">
+  </notes>
+  <vm-controllers>
+    <scsi ChannelInstanceGuid="x">
+      <controller0>
+        <drive0>
+          <pathname type="string">"Virtual Hard Disks\almalinux.vhdx"</pathname>
+          <type type="string">VHD</type>
+        </drive0>
+      </controller0>
+    </scsi>
+  </vm-controllers>
+</configuration>
