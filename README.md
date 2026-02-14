@@ -543,7 +543,7 @@ packer build -only=qemu.almalinux-9-opennebula-x86_64 .
 `x86_64` BIOS only:
 
 ```sh
-packer builder -only=qemu.almalinux-9-opennebula-bios-x86_64 .
+packer build -only=qemu.almalinux-9-opennebula-bios-x86_64 .
 ```
 
 `AArch64`:
