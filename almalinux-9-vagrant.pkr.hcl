@@ -342,6 +342,20 @@ build {
 
     post-processor "shell-local" {
       inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-9-Vagrant-virtualbox-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64.box"
+      ]
+      only = ["virtualbox-iso.almalinux-9"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-9-Vagrant-virtualbox-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.box"
+      ]
+      only = ["virtualbox-iso.almalinux-9-aarch64"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
         "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-9-Vagrant-hyperv-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.x86_64",
       ]
       only = ["qemu.almalinux-9-hyperv-x86_64"]

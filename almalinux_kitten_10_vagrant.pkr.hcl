@@ -493,6 +493,27 @@ build {
 
     post-processor "shell-local" {
       inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-Kitten-Vagrant-virtualbox-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64.box"
+      ]
+      only = ["virtualbox-iso.almalinux_kitten_10_vagrant_virtualbox_x86_64"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-Kitten-Vagrant-virtualbox-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.box"
+      ]
+      only = ["virtualbox-iso.almalinux_kitten_10_vagrant_virtualbox_aarch64"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-Kitten-Vagrant-virtualbox-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64_v2.box"
+      ]
+      only = ["virtualbox-iso.almalinux_kitten_10_vagrant_virtualbox_x86_64_v2"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
         "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-Kitten-Vagrant-hyperv-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.x86_64"
       ]
       only = ["qemu.almalinux_kitten_10_vagrant_hyperv_x86_64"]

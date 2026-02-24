@@ -279,6 +279,13 @@ build {
 
     post-processor "shell-local" {
       inline = [
+        "tools/fix-vagrant-virtualbox-ovf.sh AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.virtualbox.box"
+      ]
+      only = ["virtualbox-iso.almalinux-8"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
         "tools/raw-to-vagrant-hyperv.sh ${source.name} AlmaLinux-8-Vagrant-${var.os_ver_8}-${formatdate("YYYYMMDD", timestamp())}.x86_64.hyperv"
       ]
       only = ["qemu.almalinux-8-hyperv-x86_64"]
