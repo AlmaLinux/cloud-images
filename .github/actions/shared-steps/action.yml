@@ -319,7 +319,7 @@ runs:
         echo "[Debug] KVM modules:"
         sudo lsmod | grep kvm
         echo "[Debug] Nested virtualization support:"
-        sudo cat /sys/module/kvm_amd/parameters/nested
+        sudo cat /sys/module/kvm_*/parameters/nested
 
     - name: Enable KVM group perms
       if: inputs.type != 'vagrant_virtualbox' && inputs.type != 'vagrant_vmware'

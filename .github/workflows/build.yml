@@ -349,8 +349,6 @@ jobs:
           - matrix_sh: 'oci-aarch64'
             variant: '10-kitten'
           - matrix_sh: 'oci-aarch64'
-            variant: '10'
-          - matrix_sh: 'oci-aarch64'
             variant: '9-64k'
           - matrix_sh: 'oci-aarch64'
             variant: '10-kitten-64k'

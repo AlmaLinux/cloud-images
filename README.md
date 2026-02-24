@@ -110,12 +110,6 @@ See: [How to build UEFI and Secure Boot supported Images](https://github.com/Alm
 packer build -only=qemu.almalinux-9-gencloud-x86_64 .
 ```
 
-`x86_64` BIOS only:
-
-```sh
-packer build -only=qemu.almalinux-9-gencloud-bios-x86_64 .
-```
-
 `AArch64`:
 
 ```sh
@@ -209,7 +203,7 @@ packer build -only=qemu.almalinux-9-azure-aarch64 .
 `AArch64` with with 64k page size kernel:
 
 ```sh
-packer build -only=qemu.almalinux_9_azure_aarch64_64k .
+packer build -only=qemu.almalinux_9_azure_64k_aarch64 .
 ```
 
 #### AlmaLinux OS Kitten 10
@@ -540,12 +534,6 @@ packer build -only=qemu.almalinux-8-opennebula-aarch64 .
 packer build -only=qemu.almalinux-9-opennebula-x86_64 .
 ```
 
-`x86_64` BIOS only:
-
-```sh
-packer build -only=qemu.almalinux-9-opennebula-bios-x86_64 .
-```
-
 `AArch64`:
 
 ```sh
@@ -578,12 +566,6 @@ packer build -only=qemu.almalinux-8-oci-aarch64 .
 `x86_64` Unified Boot (BIOS and UEFI):
 ```sh
 packer build -only=qemu.almalinux-9-oci-x86_64 .
-```
-
-`x86_64` BIOS only:
-
-```sh
-packer build -only=qemu.almalinux-9-oci-bios-x86_64 .
 ```
 
 `AArch64`
@@ -678,7 +660,7 @@ packer build -only=qemu.almalinux-8-azure-x86_64 .
 Debian and derivatives:
 
 ```sh
-packer build -var ovmf_code="/usr/share/OVMF/OVMF_CODE.secboot.fd" -var ovmf_vars="/usr/share/OVMF/OVMF_VARS.ms.fd" -only=qemu.almalinux-8-gencloud-uefi-x86_64 .
+packer build -var ovmf_code="/usr/share/OVMF/OVMF_CODE.secboot.fd" -var ovmf_vars="/usr/share/OVMF/OVMF_VARS.ms.fd" -only=qemu.almalinux-8-gencloud-x86_64 .
 ```
 
 or set the `ovmf_code` and  `ovmf_vars` Packer variables in `.auto.pkrvars.hcl` file:
@@ -756,6 +738,7 @@ mv versions.pkr.hcl versions.pkr.hcl.ignore
 
 * [Packer](https://www.packer.io/) `>= 1.7.0`
 * [Ansible](https://www.ansible.com/) `>= 2.12`
+  * When building AlmaLinux 8 images, the Ansible version has to be `<= 2.16` for compatibility reasons.
 * [VirtualBox](https://www.virtualbox.org/) (for VirtualBox images only)
 * [Parallels](https://www.parallels.com/) (for Parallels images only)
 * [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html) (for VMWare images and Amazon AMI's only)
