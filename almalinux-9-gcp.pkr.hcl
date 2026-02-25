@@ -81,6 +81,7 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SSH_TRANSFER_METHOD=scp",
       "ANSIBLE_SCP_EXTRA_ARGS=-O",
     ]
     only = ["qemu.almalinux-9-gcp-x86_64"]
@@ -95,6 +96,7 @@ build {
     ansible_env_vars = [
       "ANSIBLE_PIPELINING=True",
       "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SSH_TRANSFER_METHOD=scp",
       "ANSIBLE_SCP_EXTRA_ARGS=-O"
     ]
     only = ["qemu.almalinux-9-gcp-aarch64"]
