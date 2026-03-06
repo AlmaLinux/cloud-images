@@ -279,11 +279,13 @@ After the image is imported (QCOW2 path only), the workflow configures shape com
    - `VM.Standard.Ampere.Generic` is excluded — it's an OCI alias for `A1.Flex` and adding it overwrites `A1.Flex`'s constraints
 
 **For x86_64:**
-1. Removes legacy/outdated shapes (Standard1, DenseIO1, HighIO1, Standard2T, BigData), ARM shapes (`.A1.`, `.A2.`, `.A4.`), and `*.Generic` alias shapes
-2. Configures remaining Flex shapes with OCPU/memory constraints:
+1. Checks each shape on the image against shapes available in the compartment/region
+2. Removes shapes that are not available (this naturally covers legacy, ARM, and retired shapes)
+3. Configures available Flex shapes with OCPU/memory constraints:
    - Each Flex shape is **removed then re-added** (because `add` silently skips shapes that already exist without updating constraints)
    - Constraints are queried dynamically from `oci compute shape list`
-   - Shapes not available in the compartment/region or missing constraint data are removed
+   - Flex shapes missing constraint data are removed
+4. Non-Flex available shapes are kept as-is
 
 ### Marketplace Artifact
 

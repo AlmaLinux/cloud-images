@@ -703,38 +703,18 @@ jobs:
               --shape-name "${shape}" 2>/dev/null || true
           done
         else
-          # Remove legacy/outdated, ARM, and *.Generic alias shapes
-          # Legacy: Standard1, Standard2T
-          #         DenseIO1, DenseIO2, HighIO, Generic, BigData
-          # ARM:    *.A1.*, *.A2.*, *.A4.*
-          LEGACY_PATTERN="Standard1|DenseIO1|HighIO1|\.Generic$|Standard2T|BigData|\.A[0-9]+\."
-          echo "[Debug] Removing legacy, ARM, and alias shapes from x86_64 image..."
-          while read -r shape; do
-            if echo "${shape}" | grep -qE "${LEGACY_PATTERN}"; then
-              echo "  Removing: ${shape}"
-              oci compute image-shape-compatibility-entry remove \
-                --image-id ${IMAGE_OCID} \
-                --shape-name "${shape}" \
-                --force 2>/dev/null || true
-            fi
-          done < /tmp/current_shapes.txt
-
-          # Configure memory/OCPU constraints for all remaining Flex shapes.
-          # The Marketplace API requires explicit constraints for Flex shapes.
+          # For x86_64: check each shape against what's available in the
+          # compartment/region. Remove unavailable shapes, and configure
+          # Flex shapes with OCPU/memory constraints.
           COMPARTMENT_ID="${{ secrets.OCI_COMPARTMENT_ID }}"
           ALL_SHAPES=$(oci compute shape list \
             --compartment-id ${COMPARTMENT_ID} \
             --all 2>/dev/null)
 
-          echo "[Debug] Configuring constraints for x86_64 Flex shapes..."
-          oci compute image-shape-compatibility-entry list \
-            --image-id ${IMAGE_OCID} \
-            --all \
-            --query 'data[*].shape' \
-            --raw-output | jq -r '.[]' | grep '\.Flex$' | while read -r shape; do
+          echo "[Debug] Checking x86_64 image shapes against available shapes..."
+          while read -r shape; do
             SHAPE_DATA=$(echo "${ALL_SHAPES}" | jq --arg s "${shape}" '[.data[] | select(.shape == $s)] | first')
             if [ "${SHAPE_DATA}" = "null" ] || [ -z "${SHAPE_DATA}" ]; then
-              # Shape not available in this compartment/region — remove it
               echo "  Removing (not available): ${shape}"
               oci compute image-shape-compatibility-entry remove \
                 --image-id ${IMAGE_OCID} \
@@ -742,33 +722,38 @@ jobs:
                 --force 2>/dev/null || true
               continue
             fi
-            OCPU_MIN=$(echo "${SHAPE_DATA}" | jq -r '."ocpu-options".min // empty')
-            OCPU_MAX=$(echo "${SHAPE_DATA}" | jq -r '."ocpu-options".max // empty')
-            MEM_MIN=$(echo "${SHAPE_DATA}" | jq -r '."memory-options"."min-in-g-bs" // empty')
-            MEM_MAX=$(echo "${SHAPE_DATA}" | jq -r '."memory-options"."max-in-g-bs" // empty')
-            if [ -z "${OCPU_MAX}" ] || [ -z "${MEM_MAX}" ]; then
-              # Shape found but missing constraint fields — remove it
-              echo "  Removing (no constraint data): ${shape}"
+
+            # Flex shapes need explicit OCPU/memory constraints for
+            # the Marketplace API. Remove first, then re-add with constraints
+            # (add silently skips shapes that already exist).
+            if echo "${shape}" | grep -q '\.Flex$'; then
+              OCPU_MIN=$(echo "${SHAPE_DATA}" | jq -r '."ocpu-options".min // empty')
+              OCPU_MAX=$(echo "${SHAPE_DATA}" | jq -r '."ocpu-options".max // empty')
+              MEM_MIN=$(echo "${SHAPE_DATA}" | jq -r '."memory-options"."min-in-g-bs" // empty')
+              MEM_MAX=$(echo "${SHAPE_DATA}" | jq -r '."memory-options"."max-in-g-bs" // empty')
+              if [ -z "${OCPU_MAX}" ] || [ -z "${MEM_MAX}" ]; then
+                echo "  Removing (no constraint data): ${shape}"
+                oci compute image-shape-compatibility-entry remove \
+                  --image-id ${IMAGE_OCID} \
+                  --shape-name "${shape}" \
+                  --force 2>/dev/null || true
+                continue
+              fi
+              echo "  Configuring: ${shape} — OCPU: ${OCPU_MIN}-${OCPU_MAX}, Memory: ${MEM_MIN}-${MEM_MAX} GB"
               oci compute image-shape-compatibility-entry remove \
                 --image-id ${IMAGE_OCID} \
                 --shape-name "${shape}" \
                 --force 2>/dev/null || true
-              continue
+              oci compute image-shape-compatibility-entry add \
+                --image-id ${IMAGE_OCID} \
+                --shape-name "${shape}" \
+                --memory-constraints "{\"minInGBs\": ${MEM_MIN}, \"maxInGBs\": ${MEM_MAX}}" \
+                --ocpu-constraints "{\"min\": ${OCPU_MIN}, \"max\": ${OCPU_MAX}}" \
+                --force 2>/dev/null || true
+            else
+              echo "  Keeping: ${shape}"
             fi
-            echo "  Configuring: ${shape} — OCPU: ${OCPU_MIN}-${OCPU_MAX}, Memory: ${MEM_MIN}-${MEM_MAX} GB"
-            # Remove first, then re-add — `add` silently skips shapes that
-            # already exist on the image without updating their constraints.
-            oci compute image-shape-compatibility-entry remove \
-              --image-id ${IMAGE_OCID} \
-              --shape-name "${shape}" \
-              --force 2>/dev/null || true
-            oci compute image-shape-compatibility-entry add \
-              --image-id ${IMAGE_OCID} \
-              --shape-name "${shape}" \
-              --memory-constraints "{\"minInGBs\": ${MEM_MIN}, \"maxInGBs\": ${MEM_MAX}}" \
-              --ocpu-constraints "{\"min\": ${OCPU_MIN}, \"max\": ${OCPU_MAX}}" \
-              --force 2>/dev/null || true
-          done
+          done < /tmp/current_shapes.txt
         fi
 
         # Show final shapes
