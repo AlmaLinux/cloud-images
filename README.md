@@ -33,6 +33,7 @@ This repository includes GitHub Actions workflows that automate building, testin
 | [BUILD_CLOUD_IMAGES.md](BUILD_CLOUD_IMAGES.md) | `build.yml`, `shared-steps/action.yml` | Main workflow that builds all cloud and Vagrant image types using Packer with a matrix strategy across multiple architectures and platforms |
 | [AWS_AMI_BUILD_COPY_RELEASE.md](AWS_AMI_BUILD_COPY_RELEASE.md) | `build-ami.yml`, `copy-ami.yml`, `ami-to-marketplace.yml` | End-to-end AWS pipeline: build AMIs with Packer, copy across all regions, and publish to AWS Marketplace |
 | [AZURE_GALLERY.md](AZURE_GALLERY.md) | `azure-to-gallery.yml` | Convert and upload images to Azure Compute Gallery with support for Gen1/Gen2 VMs and multiple architectures |
+| [AZURE_MARKETPLACE.md](AZURE_MARKETPLACE.md) | `azure-to-marketplace.yml` | Publish VHD images to Azure Marketplace via the Partner Center Product Ingestion API |
 | [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) | `oci-marketplace-publish.yml` | Import images into Oracle Cloud Infrastructure and publish to the OCI Marketplace |
 | [GCP_IMAGE_TEST_PUBLISH.md](GCP_IMAGE_TEST_PUBLISH.md) | `test-gcp.yml`, `gcp-publish.yml` | Test GCP images across many machine shapes using Cloud Image Tests, then publish to the `almalinux-cloud` project |
 | [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-cloud-publish.yaml` | Publish Vagrant boxes to Vagrant Cloud for VirtualBox, libvirt, and VMware Desktop providers |
