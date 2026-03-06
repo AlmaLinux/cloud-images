@@ -1,0 +1,42 @@
+name: Azure image to Marketplace release
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        image_blob_url:
+          description: "VHD blob URL in Azure Storage"
+          required: true
+          type: string
+          default: ''
+
+        release_to_marketplace:
+          description: "Release to Azure Marketplace"
+          required: true
+          type: boolean
+          default: false
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # Partner Center Product Ingestion API
+  PC_API_BASE: https://graph.microsoft.com/rp/product-ingestion
+  PC_API_VERSION: "2022-07-01"
+  # Azure storage account (same as azure-to-gallery.yml)
+  STORAGE_ACCOUNT: almalinux
+
+jobs:
+  release-image-to-marketplace:
+    name: "Release image to Azure Marketplace"
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
