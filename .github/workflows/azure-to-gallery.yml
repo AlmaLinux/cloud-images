@@ -25,7 +25,9 @@ on:
           default: true
 
         public_gallery:
-          description: "Release to public Gallery"
+          description: |
+            Release to public Gallery
+            (except for AlmaLinux 10 and Kitten)
           required: true
           type: boolean
           default: false
@@ -157,7 +159,8 @@ jobs:
           release_options+=' -f'
 
         # If public_gallery is true, then upload to 'almalinux' public Gallery
-        [[ ${{ inputs.public_gallery }} == true ]] && \
+        # TODO: AlmaLinux 10 and Kitten are not released to the public Gallery
+        [[ ${{ inputs.public_gallery }} == true ]] && [[ ${{ env.RELEASE_VERSION }} != "10"* ]] && \
           release_options+=' -g almalinux'
 
         ./azure_uploader.sh ${release_options} \

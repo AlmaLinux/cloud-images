@@ -38,7 +38,15 @@ show_usage() {
   echo '  -t        product type. Possible values are: default, arm64 and arm64-64k.'
   echo '  -d        distribution version (e.g. "8.10", "9.6", "10.0" and "10" if Kitten)'
   echo "  -g        Azure compute gallery name. Default is ${GALLERY_NAME}"
+  echo "            Possible values are:"
+  echo "            almalinux - Community Public"
+  echo "            almalinux_ci - Private"
+  echo "            almalinux_images - Private (deprecated)"
+  echo "            AlmaLinux 10 and Kitten are not released to the Community Public gallery"
   echo "  -r        Azure resource group name. Default is ${RESOURCE_GROUP}"
+  echo "            Possible values are:"
+  echo "            rg-alma-images - default at East US region"
+  echo "            rg-alma-images-prod - deprecated at East US region"
   echo "  -s        Azure storage account name. Default is ${STORAGE_ACCOUNT}"
   echo '  -u        image blob URI in case if it is already uploaded'
   echo '  -f        perform all operations (by default script runs in dry-run mode)'
@@ -533,14 +541,27 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         readonly DISTRO_VER
         ;;
       g)
+        # TODO: AlmaLinux 10 and Kitten are not released to the public Gallery
+        if [[ "${OPTARG}" != "almalinux" && "${OPTARG}" != "almalinux_ci" ]]; then
+          echo "Error: invalid gallery name '${OPTARG}'. Must be 'almalinux' or 'almalinux_ci'." >&2
+          exit 1
+        fi
         GALLERY_NAME="${OPTARG}"
         readonly GALLERY_NAME
         ;;
       r)
+        if [[ "${OPTARG}" != "rg-alma-images" && "${OPTARG}" != "rg-alma-images-prod" ]]; then
+          echo "Error: invalid resource group '${OPTARG}'. Must be 'rg-alma-images' or 'rg-alma-images-prod'." >&2
+          exit 1
+        fi
         RESOURCE_GROUP="${OPTARG}"
         readonly RESOURCE_GROUP
         ;;
       s)
+        if [[ "${OPTARG}" != "almalinux" ]]; then
+          echo "Error: invalid storage account '${OPTARG}'. Must be 'almalinux'." >&2
+          exit 1
+        fi
         STORAGE_ACCOUNT="${OPTARG}"
         readonly STORAGE_ACCOUNT
         ;;
