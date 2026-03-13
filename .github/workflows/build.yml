@@ -282,6 +282,12 @@ jobs:
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-64k'
+          - matrix_sh: 'gcp-aarch64'
+            variant: '9-64k'
+          - matrix_sh: 'gcp-aarch64'
+            variant: '10-kitten-64k'
+          - matrix_sh: 'gcp-aarch64'
+            variant: '10-64k'
 
     steps:
     - name: Setup and start runner
@@ -365,6 +371,12 @@ jobs:
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
+            variant: '10-64k'
+          - matrix_sh: 'gcp-aarch64'
+            variant: '9-64k'
+          - matrix_sh: 'gcp-aarch64'
+            variant: '10-kitten-64k'
+          - matrix_sh: 'gcp-aarch64'
             variant: '10-64k'
 
     env:
