@@ -30,6 +30,7 @@ reboot --eject
 %packages --exclude-weakdeps --inst-langs=en
 dracut-config-generic
 grub2-pc
+pciutils
 tar
 rsyslog-logrotate
 -*firmware
