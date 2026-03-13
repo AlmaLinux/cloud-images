@@ -22,6 +22,7 @@ reboot --eject
 
 %packages --exclude-weakdeps --inst-langs=en
 dracut-config-generic
+pciutils
 tar
 rsyslog-logrotate
 -*firmware

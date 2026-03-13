@@ -48,6 +48,7 @@ yum
 nfs-utils
 dnf-utils
 hostname
+pciutils
 
 # pull firmware packages out
 -aic94xx-firmware

@@ -29,6 +29,7 @@ reboot --eject
 
 %packages
 @core
+pciutils
 tar
 -biosdevname
 -open-vm-tools
