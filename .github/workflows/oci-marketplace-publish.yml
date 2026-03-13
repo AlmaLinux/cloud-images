@@ -47,7 +47,7 @@ jobs:
       OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Validate inputs
       run: |

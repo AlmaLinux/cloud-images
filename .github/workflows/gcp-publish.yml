@@ -35,7 +35,7 @@ jobs:
       contents: read
     steps:
       # we don't need the checked out files, but this is required for the google auth action to work
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Build image name from inputs
         id: build-image-name
@@ -44,13 +44,13 @@ jobs:
           echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
 
       - id: google-auth-image-release
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
             workload_identity_provider: projects/1071098808632/locations/global/workloadIdentityPools/github-actions/providers/github
             service_account: gh-actions-prod-release@almalinux-image-release.iam.gserviceaccount.com
 
       - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v3.0.0
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Copy image to almalinux-cloud project
         run: |

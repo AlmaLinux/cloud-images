@@ -48,9 +48,9 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: runs-on/action@v2
-      # only when in runs-on environment
-      if: env.RUNS_ON_VERSION != ''
+    - uses: runs-on/action@v2.1.0
+      # only when in runs-on environment and not AlmaLinux AMI
+      if: env.RUNS_ON_VERSION != '' && ! contains(env.RUNS_ON_AMI_NAME, 'AlmaLinux')
       with:
         metrics: cpu,network,memory,disk,io
 
@@ -340,7 +340,7 @@ runs:
 
     - name: Install VirtualBox from its repository
       if: inputs.type == 'vagrant_virtualbox'
-      uses: myci-actions/add-deb-repo@10
+      uses: myci-actions/add-deb-repo@11
       with:
         repo: deb [arch=amd64] https://download.virtualbox.org/virtualbox/debian ${{ env.UBUNTU_CODENAME }} contrib
         repo-name: virtualbox
@@ -422,7 +422,7 @@ runs:
 
     - name: Set up Python and install generator deps
       if: env.IMAGE_TYPE == 'gcp'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.11'
         cache: 'pip'
@@ -541,14 +541,14 @@ runs:
 
     - id: 'google-auth-dev-images'
       if: env.IMAGE_TYPE == 'gcp'
-      uses: 'google-github-actions/auth@v2'
+      uses: 'google-github-actions/auth@v3'
       with:
         workload_identity_provider: 'projects/443728870479/locations/global/workloadIdentityPools/github-actions/providers/github'
         service_account: 'github-actions-cloud-images@almalinux-dev-images-469421.iam.gserviceaccount.com'
 
     - name: 'Set up Google Cloud SDK'
       if: env.IMAGE_TYPE == 'gcp'
-      uses: 'google-github-actions/setup-gcloud@v3.0.0'
+      uses: 'google-github-actions/setup-gcloud@v3'
 
     - name: Upload output to GCP storage bucket
       if: env.IMAGE_TYPE == 'gcp'
@@ -562,7 +562,7 @@ runs:
 
     - name: Clone gce_image_publish repo
       if: env.IMAGE_TYPE == 'gcp'
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         path: compute-image-tools
         repository: GoogleCloudPlatform/compute-image-tools
@@ -693,7 +693,7 @@ runs:
           && echo "got_pkgs_list=true" >> $GITHUB_ENV \
           || echo "got_pkgs_list=false" >> $GITHUB_ENV
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       name: Store image as artifact
       id: image-artifact
       if: inputs.store_as_artifact == 'true'
@@ -702,7 +702,7 @@ runs:
         name: ${{ env.IMAGE_NAME }}
         path: ${{ env.IMAGE_FILE }}
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       name: Store collected sbom data as artifact
       id: sbom-data-artifact
       if: inputs.store_as_artifact == 'true' && env.IMAGE_TYPE == 'gcp'
@@ -711,7 +711,7 @@ runs:
         name: ${{ env.IMAGE_NAME }}.sbom-data.json
         path: ${{ env.IMAGE_FILE }}.sbom-data.json
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       name: Store SBOM as artifact
       id: sbom-artifact
       if: inputs.store_as_artifact == 'true' && env.IMAGE_TYPE == 'gcp'
@@ -720,7 +720,7 @@ runs:
         name: ${{ env.IMAGE_NAME }}.sbom.spdx.json
         path: ${{ env.IMAGE_FILE }}.sbom.spdx.json
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       name: Store checksum as artifact
       id: checksum-artifact
       if: inputs.store_as_artifact  == 'true'
@@ -729,7 +729,7 @@ runs:
         name: ${{ env.IMAGE_NAME }}.sha256sum
         path: ${{ env.IMAGE_FILE }}.sha256sum
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       name: Store packages list as artifact
       id: pkglist-artifact
       if: inputs.store_as_artifact  == 'true' && env.got_pkgs_list == 'true'
@@ -739,7 +739,7 @@ runs:
         path: ${{ env.IMAGE_FILE }}.txt
 
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4.0.2
+      uses: aws-actions/configure-aws-credentials@v6
       if: inputs.upload_to_s3  == 'true'
       with:
         aws-access-key-id: ${{ inputs.S3_ACCESS_KEY_ID }}
@@ -772,7 +772,7 @@ runs:
         done
 
     - name: Print workflow summary
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       env:
         got_pkgs_list: ${{ env.got_pkgs_list || 'false' }}
         upload_to_s3: ${{ inputs.upload_to_s3 || 'false' }}

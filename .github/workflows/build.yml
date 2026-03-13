@@ -227,7 +227,7 @@ jobs:
           echo "ARCH=$arch" >> $GITHUB_ENV
 
       - name: Checkout ${{ github.action_repository }}
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - uses: ./.github/actions/shared-steps
         name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
@@ -384,7 +384,7 @@ jobs:
         run: sudo rm -rf ansible .vagrant output-*
 
       - name: Checkout ${{ github.action_repository }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - uses: ./.github/actions/shared-steps
         name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} image
