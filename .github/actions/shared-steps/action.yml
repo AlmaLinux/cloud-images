@@ -331,7 +331,7 @@ runs:
         sudo udevadm trigger --name-match=kvm
 
     - name: Unload KVM modules
-      if: inputs.type == 'vagrant_virtualbox' && inputs.runner == 'aws-ec2'
+      if: inputs.type == 'vagrant_virtualbox' || inputs.type == 'vagrant_vmware'
       shell: bash
       run: |
         # Unload KVM modules
@@ -616,9 +616,11 @@ runs:
         cat <<'EOF'>Vagrantfile
         Vagrant.configure("2") do |config|
           config.vm.box = "${{ inputs.type }}-${{ inputs.variant }}"
+          config.vm.disk :disk, size: "100GB", primary: true
           config.vm.provider "libvirt" do |libvirt|
             libvirt.memory = 2048
             libvirt.cpus = 2
+            libvirt.machine_virtual_size = 100
           end
           config.vm.provider "virtualbox" do |vb|
             vb.memory = 2048
@@ -627,6 +629,7 @@ runs:
           config.vm.provider "vmware_desktop" do |v|
             v.memory = 2048
             v.cpus = 2
+            v.linked_clone = false
           end
         end
         EOF
@@ -678,6 +681,9 @@ runs:
           sudo vagrant ssh default -c "grep '${{ env.RELEASE_STRING }}' /etc/almalinux-release"
           echo "[Debug] System architecture:"
           sudo vagrant ssh default -c "rpm -q --qf='%{ARCH}\n' ${{ env.RELEASE_PACKAGE }} | grep '${{ env.alma_arch }}'"
+          echo "[Debug] Disk and filesystems:"
+          sudo vagrant ssh default -c "sudo lsblk"
+          sudo vagrant ssh default -c "ROOT_SIZE_BYTES=\$(df -B1 --output=size / | tail -n 1 | tr -d ' '); MIN_SIZE_BYTES=\$((98*1024*1024*1024)); [ \"\${ROOT_SIZE_BYTES}\" -gt \"\${MIN_SIZE_BYTES}\" ] || { echo \"[Error] Root filesystem resize check failed: \${ROOT_SIZE_BYTES} bytes (expected > \${MIN_SIZE_BYTES} bytes)\"; exit 1; }"
           echo "[Debug] Check for updates:"
           sudo vagrant ssh default -c "sudo dnf check-update"
           # Get installed packages list
@@ -791,9 +797,13 @@ runs:
             summary
               .addLink('${{ env.IMAGE_NAME }}.txt', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.txt');
           }
-          {
+          if (process.env.got_pkgs_list === 'true') {
             summary
               .addRaw('Tests ${{ inputs.run_test == 'true' && 'passed ✅' || 'N/A ⚠️' }}');
+          }
+          if (process.env.got_pkgs_list === 'false') {
+            summary
+              .addRaw('Tests ${{ inputs.run_test == 'true' && 'failed ❌' || 'N/A ⚠️' }}');
           }
           summary.write();
 
@@ -815,7 +825,7 @@ runs:
             echo "- Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})"
             echo "${{ env.got_pkgs_list == 'true' && format('- Packages list: [{0}.txt](https://{1}.s3-accelerate.dualstack.amazonaws.com/{2}/{3}.txt)', env.IMAGE_NAME, inputs.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || ''}}"
           fi
-          echo "- Tests ${{ inputs.run_test == 'true' && 'passed ✅' || 'N/A ⚠️' }}"
+          echo "- Tests ${{ inputs.run_test == 'true' && ( env.got_pkgs_list == 'true' && 'passed ✅' || 'failed ❌' ) || 'N/A ⚠️' }}"
 
           echo EOF
         } >> "$GITHUB_ENV"
