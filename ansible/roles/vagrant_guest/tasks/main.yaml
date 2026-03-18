@@ -13,6 +13,7 @@
     install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
     name:
       - cloud-init
+      - cloud-utils-growpart
       - cifs-utils
       - jq
       - nfs-utils
@@ -53,3 +54,26 @@
     dest: /etc/cloud/cloud.cfg
     regexp: '^(\s+name:).*$'
     replace: '\1 vagrant'
+
+- name: Configure cloud-init datasource for Vagrant
+  ansible.builtin.copy:
+    src: 99_vagrant.cfg
+    dest: /etc/cloud/cloud.cfg.d/99_vagrant.cfg
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check if growpart is already in cloud_init_modules
+  ansible.builtin.shell: grep -q "^\s*- growpart$" /etc/cloud/cloud.cfg
+  register: growpart_check
+  changed_when: false
+  failed_when: false
+
+- name: Ensure growpart module is in cloud_init_modules before resizefs
+  ansible.builtin.lineinfile:
+    path: /etc/cloud/cloud.cfg
+    regexp: '^\s+- resizefs$'
+    line: '  - growpart'
+    insertbefore: '^\s+- resizefs$'
+    state: present
+  when: growpart_check.rc != 0
