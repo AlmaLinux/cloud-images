@@ -72,7 +72,6 @@
 - name: Ensure growpart module is in cloud_init_modules before resizefs
   ansible.builtin.lineinfile:
     path: /etc/cloud/cloud.cfg
-    regexp: '^\s+- resizefs$'
     line: '  - growpart'
     insertbefore: '^\s+- resizefs$'
     state: present
