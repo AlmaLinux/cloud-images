@@ -141,16 +141,19 @@ runs:
             packer_source=almalinux-${{ env.version_major }}-hyperv-${{ env.alma_arch }}
             output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.hyperv.box
             packer_source=qemu.${packer_source}
+            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
             ;;
           hyperv9)
             output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
             packer_source=qemu.${packer_source}
+            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
             ;;
           hyperv10)
             packer_source=almalinux_10_vagrant_hyperv_${{ env.alma_arch }}
             [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
             output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
             packer_source=qemu.${packer_source}
+            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
             ;;
           hyperv*kitten*)
             packer_source=almalinux_kitten_10_vagrant_hyperv_${{ env.alma_arch }}
