@@ -37,6 +37,7 @@ This repository includes GitHub Actions workflows that automate building, testin
 | [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) | `oci-marketplace-publish.yml` | Import images into Oracle Cloud Infrastructure and publish to the OCI Marketplace |
 | [GCP_IMAGE_TEST_PUBLISH.md](GCP_IMAGE_TEST_PUBLISH.md) | `test-gcp.yml`, `gcp-publish.yml` | Test GCP images across many machine shapes using Cloud Image Tests, then publish to the `almalinux-cloud` project |
 | [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-cloud-publish.yaml` | Publish Vagrant boxes to Vagrant Cloud for VirtualBox, libvirt, and VMware Desktop providers |
+| [VMWARE_OVA.md](VMWARE_OVA.md) | _(manual process)_ | Convert Vagrant VMware Desktop `.box` files to vSphere/ESXi-compatible `.ova` templates |
 
 
 ## Usage
