@@ -22,6 +22,9 @@ on:
           type: boolean
           default: false
 
+env:
+  STORAGE_ACCOUNT: almalinux
+
 permissions:
   id-token: write
   contents: read
@@ -127,29 +130,35 @@ jobs:
       run: |
         CONTAINER_NAME="${ALMALINUX_MAJOR}-hpc"
 
-        echo "[Debug] Uploading ${BLOB_NAME} to almalinux/${CONTAINER_NAME}..."
+        echo "[Debug] Uploading ${BLOB_NAME} to ${{ env.STORAGE_ACCOUNT }}/${CONTAINER_NAME}..."
         az storage blob upload \
-          --account-name almalinux \
+          --account-name ${{ env.STORAGE_ACCOUNT }} \
           --container-name "${CONTAINER_NAME}" \
           --file "/mnt/${BLOB_NAME}" \
           --name "${BLOB_NAME}" \
           --content-md5 "${BLOB_MD5}" \
           --validate-content
 
+        CONTAINER_NAME="${ALMALINUX_MAJOR}-hpc"
+        BLOB_URL="https://${{ env.STORAGE_ACCOUNT }}.blob.core.windows.net/${CONTAINER_NAME}/${BLOB_NAME}"
+
         echo "[Debug] ✅ Upload complete"
+        echo "[Debug] Blob URL: ${BLOB_URL}"
+        echo "BLOB_URL=${BLOB_URL}" >> $GITHUB_ENV
 
     - name: Print job summary
       run: |
         {
-          echo "## Azure Azure High-performance Computing Image Upload"
+          echo "## Azure High-performance Computing Image Upload"
           echo ""
           echo "### Image Details"
           echo "- **Image**: ${RELEASE_STRING} \`${IMAGE_VERSION}\`"
           echo "- **Blob name**: \`${BLOB_NAME}\`"
+          echo "- **Blob URL**: \`${BLOB_URL}\`"
           echo "- **MD5**: \`${BLOB_MD5}\`"
           echo ""
           echo "### Storage"
-          echo "- **Account**: \`almalinux\`"
+          echo "- **Account**: \`${{ env.STORAGE_ACCOUNT }}\`"
           echo "- **Container**: \`${ALMALINUX_MAJOR}-hpc\`"
           echo ""
           echo "### Status"
@@ -166,8 +175,10 @@ jobs:
         TEXT: |
           :almalinux: **${{ env.RELEASE_STRING }}** Azure High-performance Computing image uploaded to Azure Storage Container, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
-          **Blob**: `${{ env.BLOB_NAME }}`
+          **Storage Account**: `${{ env.STORAGE_ACCOUNT }}`
 
           **Container**: `${{ env.ALMALINUX_MAJOR }}-hpc`
+
+          **Blob URL**: `${{ env.BLOB_URL }}`
 
           **MD5**: `${{ env.BLOB_MD5 }}`
