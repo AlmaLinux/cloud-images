@@ -67,6 +67,7 @@ jobs:
         # Reuse the same parsing logic as azure-to-gallery.yml
         # Modern: AlmaLinux-10-Azure-10.1-20260216.0.x86_64.vhd
         #         AlmaLinux-Kitten-Azure-10-20250813.0.x86_64.vhd
+        #         AlmaLinux-8-HPC-8.10-20260330.0.x86_64.vhd
         # Legacy: almalinux-9.6-x86_64.20250522-01.vhd
         regex_modern='-([0-9]+\.?[0-9]*)-([0-9]{8}(\.[0-9]+)?).*\.(x86_64|aarch64|arm64)'
         regex_legacy='almalinux-([0-9]+\.[0-9]+)-(x86_64|aarch64|arm64)\.([0-9]{8}(-[0-9]+)?)'
@@ -94,13 +95,18 @@ jobs:
           *) echo "[Error] Unknown architecture: $arch" ; exit 1 ;;
         esac
 
+        # Detect HPC images (e.g. AlmaLinux-8-HPC-8.10-20260330.0.x86_64.vhd)
+        [[ "${IMAGE_FILE}" == *-HPC-* ]] && image_type="hpc"
+
         # Major version
         major_version="${release_version%%.*}"
 
         # AlmaLinux release string
+        hpc_label=""
+        [[ "${image_type}" == "hpc" ]] && hpc_label=" HPC"
         case $release_version in
-          10) release_string="AlmaLinux Kitten OS $release_version $arch" ;;
-          *) release_string="AlmaLinux OS $release_version $arch" ;;
+          10) release_string="AlmaLinux Kitten OS $release_version ${arch}${hpc_label}" ;;
+          *) release_string="AlmaLinux OS $release_version ${arch}${hpc_label}" ;;
         esac
 
         # Build the Marketplace package version (must be three-part X.Y.Z).
@@ -167,10 +173,12 @@ jobs:
           # AlmaLinux OS 8
           "8 default")          OFFER_ID="almalinux-x86_64"; PLAN_ID="8-gen2" ;;
           "8 arm64")            OFFER_ID="almalinux-arm"; PLAN_ID="8-arm-gen2" ;;
+          "8 hpc")              OFFER_ID="almalinux-hpc"; PLAN_ID="8-hpc-gen2" ;;
           # AlmaLinux OS 9
           "9 default")          OFFER_ID="almalinux-x86_64"; PLAN_ID="9-gen2" ;;
           "9 arm64")            OFFER_ID="almalinux-arm"; PLAN_ID="9-arm-gen2" ;;
           "9 arm64-64k")        OFFER_ID="almalinux-arm"; PLAN_ID="9-arm-64k-gen2" ;;
+          "9 hpc")              OFFER_ID="almalinux-hpc"; PLAN_ID="9-hpc-gen2" ;;
           # AlmaLinux OS 10
           "10 default")         OFFER_ID="almalinux-x86_64"; PLAN_ID="10-gen2" ;;
           "10 arm64")           OFFER_ID="almalinux-arm"; PLAN_ID="10-arm64-gen2" ;;
@@ -447,6 +455,7 @@ jobs:
           case "${{ env.IMAGE_TYPE }}" in
             default)   IMAGE_TYPES=$'x64Gen1\nx64Gen2' ;;
             arm64*)    IMAGE_TYPES="armGen2" ;;
+            hpc)       IMAGE_TYPES=$'x64Gen1\nx64Gen2' ;;
           esac
         fi
 

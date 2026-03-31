@@ -1,0 +1,173 @@
+name: Azure HPC image to Storage Container
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        blob_sas_url_b64:
+          description: "Blob SAS Token URL (base64 encoded)"
+          required: true
+          default: ''
+
+        image_full_version:
+          description: |
+            Image full version
+            (8.10.20260330, 9.7.20260330, 10.1.20260330, 10.20260330)
+          required: true
+          default: ''
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  upload-hpc-image:
+    name: "Upload HPC image ${{ inputs.image_full_version }}"
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Decode Blob SAS URL
+      run: |
+        DECODED_BLOB_SAS_URL=$(echo '${{ inputs.blob_sas_url_b64 }}' | base64 -d)
+        if [ -z "${DECODED_BLOB_SAS_URL}" ]; then
+          echo "::error::Failed to decode Blob SAS URL"
+          exit 1
+        fi
+        echo "::add-mask::${DECODED_BLOB_SAS_URL}"
+        echo "DECODED_BLOB_SAS_URL=${DECODED_BLOB_SAS_URL}" >> $GITHUB_ENV
+
+    - name: Parse image version
+      run: |
+        VERSION='${{ inputs.image_full_version }}'
+
+        # Validate format: M.N.YYYYMMDD or M.YYYYMMDD (Kitten)
+        if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]{8}$ ]] && \
+           [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]{8}$ ]]; then
+          echo "::error::Invalid image version format: ${VERSION}"
+          echo "Expected: 8.10.20260330, 9.7.20260330, 10.1.20260330, or 10.20260330 (Kitten)"
+          exit 1
+        fi
+
+        # Count dot-separated fields
+        FIELD_COUNT=$(echo "${VERSION}" | awk -F. '{print NF}')
+
+        if [ "${FIELD_COUNT}" -eq 3 ]; then
+          # Standard format: MAJOR.MINOR.DATE → e.g. 9.7.20260330
+          ALMALINUX_MAJOR=$(echo "${VERSION}" | cut -d. -f1)
+          ALMALINUX_VERSION=$(echo "${VERSION}" | cut -d. -f1-2)
+          DATE_STAMP=$(echo "${VERSION}" | cut -d. -f3)
+        elif [ "${FIELD_COUNT}" -eq 2 ]; then
+          # Kitten format: MAJOR.DATE → e.g. 10.20260330
+          ALMALINUX_MAJOR=$(echo "${VERSION}" | cut -d. -f1)
+          ALMALINUX_VERSION="${ALMALINUX_MAJOR}"
+          DATE_STAMP=$(echo "${VERSION}" | cut -d. -f2)
+        else
+          echo "::error::Cannot parse version: ${VERSION}"
+          exit 1
+        fi
+
+        IMAGE_VERSION="${DATE_STAMP}.0"
+
+        # Derive release string for display
+        if [ "${FIELD_COUNT}" -eq 2 ]; then
+          RELEASE_STRING="AlmaLinux OS Kitten ${ALMALINUX_MAJOR}"
+        else
+          RELEASE_STRING="AlmaLinux OS ${ALMALINUX_VERSION}"
+        fi
+
+        echo "[Debug] ALMALINUX_MAJOR=${ALMALINUX_MAJOR}"
+        echo "[Debug] ALMALINUX_VERSION=${ALMALINUX_VERSION}"
+        echo "[Debug] IMAGE_VERSION=${IMAGE_VERSION}"
+        echo "[Debug] RELEASE_STRING=${RELEASE_STRING}"
+
+        BLOB_NAME="AlmaLinux-${ALMALINUX_MAJOR}-HPC-${ALMALINUX_VERSION}-${IMAGE_VERSION}.x86_64.vhd"
+        echo "[Debug] BLOB_NAME=${BLOB_NAME}"
+
+        echo "ALMALINUX_MAJOR=${ALMALINUX_MAJOR}" >> $GITHUB_ENV
+        echo "ALMALINUX_VERSION=${ALMALINUX_VERSION}" >> $GITHUB_ENV
+        echo "IMAGE_VERSION=${IMAGE_VERSION}" >> $GITHUB_ENV
+        echo "RELEASE_STRING=${RELEASE_STRING}" >> $GITHUB_ENV
+        echo "BLOB_NAME=${BLOB_NAME}" >> $GITHUB_ENV
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Download blob via azcopy
+      run: |
+        # Download to /mnt which has ~70 GB of disk space on GitHub runners
+        sudo chmod o+wx /mnt
+
+        echo "[Debug] Downloading blob as ${BLOB_NAME}..."
+        azcopy copy --check-md5 NoCheck \
+          "${DECODED_BLOB_SAS_URL}" \
+          "/mnt/${BLOB_NAME}"
+
+        ls -lh "/mnt/${BLOB_NAME}"
+
+    - name: Compute MD5 checksum
+      run: |
+        echo "[Debug] Computing MD5 checksum..."
+        BLOB_MD5=$(md5sum "/mnt/${BLOB_NAME}" | awk '{print $1}')
+        echo "[Debug] MD5: ${BLOB_MD5}"
+        echo "BLOB_MD5=${BLOB_MD5}" >> $GITHUB_ENV
+
+    - name: Upload blob to Azure Storage Container
+      run: |
+        CONTAINER_NAME="${ALMALINUX_MAJOR}-hpc"
+
+        echo "[Debug] Uploading ${BLOB_NAME} to almalinux/${CONTAINER_NAME}..."
+        az storage blob upload \
+          --account-name almalinux \
+          --container-name "${CONTAINER_NAME}" \
+          --file "/mnt/${BLOB_NAME}" \
+          --name "${BLOB_NAME}" \
+          --content-md5 "${BLOB_MD5}" \
+          --validate-content
+
+        echo "[Debug] ✅ Upload complete"
+
+    - name: Print job summary
+      run: |
+        {
+          echo "## Azure Azure High-performance Computing Image Upload"
+          echo ""
+          echo "### Image Details"
+          echo "- **Image**: ${RELEASE_STRING} \`${IMAGE_VERSION}\`"
+          echo "- **Blob name**: \`${BLOB_NAME}\`"
+          echo "- **MD5**: \`${BLOB_MD5}\`"
+          echo ""
+          echo "### Storage"
+          echo "- **Account**: \`almalinux\`"
+          echo "- **Container**: \`${ALMALINUX_MAJOR}-hpc\`"
+          echo ""
+          echo "### Status"
+          echo "✅ HPC image uploaded to Azure Storage Container"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.RELEASE_STRING }}** Azure High-performance Computing image uploaded to Azure Storage Container, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Blob**: `${{ env.BLOB_NAME }}`
+
+          **Container**: `${{ env.ALMALINUX_MAJOR }}-hpc`
+
+          **MD5**: `${{ env.BLOB_MD5 }}`
