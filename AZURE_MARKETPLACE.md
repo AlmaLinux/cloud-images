@@ -27,6 +27,7 @@ Trigger via GitHub UI: Actions → Azure image to Marketplace release
 
 Inputs:
   - image_blob_url:          VHD blob URL in Azure Storage (required)
+  - custom_plan_id:          Override the auto-detected Plan ID (optional)
   - release_to_marketplace:  true/false (default: false)
   - notify_mattermost:       true/false (default: true)
 ```
@@ -77,22 +78,36 @@ The workflow requires:
 
 ## Supported Offers and Plans
 
-The workflow maps AlmaLinux versions and image types to Partner Center offer/plan IDs:
+The workflow maps AlmaLinux versions and image types to Partner Center offer/plan IDs.
+If `custom_plan_id` is provided, it overrides the auto-detected Plan ID while keeping the Offer ID from the table below:
 
 | Version | Image Type | Offer ID | Plan ID |
 |---------|------------|----------|---------|
 | AlmaLinux 8 | x86_64 | `almalinux-x86_64` | `8-gen2` |
 | AlmaLinux 8 | arm64 | `almalinux-arm` | `8-arm-gen2` |
-| AlmaLinux 8 | hpc | `almalinux-hpc` | `8-hpc-gen2` |
+| AlmaLinux 8 | hpc | `almalinux-hpc` | `8_10-hpc-gen2` (default) |
 | AlmaLinux 9 | x86_64 | `almalinux-x86_64` | `9-gen2` |
 | AlmaLinux 9 | arm64 | `almalinux-arm` | `9-arm-gen2` |
 | AlmaLinux 9 | arm64-64k | `almalinux-arm` | `9-arm-64k-gen2` |
-| AlmaLinux 9 | hpc | `almalinux-hpc` | `9-hpc-gen2` |
+| AlmaLinux 9 | hpc | `almalinux-hpc` | `9-hpc-gen2` (default) |
 | AlmaLinux 10 | x86_64 | `almalinux-x86_64` | `10-gen2` |
 | AlmaLinux 10 | arm64 | `almalinux-arm` | `10-arm64-gen2` |
 | AlmaLinux 10 | arm64-64k | `almalinux-arm` | `10-arm64-64k-gen2` |
 | Kitten 10 | x86_64 | `kitten` | `10-x64-gen2` |
 | Kitten 10 | arm64 | `kitten` | `10-arm64-gen2` |
+
+### HPC Plans (Microsoft HPC Team)
+
+The Microsoft HPC team may request publishing images they built into specific plans
+under the `almalinux-hpc` offer. Use the `custom_plan_id` input to override the
+default plan in these cases:
+
+| Plan Name | Plan IDs (Gen2 / Gen1) |
+|-----------|------------------------|
+| AlmaLinux OS 8 HPC | `8-hpc-gen2`, `8-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC | `8_10-hpc-gen2`, `8_10-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC for NVIDIA V100 GPU | `8_10-hpc-v100-gen2`, `8_10-hpc-v100-gen1` |
+| AlmaLinux OS 9 HPC | `9-hpc-gen2`, `9-hpc-gen1` |
 
 ## VHD Filename Patterns
 
