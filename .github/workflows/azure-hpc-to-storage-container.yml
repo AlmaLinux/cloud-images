@@ -56,6 +56,11 @@ jobs:
 
     - name: Parse image version
       run: |
+        # Extract original VHD filename from the SAS URL (path component before '?')
+        ORIGINAL_VHD=$(basename "${DECODED_BLOB_SAS_URL%%\?*}")
+        echo "[Debug] Original VHD filename: ${ORIGINAL_VHD}"
+        echo "ORIGINAL_VHD=${ORIGINAL_VHD}" >> $GITHUB_ENV
+
         VERSION='${{ inputs.image_full_version }}'
 
         # Validate format: M.N.YYYYMMDD or M.YYYYMMDD (Kitten)
@@ -160,6 +165,7 @@ jobs:
           echo ""
           echo "### Image Details"
           echo "- **Image**: ${RELEASE_STRING} \`${IMAGE_VERSION}\`"
+          echo "- **Original VHD**: \`${ORIGINAL_VHD}\`"
           echo "- **Blob name**: \`${BLOB_NAME}\`"
           echo "- **Blob URL**: \`${BLOB_URL}\`"
           echo "- **MD5**: \`${BLOB_MD5}\`"
@@ -181,6 +187,8 @@ jobs:
         MATTERMOST_USERNAME: ${{ github.triggering_actor }}
         TEXT: |
           :almalinux: **${{ env.RELEASE_STRING }}** Azure High-performance Computing image uploaded to Azure Storage Container, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Original VHD**: `${{ env.ORIGINAL_VHD }}`
 
           **Storage Account**: `${{ env.STORAGE_ACCOUNT }}`
 
