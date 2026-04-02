@@ -16,6 +16,13 @@ on:
           required: true
           default: ''
 
+        image_build_number:
+          description: |
+            Image build number
+            (appended to the date, used in BLOB_NAME, e.g. 20260330.0)
+          required: true
+          default: '0'
+
         notify_mattermost:
           description: "Send notification to Mattermost"
           required: true
@@ -77,7 +84,7 @@ jobs:
           exit 1
         fi
 
-        IMAGE_VERSION="${DATE_STAMP}.0"
+        IMAGE_VERSION="${DATE_STAMP}.${{ inputs.image_build_number }}"
 
         # Derive release string for display
         if [ "${FIELD_COUNT}" -eq 2 ]; then
