@@ -56,10 +56,10 @@ jobs:
 
     - name: Parse image version
       run: |
-        # Extract original VHD filename from the SAS URL (path component before '?')
-        ORIGINAL_VHD=$(basename "${DECODED_BLOB_SAS_URL%%\?*}")
-        echo "[Debug] Original VHD filename: ${ORIGINAL_VHD}"
-        echo "ORIGINAL_VHD=${ORIGINAL_VHD}" >> $GITHUB_ENV
+        # Extract source VHD filename from the SAS URL (path component before '?')
+        SOURCE_VHD=$(basename "${DECODED_BLOB_SAS_URL%%\?*}")
+        echo "[Debug] Source VHD filename: ${SOURCE_VHD}"
+        echo "SOURCE_VHD=${SOURCE_VHD}" >> $GITHUB_ENV
 
         VERSION='${{ inputs.image_full_version }}'
 
@@ -158,6 +158,17 @@ jobs:
         echo "[Debug] Blob URL: ${BLOB_URL}"
         echo "BLOB_URL=${BLOB_URL}" >> $GITHUB_ENV
 
+    - name: Update Storage container Blob Metadata
+      run: |
+        CONTAINER_NAME="${ALMALINUX_MAJOR}-hpc"
+        echo "[Debug] Updating blob metadata: SOURCE_VHD=${{ env.SOURCE_VHD }}"
+        az storage blob metadata update \
+          --account-name ${{ env.STORAGE_ACCOUNT }} \
+          --container-name "${CONTAINER_NAME}" \
+          --name "${BLOB_NAME}" \
+          --metadata "SOURCE_VHD=${{ env.SOURCE_VHD }}"
+        echo "[Debug] ✅ Blob metadata updated"
+
     - name: Print job summary
       run: |
         {
@@ -165,7 +176,7 @@ jobs:
           echo ""
           echo "### Image Details"
           echo "- **Image**: ${RELEASE_STRING} \`${IMAGE_VERSION}\`"
-          echo "- **Original VHD**: \`${ORIGINAL_VHD}\`"
+          echo "- **Source VHD** (by Azure HPC): \`${SOURCE_VHD}\`"
           echo "- **Blob name**: \`${BLOB_NAME}\`"
           echo "- **Blob URL**: \`${BLOB_URL}\`"
           echo "- **MD5**: \`${BLOB_MD5}\`"
@@ -188,7 +199,7 @@ jobs:
         TEXT: |
           :almalinux: **${{ env.RELEASE_STRING }}** Azure High-performance Computing image uploaded to Azure Storage Container, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
-          **Original VHD**: `${{ env.ORIGINAL_VHD }}`
+          **Source VHD** (by Azure HPC): `${{ env.SOURCE_VHD }}`
 
           **Storage Account**: `${{ env.STORAGE_ACCOUNT }}`
 
