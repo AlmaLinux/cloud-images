@@ -409,11 +409,16 @@ jobs:
 
         echo "PLAN_DURABLE_ID=${PLAN_DURABLE_ID}" >> $GITHUB_ENV
 
-        # Step 2: Find the tech config that references this plan durable ID
+        # Step 2: Find the tech config that references this plan durable ID.
+        # Note: "Core virtual machine" offers use schema containing
+        # "core-virtual-machine-plan-technical-configuration", while regular
+        # "Virtual machine" offers (e.g. almalinux-hpc) use
+        # "virtual-machine-plan-technical-configuration" (no "core-" prefix).
+        # The shorter pattern matches both.
         TECH_CONFIG=$(jq --arg planId "${PLAN_DURABLE_ID}" '
           .resources[]?
           | select(
-              (.["$schema"] // "" | test("core-virtual-machine-plan-technical-configuration"))
+              (.["$schema"] // "" | test("virtual-machine-plan-technical-configuration"))
               and (.plan == $planId)
             )
         ' /tmp/resource_tree.json)
