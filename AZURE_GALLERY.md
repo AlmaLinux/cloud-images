@@ -20,6 +20,29 @@ Workflow for releasing AlmaLinux OS images to an Azure Compute Gallery.
 - Supports both a CI (private) gallery and a public gallery
 - Sends Mattermost notifications and generates job summaries
 
+### `.github/workflows/azure-hpc-to-storage-container.yml`
+
+Workflow for uploading AlmaLinux OS High-Performance Computing (HPC) images to Azure Storage Containers.
+
+**What it does:**
+- Accepts a base64-encoded Blob SAS Token URL (provided by the HPC image vendor) and an image version string
+- Downloads the HPC VHD blob via `azcopy`
+- Computes its MD5 checksum
+- Uploads the blob to the `almalinux` storage account in a `{major}-hpc` container with content MD5 validation
+- Sends Mattermost notifications and generates job summaries
+
+**Usage:**
+```
+Trigger via GitHub UI: Actions → Azure HPC image to Storage Container
+
+Inputs:
+  - blob_sas_url_b64:   Blob SAS Token URL, base64 encoded (required)
+  - image_full_version:  Image version (e.g. 8.10.20260330, 9.7.20260330, 10.20260330)
+  - notify_mattermost:   Send notification to Mattermost (default: false)
+```
+
+The uploaded VHD blobs can then be published to Azure Marketplace using [`azure-to-marketplace.yml`](AZURE_MARKETPLACE.md).
+
 **Usage:**
 ```
 Trigger via GitHub UI: Actions → Azure image to Gallery release
@@ -111,6 +134,7 @@ The workflow requires:
 | `default` | x86_64 | Gen1 + Gen2 | Standard x86_64 images |
 | `arm64` | aarch64/arm64 | Gen2 only | Standard ARM64 images |
 | `arm64-64k` | aarch64 | Gen2 only | ARM64 with 64K page size (AlmaLinux 9+) |
+| `hpc` | x86_64 | Gen1 + Gen2 | High-Performance Computing images (uploaded via `azure-hpc-to-storage-container.yml`) |
 
 ## Image Filename Patterns
 
@@ -128,6 +152,12 @@ AlmaLinux-{major}-Azure-{version}-{date}.{index}[-64k].{arch}.vhd
 ```
 Example: `AlmaLinux-10-Azure-10.0-20250529.0-64k.aarch64.vhd`
 
+### HPC VHD Images
+```
+AlmaLinux-{major}-HPC-{version}-{date}.{index}.{arch}.vhd
+```
+Example: `AlmaLinux-8-HPC-8.10-20260330.0.x86_64.vhd`
+
 ### VHD Images (Legacy format)
 ```
 almalinux-{version}-{arch}.{date}-{index}.vhd
@@ -137,7 +167,7 @@ Example: `almalinux-9.6-arm64.20250522-01.vhd`
 ### Extracted Metadata
 - `RELEASE_VERSION` — distribution version (e.g., `9.6`, `10.0`, `10`)
 - `TIMESTAMP` — date with optional index (e.g., `20250529.0`)
-- `IMAGE_TYPE` — `default`, `arm64`, or `arm64-64k` (derived from architecture and 64K page size flag)
+- `IMAGE_TYPE` — `default`, `arm64`, `arm64-64k`, or `hpc` (derived from architecture, 64K page size flag, and HPC marker)
 
 ## Image Definition Naming
 
@@ -167,9 +197,11 @@ Blob containers are named per major version and image type:
 |---------|------|---------------|
 | 8.x | default | `8-default` |
 | 8.x | arm64 | `8-arm64` |
+| 8.x | hpc | `8-hpc` |
 | 9.x | default | `9-default` |
 | 9.x | arm64 | `9-arm64` |
 | 9.x | arm64-64k | `9-arm64-64k` |
+| 9.x | hpc | `9-hpc` |
 | 10.x | any | `almalinux-10` |
 | Kitten 10 | any | `kitten-10` |
 

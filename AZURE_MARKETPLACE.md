@@ -12,8 +12,8 @@ Workflow for releasing AlmaLinux OS VHD images to Azure Marketplace as new VM im
 
 **What it does:**
 - Accepts a VHD blob URL from Azure Blob Storage (same blobs used by `azure-to-gallery.yml`)
-- Parses the VHD filename to extract version, timestamp, architecture, and image type
-- Maps the image to the corresponding Azure Marketplace offer and plan
+- Parses the VHD filename to extract version, timestamp, architecture, and image type (including HPC)
+- Maps the image to the corresponding Azure Marketplace offer and plan (including `almalinux-hpc` for HPC images)
 - Generates a container-level SAS URI with Read + List permissions
 - Authenticates to the Partner Center Product Ingestion API via Azure AD token
 - Fetches the product resource tree and current plan technical configuration
@@ -27,6 +27,7 @@ Trigger via GitHub UI: Actions → Azure image to Marketplace release
 
 Inputs:
   - image_blob_url:          VHD blob URL in Azure Storage (required)
+  - custom_plan_id:          Override the auto-detected Plan ID (optional)
   - release_to_marketplace:  true/false (default: false)
   - notify_mattermost:       true/false (default: true)
 ```
@@ -64,7 +65,7 @@ The workflow requires:
 2. **Azure Storage Account**
    - Default storage account: `almalinux`
    - Contains per-version/type storage containers (same as `azure-to-gallery.yml`)
-   - VHD blobs must already be uploaded (typically by `azure-to-gallery.yml` or `azure_uploader.sh`)
+   - VHD blobs must already be uploaded (typically by `azure-to-gallery.yml`, `azure_uploader.sh`, or `azure-hpc-to-storage-container.yml` for HPC images)
 
 3. **Partner Center Offers**
    - "Core virtual machine" offers must exist in Partner Center
@@ -77,20 +78,36 @@ The workflow requires:
 
 ## Supported Offers and Plans
 
-The workflow maps AlmaLinux versions and image types to Partner Center offer/plan IDs:
+The workflow maps AlmaLinux versions and image types to Partner Center offer/plan IDs.
+If `custom_plan_id` is provided, it overrides the auto-detected Plan ID while keeping the Offer ID from the table below:
 
 | Version | Image Type | Offer ID | Plan ID |
 |---------|------------|----------|---------|
 | AlmaLinux 8 | x86_64 | `almalinux-x86_64` | `8-gen2` |
 | AlmaLinux 8 | arm64 | `almalinux-arm` | `8-arm-gen2` |
+| AlmaLinux 8 | hpc | `almalinux-hpc` | `8_10-hpc-gen2` (default) |
 | AlmaLinux 9 | x86_64 | `almalinux-x86_64` | `9-gen2` |
 | AlmaLinux 9 | arm64 | `almalinux-arm` | `9-arm-gen2` |
 | AlmaLinux 9 | arm64-64k | `almalinux-arm` | `9-arm-64k-gen2` |
+| AlmaLinux 9 | hpc | `almalinux-hpc` | `9-hpc-gen2` (default) |
 | AlmaLinux 10 | x86_64 | `almalinux-x86_64` | `10-gen2` |
 | AlmaLinux 10 | arm64 | `almalinux-arm` | `10-arm64-gen2` |
 | AlmaLinux 10 | arm64-64k | `almalinux-arm` | `10-arm64-64k-gen2` |
 | Kitten 10 | x86_64 | `kitten` | `10-x64-gen2` |
 | Kitten 10 | arm64 | `kitten` | `10-arm64-gen2` |
+
+### HPC Plans (Microsoft HPC Team)
+
+The Microsoft HPC team may request publishing images they built into specific plans
+under the `almalinux-hpc` offer. Use the `custom_plan_id` input to override the
+default plan in these cases:
+
+| Plan Name | Plan IDs (Gen2 / Gen1) |
+|-----------|------------------------|
+| AlmaLinux OS 8 HPC | `8-hpc-gen2`, `8-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC | `8_10-hpc-gen2`, `8_10-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC for NVIDIA V100 GPU | `8_10-hpc-v100-gen2`, `8_10-hpc-v100-gen1` |
+| AlmaLinux OS 9 HPC | `9-hpc-gen2`, `9-hpc-gen1` |
 
 ## VHD Filename Patterns
 
@@ -106,6 +123,14 @@ Examples:
 - `AlmaLinux-Kitten-Azure-10-20260306.0.x86_64.vhd`
 - `AlmaLinux-9-Azure-9.7-20250522.0-64k.aarch64.vhd`
 
+### HPC Format
+```
+AlmaLinux-{major}-HPC-{version}-{date}.{index}.{arch}.vhd
+```
+Examples:
+- `AlmaLinux-8-HPC-8.10-20260330.0.x86_64.vhd`
+- `AlmaLinux-9-HPC-9.7-20260330.0.x86_64.vhd`
+
 ### Legacy Format
 ```
 almalinux-{version}-{arch}.{date}-{index}.vhd
@@ -117,7 +142,7 @@ Example: `almalinux-8.10-x86_64.20250905-01.vhd`
 - `MAJOR_VERSION` — major version number (e.g., `8`, `9`, `10`)
 - `TIMESTAMP` — date with optional index (e.g., `20250905-01`, `20260306.0`)
 - `ARCH` — architecture (`x86_64`, `aarch64`, or `arm64`)
-- `IMAGE_TYPE` — `default`, `arm64`, or `arm64-64k`
+- `IMAGE_TYPE` — `default`, `arm64`, `arm64-64k`, or `hpc`
 
 ## Package Version Format
 

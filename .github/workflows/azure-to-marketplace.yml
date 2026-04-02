@@ -10,6 +10,12 @@ on:
           type: string
           default: ''
 
+        custom_plan_id:
+          description: "Custom Plan ID"
+          required: false
+          type: string
+          default: ''
+
         release_to_marketplace:
           description: "Release to Azure Marketplace"
           required: true
@@ -173,7 +179,7 @@ jobs:
           # AlmaLinux OS 8
           "8 default")          OFFER_ID="almalinux-x86_64"; PLAN_ID="8-gen2" ;;
           "8 arm64")            OFFER_ID="almalinux-arm"; PLAN_ID="8-arm-gen2" ;;
-          "8 hpc")              OFFER_ID="almalinux-hpc"; PLAN_ID="8-hpc-gen2" ;;
+          "8 hpc")              OFFER_ID="almalinux-hpc"; PLAN_ID="8_10-hpc-gen2" ;;
           # AlmaLinux OS 9
           "9 default")          OFFER_ID="almalinux-x86_64"; PLAN_ID="9-gen2" ;;
           "9 arm64")            OFFER_ID="almalinux-arm"; PLAN_ID="9-arm-gen2" ;;
@@ -191,6 +197,13 @@ jobs:
             exit 1
             ;;
         esac
+
+        # Override Plan ID if custom_plan_id input is set
+        CUSTOM_PLAN_ID="${{ inputs.custom_plan_id }}"
+        if [ -n "${CUSTOM_PLAN_ID}" ]; then
+          echo "[Debug] Overriding Plan ID with custom value: ${CUSTOM_PLAN_ID}"
+          PLAN_ID="${CUSTOM_PLAN_ID}"
+        fi
 
         echo "[Debug] Offer ID: ${OFFER_ID}"
         echo "[Debug] Plan ID: ${PLAN_ID}"
