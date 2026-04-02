@@ -535,6 +535,12 @@ jobs:
         # fields we need to change.  The resource-tree snapshot may reflect
         # a stale draft, so we force the "sticky" vmProperties booleans to
         # their published values (once enabled they cannot be disabled).
+        #
+        # Note: "Core virtual machine" offers support supportsSriov and
+        # supportsBackup, but regular "Virtual machine" offers (e.g.
+        # almalinux-hpc) do not — adding unsupported properties causes a
+        # schema validation error.  Only set properties that already exist
+        # in the tech config.
         jq --arg offer "${OFFER}" \
           --arg plan "${PLAN}" \
           --argjson versions "${ALL_VERSIONS}" \
@@ -547,8 +553,8 @@ jobs:
                  | .vmImageVersions = $versions
                  | .vmProperties.supportsNVMe = true
                  | .vmProperties.supportsCloudInit = true
-                 | .vmProperties.supportsSriov = true
-                 | .vmProperties.supportsBackup = true)
+                 | if .vmProperties | has("supportsSriov") then .vmProperties.supportsSriov = true else . end
+                 | if .vmProperties | has("supportsBackup") then .vmProperties.supportsBackup = true else . end)
             ]
           }' /tmp/current_tech_config.json > /tmp/configure_payload.json
 
