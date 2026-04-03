@@ -19,19 +19,28 @@ selinux --enforcing
 bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
 
 %pre --erroronfail
+fstype=xfs
+for param in $(cat /proc/cmdline); do
+  case $param in
+    fstype=*) fstype=${param#fstype=} ;;
+  esac
+done
 
 parted -s -a optimal /dev/sda -- mklabel gpt
 parted -s -a optimal /dev/sda -- mkpart biosboot 1MiB 2MiB set 1 bios_grub on
 parted -s -a optimal /dev/sda -- mkpart '"EFI System Partition"' fat32 2MiB 202MiB set 2 esp on
-parted -s -a optimal /dev/sda -- mkpart boot xfs 202MiB 1226MiB
-parted -s -a optimal /dev/sda -- mkpart root xfs 1226MiB 100%
+parted -s -a optimal /dev/sda -- mkpart boot $fstype 202MiB 1226MiB
+parted -s -a optimal /dev/sda -- mkpart root $fstype 1226MiB 100%
 
-%end
-
+cat > /tmp/partitions.ks <<EOF
 part biosboot --fstype=biosboot --onpart=sda1
 part /boot/efi --fstype=efi --onpart=sda2
-part /boot --fstype=xfs --onpart=sda3
-part / --fstype=xfs --onpart=sda4
+part /boot --fstype=$fstype --onpart=sda3
+part / --fstype=$fstype --onpart=sda4
+EOF
+%end
+
+%include /tmp/partitions.ks
 
 rootpw --plaintext almalinux
 

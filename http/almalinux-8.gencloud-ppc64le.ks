@@ -18,11 +18,24 @@ selinux --enforcing
 
 bootloader --timeout=0 --location=mbr --append="console=tty0 console=ttyS0,115200n8 no_timer_check net.ifnames=0"
 
+%pre --erroronfail
+fstype=xfs
+for param in $(cat /proc/cmdline); do
+  case $param in
+    fstype=*) fstype=${param#fstype=} ;;
+  esac
+done
+
+cat > /tmp/partitions.ks <<EOF
 zerombr
 clearpart --all --initlabel
 reqpart
-part /boot --fstype=xfs --size=1024
-part / --fstype=xfs --grow
+part /boot --fstype=$fstype --size=1024
+part / --fstype=$fstype --grow
+EOF
+%end
+
+%include /tmp/partitions.ks
 
 rootpw --plaintext almalinux
 reboot --eject

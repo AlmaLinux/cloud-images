@@ -263,7 +263,12 @@ runs:
             aws_s3_path=images/kitten/10/${{ inputs.type }}/${{ env.TIME_STAMP }}
             packer_source=qemu.${packer_source}
             ;;
-          gencloud10|opennebula10)
+          gencloud_ext48|gencloud_ext49)
+            packer_source=almalinux-${{ env.version_major }}-gencloud-ext4-${{ env.alma_arch }}
+            output_mask=output-${packer_source}/AlmaLinux-${{ env.version_major }}-*.${{ env.alma_arch }}.qcow2
+            packer_source=qemu.${packer_source}
+            ;;
+          gencloud10|gencloud_ext410|opennebula10)
             packer_source=almalinux_${{ env.version_major }}_${{ inputs.type }}_${{ env.alma_arch }}
             [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
             output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.qcow2
@@ -481,7 +486,7 @@ runs:
         # Image file format: raw or qcow2
         # Image file name is redefined for the Hyper-V, as it is build using Qemu and converted to .box file
         case ${{ inputs.type }} in
-          oci|gencloud|opennebula)
+          oci|gencloud|gencloud_ext4|opennebula)
             format=qcow2
             image_file=${{ env.IMAGE_FILE }}
             ;;
