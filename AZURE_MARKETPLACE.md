@@ -100,14 +100,15 @@ If `custom_plan_id` is provided, it overrides the auto-detected Plan ID while ke
 
 The Microsoft HPC team may request publishing images they built into specific plans
 under the `almalinux-hpc` offer. Use the `custom_plan_id` input to override the
-default plan in these cases:
+default **Plan ID** in these cases:
 
-| Plan Name | Plan IDs (Gen2 / Gen1) |
-|-----------|------------------------|
-| AlmaLinux OS 8 HPC | `8-hpc-gen2`, `8-hpc-gen1` |
-| AlmaLinux OS 8.10 HPC | `8_10-hpc-gen2`, `8_10-hpc-gen1` |
-| AlmaLinux OS 8.10 HPC for NVIDIA V100 GPU | `8_10-hpc-v100-gen2`, `8_10-hpc-v100-gen1` |
-| AlmaLinux OS 9 HPC | `9-hpc-gen2`, `9-hpc-gen1` |
+| Plan Name | Plan ID | SKU IDs (Gen2 / Gen1) |
+|-----------|---------|-----------------------|
+| AlmaLinux OS 8 HPC | `8-hpc-gen2` | `8-hpc-gen2`, `8-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC | `8_10-hpc-gen2` | `8_10-hpc-gen2`, `8_10-hpc-gen1` |
+| AlmaLinux OS 8.10 HPC for NVIDIA V100 GPU | `8_10-hpc-v100-gen1` | `8_10-hpc-v100-gen2`, `8_10-hpc-v100-gen1` |
+| AlmaLinux OS 9 HPC | `9-hpc-gen2` | `9-hpc-gen2`, `9-hpc-gen1` |
+| AlmaLinux OS 9 HPC for NVIDIA V100 GPU | `9-hpc-v100-gen1` | `9-hpc-v100-gen2`, `9-hpc-v100-gen1` |
 
 ## VHD Filename Patterns
 
