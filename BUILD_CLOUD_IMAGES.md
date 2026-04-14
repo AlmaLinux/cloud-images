@@ -11,7 +11,7 @@ This repository includes a GitHub Actions workflow and a reusable composite acti
 Main workflow that orchestrates image builds across multiple platforms, architectures, and variants.
 
 **What it does:**
-- Builds cloud images (Azure, GCP, GenCloud, OCI, OpenNebula, Hyper-V) and Vagrant boxes (libvirt, VirtualBox, VMware)
+- Builds cloud images (Azure, GCP, GenCloud, GenCloud ext4, OCI, OpenNebula, Hyper-V) and Vagrant boxes (libvirt, VirtualBox, VMware)
 - Supports AlmaLinux 8, 9, 10, and Kitten 10
 - Builds for both x86_64 and aarch64 architectures, plus x86_64_v2 and aarch64 64K page variants
 - Splits work between GitHub-hosted runners (x86_64) and self-hosted runners (aarch64, VMware)
@@ -88,7 +88,8 @@ The workflow requires:
 |------|--------------|---------------|-------|
 | `azure` | `.raw` | x86_64, aarch64, aarch64-64k | Azure VHD source; 64K page variant for AL9+ |
 | `gcp` | `.tar.gz` | x86_64, aarch64 | Google Cloud; includes SBOM generation |
-| `gencloud` | `.qcow2` | x86_64, aarch64 | Generic cloud (OpenStack, etc.) |
+| `gencloud` | `.qcow2` | x86_64, aarch64 | Generic cloud (OpenStack, etc.); XFS filesystem |
+| `gencloud_ext4` | `.qcow2` | x86_64, aarch64 | Generic cloud with ext4 filesystem |
 | `hyperv` | `.box` | x86_64 only | Hyper-V Vagrant box; built with QEMU |
 | `oci` | `.qcow2` | x86_64, aarch64 | Oracle Cloud Infrastructure |
 | `opennebula` | `.qcow2` | x86_64, aarch64 | OpenNebula platform |
@@ -105,12 +106,12 @@ The workflow requires:
 
 | Input | Variants Built | Notes |
 |-------|---------------|-------|
-| `8` | `8` | Single variant |
-| `9` | `9` | Single variant; Azure also builds `9-64k` on aarch64 |
-| `10` | `10`, `10-v2` | v2 = x86_64_v2 microarchitecture; Azure also builds `10-64k` |
-| `10-kitten` | `10-kitten`, `10-kitten-v2` | Kitten builds; Azure also builds `10-kitten-64k` |
+| `8` | `8` | Single variant; gencloud also builds `gencloud_ext4` |
+| `9` | `9` | Single variant; Azure also builds `9-64k` on aarch64; gencloud also builds `gencloud_ext4` |
+| `10` | `10`, `10-v2` | v2 = x86_64_v2 microarchitecture; Azure also builds `10-64k`; gencloud also builds `gencloud_ext4` |
+| `10-kitten` | `10-kitten`, `10-kitten-v2` | Kitten builds; Azure also builds `10-kitten-64k`; gencloud also builds `gencloud_ext4` |
 
-The `-v2` suffix produces images with x86_64_v2 microarchitecture level support. The `-64k` suffix produces aarch64 images with 64K page size (Azure only, AL9+).
+The `-v2` suffix produces images with x86_64_v2 microarchitecture level support. The `-64k` suffix produces aarch64 images with 64K page size (Azure only, AL9+). The `gencloud_ext4` variant produces GenericCloud images with ext4 filesystem instead of the default XFS.
 
 ## Build Matrix
 
@@ -132,7 +133,8 @@ Builds: all aarch64 cloud images, Vagrant VMware (x86_64)
 
 Certain variant/type combinations are excluded:
 - **v2 variants**: excluded from Azure, OCI, GCP, DigitalOcean (cloud images don't use v2)
-- **64k variants**: excluded from OCI, GenCloud, OpenNebula (only Azure supports 64K page)
+- **64k variants**: excluded from OCI, GenCloud, GenCloud ext4, OpenNebula (only Azure supports 64K page)
+- **gencloud_ext4**: excluded from 64k variants (ext4 variant does not produce 64K page images)
 - **OCI**: excluded for Kitten (aarch64)
 
 ## Workflow Process

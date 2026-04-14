@@ -123,7 +123,9 @@ jobs:
           # fi
           if [ "${{ inputs.image_type }}" = "gencloud" -o "${{ inputs.image_type }}" = "ALL" ]; then
             VARIANTS_GH+=("gencloud-x86_64")
+            VARIANTS_GH+=("gencloud_ext4-x86_64")
             VARIANTS_SH+=("gencloud-aarch64")
+            VARIANTS_SH+=("gencloud_ext4-aarch64")
           fi
           if [ "${{ inputs.image_type }}" = "oci" -o "${{ inputs.image_type }}" = "ALL" ]; then
             if [[ "${{ inputs.version_major }}" != *"kitten"*  ]]; then
@@ -276,6 +278,12 @@ jobs:
             variant: '10-kitten-64k'
           - matrix_sh: 'gencloud-aarch64'
             variant: '10-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
+            variant: '9-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
+            variant: '10-kitten-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
+            variant: '10-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '9-64k'
           - matrix_sh: 'opennebula-aarch64'
@@ -365,6 +373,12 @@ jobs:
           - matrix_sh: 'gencloud-aarch64'
             variant: '10-kitten-64k'
           - matrix_sh: 'gencloud-aarch64'
+            variant: '10-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
+            variant: '9-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
+            variant: '10-kitten-64k'
+          - matrix_sh: 'gencloud_ext4-aarch64'
             variant: '10-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '9-64k'

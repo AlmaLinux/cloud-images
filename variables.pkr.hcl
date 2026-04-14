@@ -529,6 +529,300 @@ variable "gencloud_boot_command_10_x86_64_v2" {
     "<leftCtrlOn>x<leftCtrlOff>",
   ]
 }
+
+# Generic Cloud ext4
+
+local "gencloud_ext4_boot_command_8_x86_64" {
+  expression = [
+    "c<wait>",
+    "linuxefi",
+    " /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-x86_64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0 fstype=ext4",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-x86_64.ks",
+    "<enter>",
+    "initrdefi /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+local "gencloud_ext4_boot_command_8_aarch64" {
+  expression = [
+    "c<wait>",
+    "linux /images/pxeboot/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0 fstype=ext4",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-aarch64.ks",
+    "<enter>",
+    "initrd /images/pxeboot/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+local "gencloud_ext4_boot_command_8_ppc64le" {
+  expression = [
+    "c<wait>",
+    "linux /ppc/ppc64/vmlinuz",
+    " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-ppc64le-dvd ro",
+    " inst.text biosdevname=0 net.ifnames=0 fstype=ext4",
+    " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-ppc64le.ks",
+    "<enter>",
+    "initrd /ppc/ppc64/initrd.img",
+    "<enter>",
+    "boot<enter><wait>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_9_x86_64" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud ext4 x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_9_aarch64" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud ext4 AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_9_ppc64le" {
+  description = "Boot command for AlmaLinux OS 9 Generic Cloud ext4 ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_kitten_10_x86_64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_kitten_10_aarch64" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_kitten_10_ppc64le" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_kitten_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 x86_64_v2"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_10_x86_64" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud ext4 x86_64"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-x86_64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_10_aarch64" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud ext4 AArch64"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-aarch64.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_10_ppc64le" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud ext4 ppc64le"
+
+  type = list(string)
+
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-ppc64le.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
+variable "gencloud_ext4_boot_command_10_x86_64_v2" {
+  description = "Boot command for AlmaLinux OS 10 Generic Cloud ext4 x86_64_v2"
+
+  type = list(string)
+  default = [
+    "e",
+    "<down><down>",
+    "<leftCtrlOn>e<leftCtrlOff>",
+    "<spacebar>",
+    "biosdevname=0",
+    "<spacebar>",
+    "net.ifnames=0",
+    "<spacebar>",
+    "inst.text",
+    "<spacebar>",
+    "fstype=ext4",
+    "<spacebar>",
+    "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-x86_64_v2.ks",
+    "<leftCtrlOn>x<leftCtrlOff>",
+  ]
+}
+
 # Azure
 
 variable "azure_disk_size" {
