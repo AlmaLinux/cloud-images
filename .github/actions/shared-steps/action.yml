@@ -92,11 +92,9 @@ runs:
         packer_opts=
         case ${{ env.runner_os }} in
           ubuntu)
-            # Packer options
             packer_opts="-var qemu_binary=/usr/bin/qemu-system-${{ inputs.arch }} -var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
             ;;
           rhel)
-            # Packer options
             packer_opts="-var qemu_binary=/usr/libexec/qemu-kvm"
             ;;
         esac
@@ -116,170 +114,27 @@ runs:
           release_package="almalinux-kitten-release"
         fi
 
-        # Packer source for image set in .pkr.hcl configs, e.g. almalinux-9-gencloud-x86_64, almalinux-9-azure-x86_64, ...
-        packer_source=almalinux-${{ env.version_major }}-${{ inputs.type }}-${{ env.alma_arch }}
+        # Resolve packer_source, output_mask, AWS_S3_PATH, packer_builder
+        eval "$(${{ github.workspace }}/.github/scripts/resolve-image-config.sh \
+          "${{ inputs.type }}" "${{ env.version_major }}" "${{ env.alma_arch }}" \
+          "${{ inputs.variant }}" "${release}" "${{ env.TIME_STAMP }}")"
 
-        # Mask to locate output image file
-        output_mask=${packer_source}/AlmaLinux-${{ env.version_major }}-*.${{ env.alma_arch }}.qcow2
+        # Non-qemu builders (virtualbox-iso, vmware-iso) don't use qemu packer_opts
+        [[ "${packer_builder}" != "qemu" ]] && packer_opts=
 
-        # AWS S3 path to store images
-        aws_s3_path=images/${{ env.version_major }}/${release}/${{ inputs.type }}/${{ env.TIME_STAMP }}
-
-        # tell packer we can use more cpu/ram if we're using runs-on
+        # TODO: tell packer we can use more cpu/ram if we're using runs-on
         # which means we're using runs-on with metal instances
-        # TODO: Error launching VM: Qemu failed to start. Please run with PACKER_LOG=1 to get more info.
         # [[ "${{ env.RUNS_ON_VERSION }}" != "" ]] && packer_opts="${packer_opts} -var cpus=$(($(nproc)-4)) -var memory_${{ env.alma_arch }}=32768"
 
-        # Overriding packer source, image mask and S3 path where necessary
-        case "${{ inputs.type }}_${{ env.version_major }}" in
-          azure_8|azure_9)
-            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_${{ inputs.type }}_64k_${{ env.alma_arch }}"
-            output_mask=output-${packer_source}/AlmaLinux-*${{ env.version_major }}*.${{ env.alma_arch }}.raw
-            packer_source=qemu.${packer_source}
-            ;;
-          hyperv_8)
-            packer_source=almalinux-${{ env.version_major }}-hyperv-${{ env.alma_arch }}
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.hyperv.box
-            packer_source=qemu.${packer_source}
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          hyperv_9)
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
-            packer_source=qemu.${packer_source}
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          hyperv_10)
-            packer_source=almalinux_10_vagrant_hyperv_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-hyperv-*.${{ env.alma_arch }}.box
-            packer_source=qemu.${packer_source}
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          hyperv*kitten*)
-            packer_source=almalinux_kitten_10_vagrant_hyperv_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=AlmaLinux-Kitten-Vagrant-hyperv-10-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
-            packer_source=qemu.${packer_source}
-            ;;
-          azure*kitten*)
-            packer_source=almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="${packer_source}_64k"
-            output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.raw
-            aws_s3_path=images/kitten/10/${{ inputs.type }}/${{ env.TIME_STAMP }}
-            packer_source=qemu.${packer_source}
-            ;;
-          azure_10)
-            packer_source=almalinux_${{ env.version_major }}_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_${{ inputs.type }}_64k_${{ env.alma_arch }}"
-            output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.raw
-            packer_source=qemu.${packer_source}
-            ;;
-          digitalocean*)
-            output_mask=output-${packer_source}/AlmaLinux-${{ env.version_major }}-DigitalOcean-*.${{ env.alma_arch }}.qcow2
-            packer_source=qemu.${packer_source}
-            # TODO: Exclude digitalocean-import post-processor because of lack of DigitalOcean API token
-            # Operating System Version test fails for almaLinux 8.10. Need to refresh from the official repository
-            # https://github.com/digitalocean/marketplace-partners/blob/master/scripts/99-img-check.sh
-            packer_opts="${packer_opts} -except=digitalocean-import"
-            # TODO: Remove pvgrub_config role from ansible playbook as it is not implemented ???
-            sed -i '/role: pvgrub_config/d' ansible/roles/digitalocean_guest/meta/main.yml
-            ;;
-          vagrant_libvirt_8)
-            packer_source=qemu.almalinux-${{ env.version_major }}
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.libvirt.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_libvirt_9)
-            packer_source=qemu.almalinux-${{ env.version_major }}
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-libvirt-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_libvirt_10)
-            packer_source=qemu.almalinux_${{ env.version_major }}_vagrant_libvirt_${{ env.alma_arch }}
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-libvirt-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_virtualbox_8)
-            packer_source=virtualbox-iso.almalinux-${{ env.version_major }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.virtualbox.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_virtualbox_9)
-            packer_source=virtualbox-iso.almalinux-${{ env.version_major }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-virtualbox-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_virtualbox_10)
-            packer_source=virtualbox-iso.almalinux_${{ env.version_major }}_vagrant_virtualbox_${{ env.alma_arch }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-virtualbox-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_vmware_8)
-            packer_source=vmware-iso.almalinux-${{ env.version_major }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-*.${{ env.alma_arch }}.vmware.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_vmware_9)
-            packer_source=vmware-iso.almalinux-${{ env.version_major }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-vmware-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_vmware_10)
-            packer_source=vmware-iso.almalinux_${{ env.version_major }}_vagrant_vmware_${{ env.alma_arch }}
-            packer_opts=
-            output_mask=AlmaLinux-${{ env.version_major }}-Vagrant-vmware-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/${{ env.version_major }}/${release}/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_vmware*kitten*)
-            packer_source=vmware-iso.almalinux_kitten_10_vagrant_vmware_${{ env.alma_arch }}
-            packer_opts=
-            output_mask=AlmaLinux-Kitten-Vagrant-vmware-10-*.${{ env.alma_arch }}.box
-            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_libvirt*kitten*)
-            packer_source=qemu.almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=AlmaLinux-Kitten-Vagrant-libvirt-10-*.${{ env.alma_arch }}*.box
-            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          vagrant_virtualbox*kitten*)
-            packer_source=virtualbox-iso.almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=AlmaLinux-Kitten-Vagrant-virtualbox-10-*.${{ env.alma_arch }}*.box
-            aws_s3_path=images/kitten/10/vagrant/${{ env.TIME_STAMP }}
-            ;;
-          *kitten*)
-            packer_source=almalinux_kitten_10_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.qcow2
-            aws_s3_path=images/kitten/10/${{ inputs.type }}/${{ env.TIME_STAMP }}
-            packer_source=qemu.${packer_source}
-            ;;
-          gencloud_ext4_8|gencloud_ext4_9)
-            packer_source=almalinux-${{ env.version_major }}-gencloud-ext4-${{ env.alma_arch }}
-            output_mask=output-${packer_source}/AlmaLinux-${{ env.version_major }}-*.${{ env.alma_arch }}.qcow2
-            packer_source=qemu.${packer_source}
-            aws_s3_path=images/${{ env.version_major }}/${release}/gencloud_ext4/${{ env.TIME_STAMP }}
-            ;;
-          gencloud_10|gencloud_ext4_10|opennebula_10)
-            packer_source=almalinux_${{ env.version_major }}_${{ inputs.type }}_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            output_mask=output-${packer_source}/AlmaLinux-*.${{ env.alma_arch }}*.qcow2
-            packer_source=qemu.${packer_source}
-            ;;
-          *)
-            output_mask=output-${output_mask}
-            packer_source=qemu.${packer_source}
-            ;;
-        esac
+        # digitalocean-specific side effects
+        if [[ "${{ inputs.type }}" == digitalocean* ]]; then
+          # TODO: Exclude digitalocean-import post-processor because of lack of DigitalOcean API token
+          # Operating System Version test fails for almaLinux 8.10. Need to refresh from the official repository
+          # https://github.com/digitalocean/marketplace-partners/blob/master/scripts/99-img-check.sh
+          packer_opts="${packer_opts} -except=digitalocean-import"
+          # TODO: Remove pvgrub_config role from ansible playbook as it is not implemented ???
+          sed -i '/role: pvgrub_config/d' ansible/roles/digitalocean_guest/meta/main.yml
+        fi
 
         echo "PACKER_OPTS=${packer_opts}" >> $GITHUB_ENV
 
@@ -287,7 +142,7 @@ runs:
         echo "RELEASE=${release}" >> "$GITHUB_ENV"
         echo "packer_source=${packer_source}" >> $GITHUB_ENV
         echo "output_mask=${output_mask}" >> $GITHUB_ENV
-        echo "AWS_S3_PATH=${aws_s3_path}" >> $GITHUB_ENV
+        echo "AWS_S3_PATH=${AWS_S3_PATH}" >> $GITHUB_ENV
         echo "RELEASE_STRING=${release_string}" >> $GITHUB_ENV
         echo "RELEASE_PACKAGE=${release_package}" >> $GITHUB_ENV
 
@@ -334,7 +189,7 @@ runs:
       run: |
         # Unload KVM modules
         sudo lsmod | grep kvm
-        sudo modprobe -r kvm_intel kvm || sudo modprobe -r kvm_amd kvm
+        sudo modprobe -r kvm_intel kvm || sudo modprobe -r kvm_amd kvm || true
 
     - name: Install VirtualBox from its repository
       if: inputs.type == 'vagrant_virtualbox'

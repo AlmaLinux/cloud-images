@@ -32,7 +32,7 @@ on:
             - vagrant_vmware
 
         self-hosted:
-          description: "Build vagrant_vmware on self-hosted runner"
+          description: "Build on self-hosted runner"
           required: true
           type: boolean
           default: true
@@ -68,7 +68,7 @@ on:
           description: "Send notification to Mattermost"
           required: true
           type: boolean
-          default: false
+          default: true
 env:
   PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
@@ -90,12 +90,31 @@ jobs:
           matrix_sh=  #  ["vagrant_vmware-x86_64"]
 
           if [ "${{ inputs.vagrant_type }}" = "vagrant_libvirt" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("vagrant_libvirt-x86_64")
+            if [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
+              # If self-hosted is enabled and self-hosted runner is set,
+              # run on manually set up runner, like:
+              # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_libvirt-x86_64 --labels vagrant_libvirt-x86_64 --no-default-labels --work _work --runnergroup default --replace
+              VARIANTS_SH+=("vagrant_libvirt-x86_64")
+            else
+              # This is the default behavior to run on GitHub runners
+              VARIANTS_GH+=("vagrant_libvirt-x86_64")
+            fi
           fi
           if [ "${{ inputs.vagrant_type }}" = "vagrant_virtualbox" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+            if [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
+              # If self-hosted is enabled and self-hosted runner is set,
+              # run on manually set up runner, like:
+              # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_virtualbox-x86_64 --labels vagrant_virtualbox-x86_64 --no-default-labels --work _work --runnergroup default --replace
+              VARIANTS_SH+=("vagrant_virtualbox-x86_64")
+            else
+              # This is the default behavior to run on GitHub runners
               VARIANTS_GH+=("vagrant_virtualbox-x86_64") # tests aren't work on GitHub runners, use self-hosted to run tests
+            fi
           fi
           if [ "${{ inputs.vagrant_type }}" = "vagrant_vmware" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+              # Run on AWS EC2 (automatically set up),
+              # or manually set up self-hosted runner, like:
+              # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_vmware-x86_64 --labels vagrant_vmware-x86_64 --no-default-labels --work _work --runnergroup default --replace
               VARIANTS_SH+=("vagrant_vmware-x86_64") # VMware has networking issues on GitHub runners, so we use self-hosted runner
           fi
 
@@ -230,8 +249,7 @@ jobs:
     #
     # Otherwise use AWS EC2 Self-Hosted x86_64 runner set up with the 'start-self-hosted-runner' job above
     #
-    # Or use manually set up runner. Vagrant for VirtualBox x86_64 runner configuration example:
-    # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_virtualbox-x86_64 --labels vagrant_virtualbox-x86_64 --no-default-labels --work _work --runnergroup default --replace
+    # Or use manually set up runner.
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
