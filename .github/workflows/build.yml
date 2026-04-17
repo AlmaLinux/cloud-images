@@ -30,7 +30,7 @@ on:
             - ALL
             - azure
             # - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
-            - gcp
+            # - gcp                  # Separated to gcp-build.yml
             - gencloud
             - hyperv
             - oci
@@ -111,10 +111,7 @@ jobs:
             VARIANTS_GH+=("azure-x86_64")
             VARIANTS_SH+=("azure-aarch64")
           fi
-          if [ "${{ inputs.image_type }}" = "gcp" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("gcp-x86_64")
-            VARIANTS_SH+=("gcp-aarch64")
-          fi
+          # GCP is separated to gcp-build.yml
           # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
           # if [ "${{ inputs.image_type }}" = "digitalocean" -o "${{ inputs.image_type }}" = "ALL" ]; then
           #   if [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && [[ "${{ inputs.version_major }}" != *"10"  ]]; then
@@ -203,13 +200,9 @@ jobs:
             variant: '10-kitten-v2'
           - matrix_gh: 'oci-x86_64'
             variant: '10-kitten-v2'
-          - matrix_gh: 'gcp-x86_64'
-            variant: '10-kitten-v2'
           - matrix_gh: 'digitalocean-x86_64'
             variant: '10-kitten-v2'
           - matrix_gh: 'azure-x86_64'
-            variant: '10-v2'
-          - matrix_gh: 'gcp-x86_64'
             variant: '10-v2'
           - matrix_gh: 'oci-x86_64'
             variant: '10-v2'
@@ -290,12 +283,6 @@ jobs:
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-64k'
-          - matrix_sh: 'gcp-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gcp-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gcp-aarch64'
-            variant: '10-64k'
 
     steps:
     - name: Setup and start runner
@@ -332,7 +319,7 @@ jobs:
     needs: [init-data, start-self-hosted-runner]
     # If almalinux org, use RunsOn with:
     # - AlmaLinux 9.x x86_64 specific AWS AMI ID (need to build Vagrant for VMware)
-    # - ubuntu24-full-arm64 for GCP on aarch64
+    # - almalinux-9-aarch64 on a1.metal for aarch64
     #
     # Otherwise use AWS EC2 Self-Hosted x86_64 or aarch64 runner set up with the 'start-self-hosted-runner' job above
     #
@@ -343,9 +330,6 @@ jobs:
         github.repository_owner == 'AlmaLinux' && (
           contains(matrix.matrix_sh, 'x86_64') &&
             format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64)
-          ||
-          contains(matrix.matrix_sh, 'gcp') &&
-            format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-arm64', github.run_id)
           ||
           format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id)
         )
@@ -385,12 +369,6 @@ jobs:
           - matrix_sh: 'opennebula-aarch64'
             variant: '10-kitten-64k'
           - matrix_sh: 'opennebula-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'gcp-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gcp-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gcp-aarch64'
             variant: '10-64k'
 
     env:

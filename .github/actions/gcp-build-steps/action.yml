@@ -1,0 +1,428 @@
+name: "GCP Image build, upload and notify"
+description: "Builds AlmaLinux GCP cloud images using Packer, generates SBOM, uploads to GCS and S3, and sends notifications"
+
+inputs:
+  variant:
+    description: 'AlmaLinux variant to build (e.g., 9, 10, 10-kitten)'
+    required: true
+  arch:
+    description: 'Target architecture (x86_64 or aarch64)'
+    required: true
+  S3_ACCESS_KEY_ID:
+    description: 'AWS S3 access key ID for uploading images'
+    required: true
+  S3_SECRET_ACCESS_KEY:
+    description: 'AWS S3 secret access key for uploading images'
+    required: true
+  AWS_REGION:
+    description: 'AWS region for S3 bucket'
+    required: true
+  AWS_S3_BUCKET:
+    description: 'S3 bucket name for storing built images'
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: 'Mattermost webhook URL for notifications'
+    required: true
+  MATTERMOST_CHANNEL:
+    description: 'Mattermost channel for notifications'
+    required: true
+  store_as_artifact:
+    description: 'Whether to store the built image as a GitHub artifact (true/false)'
+    required: true
+  upload_to_s3:
+    description: 'Whether to upload the built image to S3 (true/false)'
+    required: true
+  notify_mattermost:
+    description: 'Whether to send notifications to Mattermost (true/false)'
+    required: true
+  runner:
+    description: 'Type of runner to use for the build process'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: runs-on/action@v2.1.0
+      # only when in runs-on environment and not AlmaLinux AMI
+      if: env.RUNS_ON_VERSION != '' && ! contains(env.RUNS_ON_AMI_NAME, 'AlmaLinux')
+      with:
+        metrics: cpu,network,memory,disk,io
+
+    - name: Runner OS, install extra packages
+      shell: bash
+      run: |
+        # Runner OS
+        if [ -e /etc/redhat-release ]; then
+          runner_os=rhel
+          sudo dnf -y -q install unzip wget epel-release
+        elif lsb_release -cs > /dev/null 2>&1; then
+          runner_os=ubuntu
+          sudo apt-get -y update
+          sudo apt-get -y install ovmf rpm unzip
+
+          echo "UBUNTU_CODENAME=$(lsb_release -cs)" >> $GITHUB_ENV
+        else
+          echo "[Debug] Unknown OS"
+          exit 1
+        fi
+        echo "runner_os=${runner_os}" >> $GITHUB_ENV
+
+    - name: Set major version and arch
+      shell: bash
+      run: |
+        # Set major version and arch
+        version_major=${{ inputs.variant }}
+        alma_arch=${{ inputs.arch }}
+        [[ ${version_major} == *'v2'* ]] && alma_arch=x86_64_v2
+        version_major=${version_major%-64k}
+        version_major=${version_major%-v2}
+        echo "version_major=${version_major}" >> $GITHUB_ENV
+        echo "alma_arch=${alma_arch}" >> $GITHUB_ENV
+
+    - name: Prepare stuff
+      shell: bash
+      run: |
+        # Prepare stuff
+        packer_opts=
+        case ${{ env.runner_os }} in
+          ubuntu)
+            packer_opts="-var qemu_binary=/usr/bin/qemu-system-${{ inputs.arch }} -var ovmf_code=/usr/share/OVMF/OVMF_CODE_4M.fd -var ovmf_vars=/usr/share/OVMF/OVMF_VARS_4M.fd"
+            ;;
+          rhel)
+            packer_opts="-var qemu_binary=/usr/libexec/qemu-kvm"
+            ;;
+        esac
+
+        # Release string and version
+        if [[ ${{ env.version_major }} != *'kitten'* ]]; then
+          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ env.version_major }}.${{ env.alma_arch }}.rpm
+          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          release_string="AlmaLinux release ${release}"
+          release_package="almalinux-release"
+        else
+          release=10
+          release_string="AlmaLinux Kitten release ${release}"
+          release_package="almalinux-kitten-release"
+        fi
+
+        # Packer source, output mask, and S3 path for GCP
+        aws_s3_path=images/${{ env.version_major }}/${release}/gcp/${{ env.TIME_STAMP }}
+
+        case "${{ env.version_major }}" in
+          8|9)
+            packer_source=almalinux-${{ env.version_major }}-gcp-${{ env.alma_arch }}
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
+            packer_source=qemu.${packer_source}
+            ;;
+          10)
+            packer_source=almalinux_${{ env.version_major }}_gcp_${{ env.alma_arch }}
+            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_gcp_64k_${{ env.alma_arch }}"
+            output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
+            packer_source=qemu.${packer_source}
+            ;;
+          *kitten*)
+            packer_source=almalinux_kitten_10_gcp_${{ env.alma_arch }}
+            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.qcow2
+            aws_s3_path=images/kitten/10/gcp/${{ env.TIME_STAMP }}
+            packer_source=qemu.${packer_source}
+            ;;
+        esac
+
+        echo "PACKER_OPTS=${packer_opts}" >> $GITHUB_ENV
+        echo "IMAGE_TYPE=Gcp" >> $GITHUB_ENV
+        echo "RELEASE=${release}" >> "$GITHUB_ENV"
+        echo "packer_source=${packer_source}" >> $GITHUB_ENV
+        echo "output_mask=${output_mask}" >> $GITHUB_ENV
+        echo "AWS_S3_PATH=${aws_s3_path}" >> $GITHUB_ENV
+        echo "RELEASE_STRING=${release_string}" >> $GITHUB_ENV
+        echo "RELEASE_PACKAGE=${release_package}" >> $GITHUB_ENV
+
+    - name: Install KVM
+      shell: bash
+      run: |
+        # Install KVM
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt-get -y install qemu-kvm
+            sudo adduser "$(id -un)" kvm
+            ;;
+          rhel)
+            sudo dnf -y -q install qemu-kvm
+            sudo usermod --append -G kvm "$(id -un)"
+            ;;
+        esac
+
+    - name: Check nested virtualization support
+      if: inputs.arch == 'x86_64' && inputs.runner != 'aws-ec2'
+      shell: bash
+      run: |
+        # Check nested virtualization support
+        echo "[Debug] vmx|svm CPU flags:"
+        egrep -c '(vmx|svm)' /proc/cpuinfo
+        echo "[Debug] KVM modules:"
+        sudo lsmod | grep kvm
+        echo "[Debug] Nested virtualization support:"
+        sudo cat /sys/module/kvm_*/parameters/nested
+
+    - name: Enable KVM group perms
+      shell: bash
+      run: |
+        # Enable KVM group perms
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Add Hashicorp repository
+      shell: bash
+      run: |
+        # Add Hashicorp repository
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+            wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${{ env.UBUNTU_CODENAME }} main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+            sudo apt-get -y update
+            ;;
+          rhel)
+            sudo dnf -y -q install dnf-utils
+            sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+            ;;
+        esac
+
+    - name: Install packer
+      shell: bash
+      run: |
+        # Install packer
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install packer
+
+    - name: Install ansible
+      shell: bash
+      run: |
+        # Install ansible
+        sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install ansible
+
+    - name: Clone SBOM tools
+      shell: bash
+      run: |
+        rm -rf sbom-tools
+        git clone --depth=1 https://github.com/AlmaLinux/cloud-images-sbom-tools.git sbom-tools
+
+    - name: Set up Python and install generator deps
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: sbom-tools/requirements.txt
+
+    - name: Create venv and install
+      shell: bash
+      run: |
+        python -m venv .venv-sbom
+        .venv-sbom/bin/pip install -r sbom-tools/requirements.txt
+
+    - name: Initialize packer
+      shell: bash
+      run: sudo /usr/bin/packer init -upgrade .
+
+    - name: Build GCP image
+      shell: bash
+      run: |
+        # Build GCP image
+        # PACKER_LOG=1
+        sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
+
+    - name: Locate image file, generate checksum
+      shell: bash
+      run: |
+        # Locate image file, generate checksum
+        ls -la $(dirname '${{ env.output_mask }}')
+        image_file=$(ls -1 ${{ env.output_mask }} | head -n 1)
+        [ "x${image_file}" = "x" ] && false
+        cd $(dirname ${image_file})
+        sudo sh -c "sha256sum $(basename ${image_file}) > $(basename ${image_file}).sha256sum"
+
+        echo "IMAGE_FILE=${image_file}" >> $GITHUB_ENV
+        echo "IMAGE_NAME=$(basename ${image_file})" >> $GITHUB_ENV
+
+        # don't fail if this doesn't exist, we may not always generate it
+        sudo mv sbom-data-*.json $(basename ${image_file}).sbom-data.json || true
+
+    - name: Generate SBOM
+      shell: bash
+      run: |
+        echo "Generating SBOM document of ${{ env.IMAGE_FILE }}"
+        sudo .venv-sbom/bin/python3 sbom-tools/sbom_generator.py "${{ env.IMAGE_NAME }}" "${{ env.IMAGE_FILE }}.sbom-data.json" "${{ env.IMAGE_FILE }}.sbom.spdx.json"
+
+    - id: 'google-auth-dev-images'
+      uses: 'google-github-actions/auth@v3'
+      with:
+        workload_identity_provider: 'projects/443728870479/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-cloud-images@almalinux-dev-images-469421.iam.gserviceaccount.com'
+
+    - name: 'Set up Google Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v3'
+
+    - name: Upload output to GCP storage bucket
+      shell: bash
+      run: gcloud storage cp ${{ env.IMAGE_FILE }} gs://almalinux-images-dev/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d')/root.tar.gz
+
+    - name: Upload SBOM data to GCP storage bucket
+      shell: bash
+      run: gcloud storage cp ${{ env.IMAGE_FILE }}.sbom.spdx.json gs://almalinux-images-dev-sbom/almalinux-${version_major}${{ inputs.arch == 'aarch64' && '-arm64' || '' }}-v$(date +'%Y%m%d').sbom.spdx.json
+
+    - name: Clone gce_image_publish repo
+      uses: actions/checkout@v6
+      with:
+        path: compute-image-tools
+        repository: GoogleCloudPlatform/compute-image-tools
+        ref: "20250916.00"
+
+    - name: Build gce_image_publish tool
+      shell: bash
+      run: |
+        # we need golang
+        case ${{ env.runner_os }} in
+          ubuntu)
+            sudo apt update
+            sudo apt-get -y install golang-go
+            ;;
+          rhel)
+            sudo dnf -y -q install golang
+            ;;
+        esac
+        # print golang version for reference
+        go version
+        # Build gce_image_publish tool
+        cd compute-image-tools/cli_tools/gce_image_publish
+        go mod tidy
+        go install
+
+    - name: Create test image on GCP
+      shell: bash
+      run: |
+        /home/$USER/go/bin/gce_image_publish \
+          -var:environment=test \
+          -skip_confirmation \
+          -rollout_rate=0 \
+          -publish_project="almalinux-dev-images-469421" \
+          -work_project="almalinux-dev-images-469421" \
+          -replace \
+          -source_gcs_path="gs://almalinux-images-dev/" \
+          vm-scripts/gcp/almalinux_${version_major}${{ inputs.arch == 'aarch64' && '_arm64' || '' }}.publish.json
+
+    - uses: actions/upload-artifact@v7
+      name: Store image as artifact
+      id: image-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 1
+        name: ${{ env.IMAGE_NAME }}
+        path: ${{ env.IMAGE_FILE }}
+
+    - uses: actions/upload-artifact@v7
+      name: Store collected sbom data as artifact
+      id: sbom-data-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 9
+        name: ${{ env.IMAGE_NAME }}.sbom-data.json
+        path: ${{ env.IMAGE_FILE }}.sbom-data.json
+
+    - uses: actions/upload-artifact@v7
+      name: Store SBOM as artifact
+      id: sbom-artifact
+      if: inputs.store_as_artifact == 'true'
+      with:
+        compression-level: 9
+        name: ${{ env.IMAGE_NAME }}.sbom.spdx.json
+        path: ${{ env.IMAGE_FILE }}.sbom.spdx.json
+
+    - uses: actions/upload-artifact@v7
+      name: Store checksum as artifact
+      id: checksum-artifact
+      if: inputs.store_as_artifact  == 'true'
+      with:
+        compression-level: 1
+        name: ${{ env.IMAGE_NAME }}.sha256sum
+        path: ${{ env.IMAGE_FILE }}.sha256sum
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      if: inputs.upload_to_s3  == 'true'
+      with:
+        aws-access-key-id: ${{ inputs.S3_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ inputs.S3_SECRET_ACCESS_KEY }}
+        aws-region: ${{ inputs.AWS_REGION }}
+
+    - name: Install aws CLI
+      if: inputs.upload_to_s3 == 'true'
+      shell: bash
+      run: |
+        # Install aws CLI
+        if ! aws --version 2>/dev/null; then
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-${{ inputs.arch }}.zip" -o "awscliv2.zip"
+          unzip -qq awscliv2.zip
+          sudo ./aws/install
+        else
+          true
+        fi
+
+    - name: Publish to S3 Bucket and put object tagging with aws CLI
+      if: inputs.upload_to_s3 == 'true'
+      shell: bash
+      run: |
+        # Publish to S3 Bucket and put object tagging with aws CLI
+        cd $(dirname ${{ env.IMAGE_FILE }})
+        for object in ${{ env.IMAGE_NAME }} ${{ env.IMAGE_NAME }}.sha256sum; do
+          [ ! -f ${object} ] && continue
+          aws s3 cp ${object} s3://${{ inputs.AWS_S3_BUCKET }}/${{ env.AWS_S3_PATH }}/
+          aws s3api put-object-tagging --bucket ${{ inputs.AWS_S3_BUCKET }} --key ${{ env.AWS_S3_PATH }}/${object} --tagging 'TagSet={Key=public,Value=yes}'
+        done
+
+    - name: Print workflow summary
+      uses: actions/github-script@v8
+      env:
+        upload_to_s3: ${{ inputs.upload_to_s3 || 'false' }}
+      with:
+        result-encoding: string
+        script: |
+          const summary = core.summary
+            .addRaw('**${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
+          if (process.env.upload_to_s3 === 'true') {
+            summary
+              .addRaw('S3 Bucket download URLs:\n')
+              .addLink('${{ env.IMAGE_NAME }}', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}')
+              .addLink('${{ env.IMAGE_NAME }}.sha256sum', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum');
+          }
+          summary.write();
+
+    - name: Prepare Mattermost notification message
+      if: ${{ inputs.notify_mattermost == 'true' }}
+      shell: bash
+      run: |
+        {
+          echo 'MATTERMOST_NOTIFICATION_MESSAGE<<EOF'
+
+          echo ":almalinux: **${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [ "${{ inputs.store_as_artifact }}" = "true" -a "${{ inputs.upload_to_s3 }}" = "false" ]; then
+            echo "- CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})"
+            echo "- Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})"
+          fi
+          if [ "${{ inputs.upload_to_s3 }}" = "true" ]; then
+            echo "- CHECKSUM(SHA256): [${{ env.IMAGE_NAME }}.sha256sum](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.sha256sum)"
+            echo "- Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})"
+          fi
+
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: ${{ inputs.notify_mattermost == 'true' }}
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: ${{ env.MATTERMOST_NOTIFICATION_MESSAGE }}
