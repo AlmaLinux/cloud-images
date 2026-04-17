@@ -1,4 +1,4 @@
-name: Build Cloud and Vagrant Images
+name: Vagrant Image Build
 
 on:
   workflow_dispatch:
@@ -20,36 +20,19 @@ on:
             - 9
             - 8
 
-        image_type:
-          description: 'Cloud image type'
-          required: true
-          default: 'NONE'
-          type: choice
-          options:
-            - NONE
-            - ALL
-            - azure
-            # - digitalocean        # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
-            # - gcp                  # Separated to gcp-build.yml
-            - gencloud
-            - hyperv
-            - oci
-            - opennebula
-
         vagrant_type:
           description: 'Vagrant image type'
           required: true
-          default: 'NONE'
+          default: 'ALL'
           type: choice
           options:
-            - NONE
             - ALL
             - vagrant_libvirt
             - vagrant_virtualbox
             - vagrant_vmware
 
         self-hosted:
-          description: "Allow self-hosted runner (aarch64 or vagrant_vmware only)"
+          description: "Build vagrant_vmware on self-hosted runner"
           required: true
           type: boolean
           default: true
@@ -64,7 +47,7 @@ on:
             - aws-ec2
 
         run_test:
-          description: "Do image simple testing and generate installed packages list (vagrant_* only)"
+          description: "Do image simple testing and generate installed packages list"
           required: true
           type: boolean
           default: true
@@ -103,42 +86,9 @@ jobs:
         id: set-matrix
         run: |
           # Build matrix is json array of string elements like:
-          matrix_gh=  #  ["azure-x86_64", "gencloud-x86_64", ...]
-          matrix_sh=  #  ["azure-aarch64", "gencloud-aarch64", ... , "vagrant_vmware-x86_64"]
+          matrix_gh=  #  ["vagrant_libvirt-x86_64", "vagrant_virtualbox-x86_64"]
+          matrix_sh=  #  ["vagrant_vmware-x86_64"]
 
-          # Cloud Images
-          if [ "${{ inputs.image_type }}" = "azure" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("azure-x86_64")
-            VARIANTS_SH+=("azure-aarch64")
-          fi
-          # GCP is separated to gcp-build.yml
-          # TODO: require data to work with the cloud, such as: bucket, access key, secret key, etc.
-          # if [ "${{ inputs.image_type }}" = "digitalocean" -o "${{ inputs.image_type }}" = "ALL" ]; then
-          #   if [[ "${{ inputs.version_major }}" != *"kitten"*  ]] && [[ "${{ inputs.version_major }}" != *"10"  ]]; then
-          #     VARIANTS_GH+=("digitalocean-x86_64")
-          #   fi
-          # fi
-          if [ "${{ inputs.image_type }}" = "gencloud" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("gencloud-x86_64")
-            VARIANTS_GH+=("gencloud_ext4-x86_64")
-            VARIANTS_SH+=("gencloud-aarch64")
-            VARIANTS_SH+=("gencloud_ext4-aarch64")
-          fi
-          if [ "${{ inputs.image_type }}" = "oci" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            if [[ "${{ inputs.version_major }}" != *"kitten"*  ]]; then
-              VARIANTS_GH+=("oci-x86_64")
-              VARIANTS_SH+=("oci-aarch64")
-            fi
-          fi
-          if [ "${{ inputs.image_type }}" = "opennebula" -o "${{ inputs.image_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("opennebula-x86_64")
-            VARIANTS_SH+=("opennebula-aarch64")
-          fi
-          if [ "${{ inputs.image_type }}" = "hyperv" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
-            VARIANTS_GH+=("hyperv-x86_64")
-          fi
-
-          # Vagrant Images
           if [ "${{ inputs.vagrant_type }}" = "vagrant_libvirt" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
             VARIANTS_GH+=("vagrant_libvirt-x86_64")
           fi
@@ -195,19 +145,6 @@ jobs:
       matrix:
         variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10-kitten' || inputs.version_major == '10' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_gh) }}
-        exclude:
-          - matrix_gh: 'azure-x86_64'
-            variant: '10-kitten-v2'
-          - matrix_gh: 'oci-x86_64'
-            variant: '10-kitten-v2'
-          - matrix_gh: 'digitalocean-x86_64'
-            variant: '10-kitten-v2'
-          - matrix_gh: 'azure-x86_64'
-            variant: '10-v2'
-          - matrix_gh: 'oci-x86_64'
-            variant: '10-v2'
-          - matrix_gh: 'digitalocean-x86_64'
-            variant: '10-v2'
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
@@ -239,7 +176,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: ${{ contains(env.type, 'vagrant') && inputs.run_test && 'true' || 'false' }} # Do image simple testing and generate installed packages list (vagrant_* only)
+          run_test: ${{ inputs.run_test }}
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -254,35 +191,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major ) ) )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
-        exclude:
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-kitten'
-          - matrix_sh: 'oci-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '10-64k'
 
     steps:
     - name: Setup and start runner
@@ -293,13 +203,11 @@ jobs:
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: ${{ vars.AWS_REGION }}
-        ec2_ami_id: ${{ secrets[format('EC2_AMI_ID_AL9_{0}', ( contains(matrix.matrix_sh, 'x86_64') && 'X86_64' || 'AARCH64' ))] }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_X86_64 }}
 
         ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
-        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }} # Availability Zones list for 'a1.metal' Instance Type
-        ec2_instance_type: ${{ contains(matrix.matrix_sh, 'x86_64') && 'c5n.metal' || 'a1.metal' }}
-                                            # aarch64 - t4g.medium a1.metal
-                                            # x86_64 - t3.medium c5n.metal
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
+        ec2_instance_type: c5n.metal
 
         ec2_root_disk_size_gb: "16"         # override default size which is too small for actions and tests stuff
         ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
@@ -319,20 +227,15 @@ jobs:
     needs: [init-data, start-self-hosted-runner]
     # If almalinux org, use RunsOn with:
     # - AlmaLinux 9.x x86_64 specific AWS AMI ID (need to build Vagrant for VMware)
-    # - almalinux-9-aarch64 on a1.metal for aarch64
     #
-    # Otherwise use AWS EC2 Self-Hosted x86_64 or aarch64 runner set up with the 'start-self-hosted-runner' job above
+    # Otherwise use AWS EC2 Self-Hosted x86_64 runner set up with the 'start-self-hosted-runner' job above
     #
     # Or use manually set up runner. Vagrant for VirtualBox x86_64 runner configuration example:
     # ./config.sh --url https://github.com/almalinux/cloud-images --token ***** --name vagrant_virtualbox-x86_64 --labels vagrant_virtualbox-x86_64 --no-default-labels --work _work --runnergroup default --replace
     runs-on: >-
       ${{
-        github.repository_owner == 'AlmaLinux' && (
-          contains(matrix.matrix_sh, 'x86_64') &&
-            format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64)
-          ||
-          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id)
-        )
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c5n.metal/ami={1}', github.run_id, vars.EC2_AMI_ID_AL9_X86_64)
         ||
         inputs.self_hosted_runner == 'aws-ec2' && github.run_id
         ||
@@ -341,35 +244,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(format('["{0}"]', ( (contains(needs.init-data.outputs.matrix_sh, 'azure-aarch64') && ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-64k', inputs.version_major) || ( ( (inputs.vagrant_type == 'vagrant_vmware' || inputs.vagrant_type == 'ALL') && ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major ) ) )) }}
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
-        exclude:
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-kitten'
-          - matrix_sh: 'oci-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'oci-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gencloud-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'gencloud_ext4-aarch64'
-            variant: '10-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '9-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '10-kitten-64k'
-          - matrix_sh: 'opennebula-aarch64'
-            variant: '10-64k'
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
@@ -405,7 +281,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
-          run_test: ${{ contains(env.type, 'vagrant') && inputs.run_test && 'true' || 'false' }} # Do image simple testing and generate installed packages list (vagrant_* only)
+          run_test: ${{ inputs.run_test }}
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'self_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
