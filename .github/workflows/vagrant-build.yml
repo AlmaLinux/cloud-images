@@ -1,4 +1,4 @@
-name: Vagrant Image Build
+name: "Vagrant: Build Box(es)"
 
 on:
   workflow_dispatch:

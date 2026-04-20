@@ -1,4 +1,4 @@
-name: Generic Cloud Image Build
+name: "GenericCloud: Build Image"
 
 on:
   workflow_dispatch:

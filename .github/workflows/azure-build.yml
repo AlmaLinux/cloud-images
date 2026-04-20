@@ -1,4 +1,4 @@
-name: Azure Image Build
+name: "Azure: Build Image"
 
 on:
   workflow_dispatch:

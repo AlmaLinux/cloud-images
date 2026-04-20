@@ -1,4 +1,4 @@
-name: OCI Image Build
+name: "OCI: Build Image"
 
 on:
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: GCP Image Build
+name: "GCP: Build Image"
 
 on:
   workflow_dispatch:

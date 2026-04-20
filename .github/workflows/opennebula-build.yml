@@ -1,4 +1,4 @@
-name: OpenNebula Image Build
+name: "OpenNebula: Build Image"
 
 on:
   workflow_dispatch:

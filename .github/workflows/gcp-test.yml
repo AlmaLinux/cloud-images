@@ -1,4 +1,4 @@
-name: GCP Image Test
+name: "GCP: Test Image"
 
 on:
   workflow_dispatch:

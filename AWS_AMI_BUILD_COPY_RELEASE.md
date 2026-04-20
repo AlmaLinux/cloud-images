@@ -6,7 +6,7 @@ This repository includes GitHub Actions workflows for building, distributing, an
 
 ## Workflows
 
-### 1. `.github/workflows/build-ami.yml` — Build AMI
+### 1. `.github/workflows/ami-build.yml` — Build AMI
 
 Builds AlmaLinux OS AMIs from source using Packer and Ansible.
 
@@ -28,7 +28,7 @@ Inputs:
   - notify_mattermost: Send notification to Mattermost (default: true)
 ```
 
-### 2. `.github/workflows/copy-ami.yml` — Copy AMI to Regions
+### 2. `.github/workflows/ami-copy.yml` — Copy AMI to Regions
 
 Copies built AMIs to all available AWS regions and makes them public.
 

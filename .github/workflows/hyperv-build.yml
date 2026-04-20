@@ -1,4 +1,4 @@
-name: Hyper-V Image Build
+name: "Vagrant: Build Hyper-V Box"
 
 on:
   workflow_dispatch:
