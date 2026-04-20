@@ -1,0 +1,200 @@
+name: OpenNebula Image Build
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        date_time_stamp:
+          description: 'Custom date+time stamp, YYYYMMDDhhmmss'
+          required: false
+          default: ''
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+
+        self-hosted:
+          description: "Build aarch64 image on self-hosted runner"
+          required: true
+          type: boolean
+          default: true
+
+        store_as_artifact:
+          description: "Store images to the workflow Artifacts"
+          required: true
+          type: boolean
+          default: false
+
+        upload_to_s3:
+          description: "Upload to S3 Bucket"
+          required: true
+          type: boolean
+          default: true
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  init-data:
+    name: Initialize common data
+    runs-on: ubuntu-24.04
+    outputs:
+      time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
+      date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+    steps:
+      - name: Date+time stamp
+        id: date-time-stamp
+        run: |
+          # date+time stamp, YYYYMMDDhhmmss
+          if [ "${{ inputs.date_time_stamp }}" != "" ]; then
+            date_time_stamp="${{ inputs.date_time_stamp }}"
+          else
+            date_time_stamp=$(date -u '+%Y%m%d%H%M%S')
+          fi
+          echo "time_stamp=${date_time_stamp}" >> $GITHUB_OUTPUT
+
+          # date stamp, YYYYMMDD
+          date_stamp=${date_time_stamp:0:-6}
+          echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+  build-gh-hosted:
+    name: ${{ matrix.variant }} opennebula-x86_64 image
+    permissions:
+      id-token: write
+      contents: read
+    needs: [init-data]
+    # use runs-on runners if within the almalinux org, otherwise GH runners
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: >-
+          ${{ fromJSON(
+            ( inputs.version_major == '10-kitten' || inputs.version_major == '10' )
+              && format('["{0}", "{0}-v2"]', inputs.version_major)
+              || format('["{0}"]', inputs.version_major)
+          ) }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ matrix.variant }} opennebula-x86_64 image
+        with:
+          type: opennebula
+          variant: ${{ matrix.variant }}
+          arch: x86_64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+  # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
+  # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
+  start-self-hosted-runner:
+    name: ${{ inputs.version_major }} opennebula-aarch64 runner
+    if: ${{ inputs.self-hosted }}
+    runs-on: ubuntu-24.04
+    needs: [init-data]
+
+    steps:
+    - name: Setup and start runner
+      if: github.repository_owner != 'AlmaLinux'
+      uses: NextChapterSoftware/ec2-action-builder@v1.10
+      with:
+        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ vars.AWS_REGION }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_AARCH64 }}
+
+        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }} # Availability Zones list for 'a1.metal' Instance Type
+        ec2_instance_type: a1.metal
+
+        ec2_root_disk_size_gb: "16"         # override default size which is too small for actions and tests stuff
+        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
+        ec2_instance_ttl: 30                # Optional (default is 60 minutes)
+        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
+        ec2_instance_tags: >                # Required for IAM role resource permission scoping
+          [
+            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
+          ]
+
+  build-self-hosted:
+    name: ${{ inputs.version_major }} opennebula-aarch64 image
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.self-hosted }}
+    needs: [init-data, start-self-hosted-runner]
+    # If almalinux org, use RunsOn with almalinux-9-aarch64 on a1.metal
+    #
+    # Otherwise use AWS EC2 Self-Hosted aarch64 runner set up with the 'start-self-hosted-runner' job above
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id)
+        ||
+        github.run_id
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ inputs.version_major }} opennebula-aarch64 image
+        with:
+          type: opennebula
+          variant: ${{ inputs.version_major }}
+          arch: aarch64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: aws-ec2
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
