@@ -55,6 +55,97 @@
     enabled: true
     state: started
 
+# Detect whether the kernel exposes the cpufreq 'boost' knob. The stock
+# virtual-guest profile inherits [cpu] boost=1 from throughput-performance.
+# Inside QEMU/KVM guests on AuthenticAMD hosts neither cpufreq/boost nor
+# intel_pstate/no_turbo is exposed, so TuneD cannot set the knob (harmless
+# apply-time warning) and `tuned-adm verify` always fails with
+# "device cpuN: 'boost' = 'None', expected '1'". If we detect this, we
+# install a sibling profile 'almalinux-virtual-guest' that includes stock
+# virtual-guest verbatim but replaces [cpu] with an empty section, and
+# switch the active profile to it.
+- name: Probe cpufreq boost sysfs knobs
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /sys/devices/system/cpu/cpufreq/boost
+    - /sys/devices/system/cpu/intel_pstate/no_turbo
+  register: tuned_boost_knobs
+
+- name: Decide whether TuneD 'boost' knob is settable on this host
+  ansible.builtin.set_fact:
+    tuned_boost_available: "{{ tuned_boost_knobs.results | selectattr('stat.exists') | list | length > 0 }}"
+
+- name: Pick expected TuneD profile for this host
+  ansible.builtin.set_fact:
+    tuned_expected_profile: "{{ 'virtual-guest' if tuned_boost_available else 'almalinux-virtual-guest' }}"
+
+# TuneD's profile layout changed in 2.24: stock profiles moved from
+# /usr/lib/tuned/<name>/ to /usr/lib/tuned/profiles/<name>/, and the user
+# override path moved from /etc/tuned/<name>/ to /etc/tuned/profiles/<name>/.
+# AL8/AL9 ship the old layout, AL10/Kitten 10 (tuned >= 2.24) ship the new.
+# Detect which layout is in use so our custom profile lands where TuneD
+# actually looks; using the wrong dir would be a silent no-op.
+- name: Probe TuneD profile layout (new /profiles/ subdir vs old flat)
+  ansible.builtin.stat:
+    path: /usr/lib/tuned/profiles/virtual-guest/tuned.conf
+  register: tuned_new_layout_stat
+  when: not tuned_boost_available
+
+- name: Compute {{ tuned_expected_profile | default('almalinux-virtual-guest') }} profile directory
+  ansible.builtin.set_fact:
+    tuned_profile_dir: >-
+      {{ ('/etc/tuned/profiles/' if tuned_new_layout_stat.stat.exists else '/etc/tuned/')
+         ~ tuned_expected_profile }}
+  when: not tuned_boost_available
+
+- name: Ensure {{ tuned_profile_dir | default('/etc/tuned/<profiles>/almalinux-virtual-guest') }} directory exists
+  ansible.builtin.file:
+    path: "{{ tuned_profile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: not tuned_boost_available
+
+- name: Install {{ tuned_expected_profile | default('almalinux-virtual-guest') }} TuneD profile
+  ansible.builtin.copy:
+    dest: "{{ tuned_profile_dir }}/tuned.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by the cloud-images opennebula_guest Ansible role.
+      #
+      # Sibling of stock 'virtual-guest' that disables the [cpu] plugin.
+      # On QEMU/KVM guests without cpufreq/intel_pstate exposure (e.g.
+      # AuthenticAMD hosts) stock virtual-guest fails `tuned-adm verify`
+      # because its inherited [cpu] boost=1 expectation cannot be
+      # satisfied on a missing sysfs knob. This profile inherits every
+      # stock setting verbatim via `include=virtual-guest`, so future
+      # upstream changes to virtual-guest.tuned.conf flow through
+      # automatically -- only [cpu] replace=1 is added to drop the
+      # unverifiable plugin.
+      #
+      # `tuned-adm active` will report 'almalinux-virtual-guest' rather
+      # than 'virtual-guest' on these hosts.
+      [main]
+      summary=AlmaLinux virtual-guest for virtualized CPUs without cpufreq/boost exposure
+      include=virtual-guest
+
+      [cpu]
+      replace=1
+  when: not tuned_boost_available
+
+# Unconditional: on Intel hosts this is a force-reapply of virtual-guest
+# (helps with the first-start race where plugins load late); on AMD
+# virtualized hosts it switches the active profile to our sibling one
+# before we assert on it.
+- name: Activate {{ tuned_expected_profile }} TuneD profile
+  ansible.builtin.command:
+    cmd: "tuned-adm profile {{ tuned_expected_profile }}"
+  changed_when: false
+
 - name: Get current TuneD profile
   ansible.builtin.command:
     cmd: tuned-adm active
@@ -63,20 +154,46 @@
 
 - name: Test if TuneD profile is active
   ansible.builtin.assert:
-    that: "tuned_adm_active.stdout == 'Current active profile: virtual-guest'"
-    fail_msg: Configured active profile is not same as current one
+    that: "tuned_adm_active.stdout == ('Current active profile: ' ~ tuned_expected_profile)"
+    fail_msg: "Configured active profile is not same as current one (expected: {{ tuned_expected_profile }})"
     success_msg: The configured TuneD profile is current
 
+# Retry around the first-start race where `tuned-adm verify` can run before
+# the daemon finishes replaying every knob. `failed_when: false` keeps the
+# loop alive across the intermediate non-zero exits; the strict assert below
+# still fails the build if verification never succeeds.
 - name: Get status of TuneD settings
   ansible.builtin.command:
     cmd: tuned-adm verify
   register: tuned_adm_verify
   changed_when: false
+  failed_when: false
+  retries: 5
+  delay: 3
+  until: "'Verification succeeded' in tuned_adm_verify.stdout"
+
+# `tuned-adm verify`'s stdout is just a generic "Verification failed ..."
+# banner; the specific plugin/knob that differs is only written to
+# /var/log/tuned/tuned.log. Capture the tail unconditionally so the strict
+# assert below can surface it in its fail_msg when verification fails.
+- name: Capture TuneD log tail for diagnostics
+  ansible.builtin.command:
+    cmd: tail -c 16384 /var/log/tuned/tuned.log
+  register: tuned_log_tail
+  changed_when: false
+  failed_when: false
 
 - name: Verify if settings on the TuneD profile is applied
   ansible.builtin.assert:
     that: "'Verification succeeded, current system settings match the preset profile.' in tuned_adm_verify.stdout"
-    fail_msg: Current system settings does not match current active profile
+    fail_msg: |-
+      Current system settings does not match current active profile.
+      --- tuned-adm verify stdout ---
+      {{ tuned_adm_verify.stdout | default('<no stdout>') }}
+      --- tuned-adm verify stderr ---
+      {{ tuned_adm_verify.stderr | default('<no stderr>') }}
+      --- /var/log/tuned/tuned.log (last 16 KiB) ---
+      {{ tuned_log_tail.stdout | default('<log unavailable>') }}
     success_msg: Current system settings matches current active profile
 
 - name: Regenerate all initramfs images
