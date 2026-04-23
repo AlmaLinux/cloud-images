@@ -79,7 +79,6 @@ jobs:
 
         else
           echo "[Error]: No pattern matched for '$image_file'" && exit 1
-          continue
         fi
 
         # Remap "vmware" to the correct Vagrant provider name "vmware_desktop"
@@ -135,7 +134,8 @@ jobs:
         echo "[Debug] provider=${{ env.vagrant_provider }} box_name=${{ env.version_major }} checksum=${checksum} image_file=${{ env.image_file }}"
 
         hcp auth login --client-id=${{ secrets.HCP_CLIENT_ID }} --client-secret=${{ secrets.HCP_CLIENT_SECRET }}
-        export VAGRANT_CLOUD_TOKEN="$(hcp auth print-access-token)"
+        VAGRANT_CLOUD_TOKEN="$(hcp auth print-access-token)"
+        export VAGRANT_CLOUD_TOKEN
         [[ ${{ inputs.dry-run-mode }} = "true" ]] && cmd="echo " \
           || cmd=''
         ${cmd}vagrant cloud publish \

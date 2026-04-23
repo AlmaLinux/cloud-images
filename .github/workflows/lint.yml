@@ -1,0 +1,69 @@
+name: "Lint: GitHub Actions workflows"
+
+# Static check for the growing workflow / composite-action surface (17
+# workflow files + 2 composite actions at the time of writing). Catches
+# drift and typos in:
+#
+#   * workflow_dispatch input declarations and references
+#   * matrix / needs / steps / inputs / secrets / vars expressions
+#   * `uses:` paths (including local composite actions)
+#   * if: / expression grammar
+#   * run: shell snippets (via shellcheck, preinstalled on ubuntu-24.04)
+#
+# See https://github.com/rhysd/actionlint for the full rule list.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/actionlint.yaml"
+      - ".github/scripts/**"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".github/actionlint.yaml"
+      - ".github/scripts/**"
+  workflow_dispatch:
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pin actionlint to a specific release so upstream rule additions
+      # don't silently change our lint surface between runs. Bumping the
+      # version is an explicit, reviewable commit.
+      - name: Install actionlint
+        id: get_actionlint
+        env:
+          ACTIONLINT_VERSION: '1.7.7'
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) \
+            "${ACTIONLINT_VERSION}"
+        shell: bash
+
+      # `-shellcheck` passes custom args to the shellcheck sub-linter:
+      #   -S warning   gate on warning+error severity only. The bulk of
+      #                the info-level SC2086 ('unquoted $var') findings
+      #                in the older per-type workflows are low-risk in
+      #                practice (values come from tightly-controlled
+      #                workflow_dispatch inputs and GitHub expressions),
+      #                so we don't want to block CI on them until a
+      #                dedicated shellcheck sweep PR lands.
+      #   -e SC2046    'unquoted $(cmd)' in a handful of echo lines;
+      #                defer to the same sweep.
+      #   -e SC2166    '[ x -o y ]' / '[ x -a y ]' bashisms; widespread
+      #                in vagrant-build.yml / oci-marketplace-publish.yml
+      #                and mechanical to convert, but not in scope here.
+      - name: Run actionlint
+        run: |
+          ${{ steps.get_actionlint.outputs.executable }} -color \
+            -shellcheck='shellcheck -S warning -e SC2046 -e SC2166'
+        shell: bash

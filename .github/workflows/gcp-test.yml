@@ -44,7 +44,7 @@ jobs:
         if [ -n "${{ inputs.image_override }}" ]; then
             echo "Using image override: ${{ inputs.image_override }}"
             image_path="${{ inputs.image_override }}"
-        elif [ "${{ inputs.arch == 'ALL' }}" ]; then
+        elif [ "${{ inputs.arch }}" = "ALL" ]; then
             echo "Using version major: ${{ inputs.version_major }}"
             echo "Using all architectures"
             image_path="projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ inputs.version_major }}"
@@ -262,9 +262,8 @@ jobs:
           -project almalinux-image-testing-469421              \
           -x86_shape ${{ matrix.shape }}                       \
           -parallel_count ${{ github.run_attempt > 1 && '1' || '1' }} \
-          ${{ matrix.zone && format('-zone {0}', matrix.zone) || '' }} \
           -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
-          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
+          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}'
 
   test-gcp-pershape-aarch64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}

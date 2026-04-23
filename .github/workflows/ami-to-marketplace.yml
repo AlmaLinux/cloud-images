@@ -68,7 +68,15 @@ jobs:
         short_name="${{ fromJSON(env.AMI_JSON).Images[0].Name }}" && short_name="${short_name% * *}"
         version_major="${{ env.OS_VERSION }}" && version_major="${version_major%%.*}"
 
-        # List of AlmaLinux public products and their IDs
+        # List of AlmaLinux public products and their IDs.
+        #
+        # NOTE: the disable directive below is intentional -- the linter
+        # can't track the '${short_name% * *}' expansion above and flags
+        # every case arm with SC2195 'pattern will never match'. The
+        # composed word is always 'AlmaLinux OS <major> <arch>' in
+        # practice (verified by the AWS AMI Name field format for
+        # AlmaLinux images, e.g. 'AlmaLinux OS 9.6.20240619 x86_64').
+        # shellcheck disable=SC2195
         case "${short_name} ${version_major} ${{ env.AMI_ARCH }}" in
           "AlmaLinux OS 8 x86_64")          PRODUCT_ID="c076b20a-2305-4771-823f-944909847a05" ;;
           "AlmaLinux OS 8 arm64")           PRODUCT_ID="744775f7-4efd-4c75-ac32-eb2540b4030c" ;;

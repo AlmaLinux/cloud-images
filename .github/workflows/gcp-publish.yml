@@ -6,7 +6,6 @@ on:
         version_major:
           description: 'AlmaLinux major version'
           required: true
-          default: ''
           type: choice
           options:
             - 10-kitten
@@ -16,7 +15,6 @@ on:
         arch:
           description: 'Architecture we are publishing'
           required: true
-          default: ''
           type: choice
           options:
             - x86_64
