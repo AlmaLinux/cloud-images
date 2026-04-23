@@ -70,10 +70,17 @@ runs:
     - name: Set major version and arch
       shell: bash
       run: |
-        # Set major version and arch
+        # Set major version and arch.
+        # alma_arch is the full arch identifier including the microarch
+        # level suffix (e.g. x86_64_v2 for the v2 variant). It is used for
+        # the almalinux-release RPM URL, the output_mask that matches v2
+        # output filenames, and the user-visible summary / Mattermost text.
+        # The pure CPU arch (for composing base Packer source names below)
+        # stays as ${{ inputs.arch }}; an explicit '_v2' suffix is appended
+        # there when inputs.variant requests the v2 microarch flavour.
         version_major=${{ inputs.variant }}
         alma_arch=${{ inputs.arch }}
-        [[ ${version_major} == *'v2'* ]] && alma_arch=x86_64_v2
+        [[ ${version_major} == *'v2'* ]] && alma_arch=${alma_arch}_v2
         version_major=${version_major%-64k}
         version_major=${version_major%-v2}
         echo "version_major=${version_major}" >> $GITHUB_ENV
@@ -110,20 +117,20 @@ runs:
 
         case "${{ env.version_major }}" in
           8|9)
-            packer_source=almalinux-${{ env.version_major }}-gcp-${{ env.alma_arch }}
+            packer_source=almalinux-${{ env.version_major }}-gcp-${{ inputs.arch }}
             output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
             packer_source=qemu.${packer_source}
             ;;
           10)
-            packer_source=almalinux_${{ env.version_major }}_gcp_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
-            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_gcp_64k_${{ env.alma_arch }}"
+            packer_source=almalinux_${{ env.version_major }}_gcp_${{ inputs.arch }}
+            [[ ${{ inputs.variant }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            [[ ${{ inputs.variant }} == *"64k"* ]] && packer_source="almalinux_${{ env.version_major }}_gcp_64k_${{ inputs.arch }}"
             output_mask=output-${packer_source}/AlmaLinux-*${version_major}*.${{ env.alma_arch }}.tar.gz
             packer_source=qemu.${packer_source}
             ;;
           *kitten*)
-            packer_source=almalinux_kitten_10_gcp_${{ env.alma_arch }}
-            [[ ${{ env.version_major }} == *"v2"* ]] && packer_source="${packer_source}_v2"
+            packer_source=almalinux_kitten_10_gcp_${{ inputs.arch }}
+            [[ ${{ inputs.variant }} == *"v2"* ]] && packer_source="${packer_source}_v2"
             output_mask=output-${packer_source}/AlmaLinux-Kitten-*.${{ env.alma_arch }}*.qcow2
             aws_s3_path=images/kitten/10/gcp/${{ env.TIME_STAMP }}
             packer_source=qemu.${packer_source}

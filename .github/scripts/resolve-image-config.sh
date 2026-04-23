@@ -58,23 +58,23 @@ case "${type}_${version_major}" in
 
   hyperv_10)
     packer_source="almalinux_10_vagrant_hyperv_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
-    output_mask="AlmaLinux-${version_major}-Vagrant-hyperv-*.${alma_arch}.box"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-${version_major}-Vagrant-hyperv-*.${alma_arch}*.box"
     packer_source="qemu.${packer_source}"
     aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
     ;;
 
   hyperv*kitten*)
     packer_source="almalinux_kitten_10_vagrant_hyperv_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
-    output_mask="AlmaLinux-Kitten-Vagrant-hyperv-10-*.${alma_arch}.box"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-Kitten-Vagrant-hyperv-10-*.${alma_arch}*.box"
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     packer_source="qemu.${packer_source}"
     ;;
 
   azure*kitten*)
     packer_source="almalinux_kitten_10_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     [[ ${variant} == *"64k"* ]] && packer_source="${packer_source}_64k"
     output_mask="output-${packer_source}/AlmaLinux-Kitten-*.${alma_arch}*.raw"
     aws_s3_path="images/kitten/10/${type}/${timestamp}"
@@ -83,7 +83,7 @@ case "${type}_${version_major}" in
 
   azure_10)
     packer_source="almalinux_${version_major}_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     [[ ${variant} == *"64k"* ]] && packer_source="almalinux_${version_major}_${type}_64k_${alma_arch}"
     output_mask="output-${packer_source}/AlmaLinux-*.${alma_arch}*.raw"
     packer_source="qemu.${packer_source}"
@@ -107,8 +107,10 @@ case "${type}_${version_major}" in
     ;;
 
   vagrant_libvirt_10)
-    packer_source="qemu.almalinux_${version_major}_vagrant_libvirt_${alma_arch}"
-    output_mask="AlmaLinux-${version_major}-Vagrant-libvirt-*.${alma_arch}.box"
+    packer_source="almalinux_${version_major}_vagrant_libvirt_${alma_arch}"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-${version_major}-Vagrant-libvirt-*.${alma_arch}*.box"
+    packer_source="qemu.${packer_source}"
     aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
     ;;
 
@@ -128,8 +130,10 @@ case "${type}_${version_major}" in
 
   vagrant_virtualbox_10)
     packer_builder=virtualbox-iso
-    packer_source="virtualbox-iso.almalinux_${version_major}_vagrant_virtualbox_${alma_arch}"
-    output_mask="AlmaLinux-${version_major}-Vagrant-virtualbox-*.${alma_arch}.box"
+    packer_source="almalinux_${version_major}_vagrant_virtualbox_${alma_arch}"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-${version_major}-Vagrant-virtualbox-*.${alma_arch}*.box"
+    packer_source="virtualbox-iso.${packer_source}"
     aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
     ;;
 
@@ -149,21 +153,25 @@ case "${type}_${version_major}" in
 
   vagrant_vmware_10)
     packer_builder=vmware-iso
-    packer_source="vmware-iso.almalinux_${version_major}_vagrant_vmware_${alma_arch}"
-    output_mask="AlmaLinux-${version_major}-Vagrant-vmware-*.${alma_arch}.box"
+    packer_source="almalinux_${version_major}_vagrant_vmware_${alma_arch}"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-${version_major}-Vagrant-vmware-*.${alma_arch}*.box"
+    packer_source="vmware-iso.${packer_source}"
     aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
     ;;
 
   vagrant_vmware*kitten*)
     packer_builder=vmware-iso
-    packer_source="vmware-iso.almalinux_kitten_10_vagrant_vmware_${alma_arch}"
-    output_mask="AlmaLinux-Kitten-Vagrant-vmware-10-*.${alma_arch}.box"
+    packer_source="almalinux_kitten_10_vagrant_vmware_${alma_arch}"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    output_mask="AlmaLinux-Kitten-Vagrant-vmware-10-*.${alma_arch}*.box"
+    packer_source="vmware-iso.${packer_source}"
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     ;;
 
   vagrant_libvirt*kitten*)
     packer_source="qemu.almalinux_kitten_10_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     output_mask="AlmaLinux-Kitten-Vagrant-libvirt-10-*.${alma_arch}*.box"
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     ;;
@@ -171,14 +179,14 @@ case "${type}_${version_major}" in
   vagrant_virtualbox*kitten*)
     packer_builder=virtualbox-iso
     packer_source="virtualbox-iso.almalinux_kitten_10_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     output_mask="AlmaLinux-Kitten-Vagrant-virtualbox-10-*.${alma_arch}*.box"
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     ;;
 
   *kitten*)
     packer_source="almalinux_kitten_10_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     output_mask="output-${packer_source}/AlmaLinux-Kitten-*.${alma_arch}*.qcow2"
     aws_s3_path="images/kitten/10/${type}/${timestamp}"
     packer_source="qemu.${packer_source}"
@@ -193,7 +201,7 @@ case "${type}_${version_major}" in
 
   gencloud_10|gencloud_ext4_10|opennebula_10)
     packer_source="almalinux_${version_major}_${type}_${alma_arch}"
-    [[ ${version_major} == *"v2"* ]] && packer_source="${packer_source}_v2"
+    [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"
     output_mask="output-${packer_source}/AlmaLinux-*.${alma_arch}*.qcow2"
     packer_source="qemu.${packer_source}"
     ;;

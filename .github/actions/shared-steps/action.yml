@@ -76,10 +76,18 @@ runs:
     - name: Set major version and arch
       shell: bash
       run: |
-        # Set major version and arch
+        # Set major version and arch.
+        # alma_arch is the full arch identifier including the microarch
+        # level suffix (e.g. x86_64_v2 for the v2 variant). It is used for
+        # the almalinux-release RPM URL, the RPM %{ARCH} grep, and the
+        # user-visible summary / Mattermost text -- the v2 release RPM
+        # really does carry %{ARCH}=x86_64_v2.
+        # The pure CPU arch (for composing base Packer source names) stays
+        # as ${{ inputs.arch }}; resolve-image-config.sh appends '_v2'
+        # itself based on ${{ inputs.variant }}.
         version_major=${{ inputs.variant }}
         alma_arch=${{ inputs.arch }}
-        [[ ${version_major} == *'v2'* ]] && alma_arch=x86_64_v2
+        [[ ${version_major} == *'v2'* ]] && alma_arch=${alma_arch}_v2
         version_major=${version_major%-64k}
         version_major=${version_major%-v2}
         echo "version_major=${version_major}" >> $GITHUB_ENV
@@ -116,7 +124,7 @@ runs:
 
         # Resolve packer_source, output_mask, AWS_S3_PATH, packer_builder
         eval "$(${{ github.workspace }}/.github/scripts/resolve-image-config.sh \
-          "${{ inputs.type }}" "${{ env.version_major }}" "${{ env.alma_arch }}" \
+          "${{ inputs.type }}" "${{ env.version_major }}" "${{ inputs.arch }}" \
           "${{ inputs.variant }}" "${release}" "${{ env.TIME_STAMP }}")"
 
         # Non-qemu builders (virtualbox-iso, vmware-iso) don't use qemu packer_opts
