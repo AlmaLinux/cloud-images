@@ -269,7 +269,7 @@ s3://almalinux-cloud/images/10/10.1/vagrant/20260220143000/AlmaLinux-10-Vagrant-
 s3://almalinux-cloud/images/kitten/10/hyperv/20260220143000/AlmaLinux-Kitten-Vagrant-hyperv-10-20260220.0.x86_64.box
 ```
 
-All uploaded objects are tagged `public=yes`. Downstream publishing to Vagrant Cloud (HCP) is handled by the separate `vagrant-publish.yaml` workflow, documented in [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md).
+All uploaded objects are tagged `public=yes`. Downstream publishing to Vagrant Cloud (HCP) is handled by the separate `vagrant-publish.yml` workflow, documented in [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md).
 
 ## Required GitHub configuration
 

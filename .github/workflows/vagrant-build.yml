@@ -1,4 +1,4 @@
-name: "Vagrant: Build Box(es)"
+name: "Vagrant: Build Boxes"
 
 on:
   workflow_dispatch:
@@ -300,6 +300,11 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: ${{ inputs.run_test }}
-          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'self_hosted' }}
+          runner: >-
+            ${{
+              github.repository_owner == 'AlmaLinux' && 'aws-ec2'
+              || inputs.self_hosted_runner == 'aws-ec2' && 'aws-ec2'
+              || 'self_hosted'
+            }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
