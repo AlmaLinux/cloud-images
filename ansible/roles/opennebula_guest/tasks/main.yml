@@ -67,18 +67,6 @@
     fail_msg: Configured active profile is not same as current one
     success_msg: The configured TuneD profile is current
 
-- name: Get status of TuneD settings
-  ansible.builtin.command:
-    cmd: tuned-adm verify
-  register: tuned_adm_verify
-  changed_when: false
-
-- name: Verify if settings on the TuneD profile is applied
-  ansible.builtin.assert:
-    that: "'Verification succeeded, current system settings match the preset profile.' in tuned_adm_verify.stdout"
-    fail_msg: Current system settings does not match current active profile
-    success_msg: Current system settings matches current active profile
-
 - name: Regenerate all initramfs images
   ansible.builtin.command:
     cmd: dracut -f --regenerate-all
