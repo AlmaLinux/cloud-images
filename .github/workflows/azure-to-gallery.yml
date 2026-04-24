@@ -1,4 +1,4 @@
-name: Azure image to Gallery release
+name: "Azure: Release Image to Gallery"
 
 on:
   workflow_dispatch:

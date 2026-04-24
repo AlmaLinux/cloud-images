@@ -30,13 +30,15 @@ This repository includes GitHub Actions workflows that automate building, testin
 
 | Documentation | Workflows | Description |
 | :--- | :--- | :--- |
-| [BUILD_CLOUD_IMAGES.md](BUILD_CLOUD_IMAGES.md) | `build.yml`, `shared-steps/action.yml` | Main workflow that builds all cloud and Vagrant image types using Packer with a matrix strategy across multiple architectures and platforms |
-| [AWS_AMI_BUILD_COPY_RELEASE.md](AWS_AMI_BUILD_COPY_RELEASE.md) | `build-ami.yml`, `copy-ami.yml`, `ami-to-marketplace.yml` | End-to-end AWS pipeline: build AMIs with Packer, copy across all regions, and publish to AWS Marketplace |
+| [BUILD_IMAGES.md](BUILD_IMAGES.md) | `azure-build.yml`, `gencloud-build.yml`, `oci-build.yml`, `opennebula-build.yml`, `shared-steps/action.yml` | Per-image-type workflows that build Azure, GenericCloud, OCI, and OpenNebula cloud images using Packer; share a common composite action and a `resolve-image-config.sh` lookup for naming/paths |
+| [BUILD_GCP.md](BUILD_GCP.md) | `gcp-build.yml`, `gcp-build-steps/action.yml` | Build GCP images with Packer, generate an SBOM, upload to dev GCS buckets, and publish a dev test image |
+| [BUILD_VAGRANT.md](BUILD_VAGRANT.md) | `vagrant-build.yml`, `hyperv-build.yml`, `shared-steps/action.yml` | Build Vagrant boxes for libvirt, VirtualBox, VMware Desktop, and Microsoft Hyper-V, with real `vagrant up` smoke tests |
+| [AWS_AMI_BUILD_COPY_RELEASE.md](AWS_AMI_BUILD_COPY_RELEASE.md) | `ami-build.yml`, `ami-copy.yml`, `ami-to-marketplace.yml` | End-to-end AWS pipeline: build AMIs with Packer, copy across all regions, and publish to AWS Marketplace |
 | [AZURE_GALLERY.md](AZURE_GALLERY.md) | `azure-to-gallery.yml`, `azure-hpc-to-storage-container.yml` | Convert and upload images to Azure Compute Gallery and Storage Containers (including HPC) with support for Gen1/Gen2 VMs and multiple architectures |
 | [AZURE_MARKETPLACE.md](AZURE_MARKETPLACE.md) | `azure-to-marketplace.yml` | Publish VHD images (including HPC) to Azure Marketplace via the Partner Center Product Ingestion API |
 | [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) | `oci-marketplace-publish.yml` | Import images into Oracle Cloud Infrastructure and publish to the OCI Marketplace |
-| [GCP_IMAGE_TEST_PUBLISH.md](GCP_IMAGE_TEST_PUBLISH.md) | `test-gcp.yml`, `gcp-publish.yml` | Test GCP images across many machine shapes using Cloud Image Tests, then publish to the `almalinux-cloud` project |
-| [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-cloud-publish.yaml` | Publish Vagrant boxes to Vagrant Cloud for VirtualBox, libvirt, and VMware Desktop providers |
+| [GCP_IMAGE_TEST_PUBLISH.md](GCP_IMAGE_TEST_PUBLISH.md) | `gcp-test.yml`, `gcp-publish.yml` | Test GCP images across many machine shapes using Cloud Image Tests, then publish to the `almalinux-cloud` project (build step is covered by [BUILD_GCP.md](BUILD_GCP.md)) |
+| [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-publish.yml` | Publish Vagrant boxes to HashiCorp Cloud Platform (Vagrant Cloud) for VirtualBox, libvirt, and VMware Desktop providers |
 | [VMWARE_OVA.md](VMWARE_OVA.md) | _(manual process)_ | Convert Vagrant VMware Desktop `.box` files to vSphere/ESXi-compatible `.ova` templates |
 
 

@@ -1,4 +1,4 @@
-name: Vagrant Cloud publish
+name: "Vagrant: Publish Box to HCP"
 
 on:
   workflow_dispatch:

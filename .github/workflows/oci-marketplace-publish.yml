@@ -1,4 +1,4 @@
-name: OCI Image to Marketplace release
+name: "OCI: Release Image to Marketplace"
 
 on:
   workflow_dispatch:

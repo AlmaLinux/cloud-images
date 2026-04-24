@@ -1,4 +1,4 @@
-name: Azure image to Marketplace release
+name: "Azure: Release Image to Marketplace"
 
 on:
   workflow_dispatch:

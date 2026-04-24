@@ -6,9 +6,9 @@ This repository includes a GitHub Actions workflow for publishing AlmaLinux OS V
 
 ## Files
 
-### `.github/workflows/vagrant-cloud-publish.yaml`
+### `.github/workflows/vagrant-publish.yml`
 
-Workflow for publishing Vagrant box images to Vagrant Cloud.
+Workflow for publishing Vagrant box images to Vagrant Cloud on HashiCorp Cloud Platform (HCP). Its display name is `Vagrant: Publish Box to HCP`.
 
 **What it does:**
 - Accepts a URL to a `.box` image file
@@ -23,7 +23,7 @@ Workflow for publishing Vagrant box images to Vagrant Cloud.
 
 **Usage:**
 ```
-Trigger via GitHub UI: Actions → Vagrant Cloud publish
+Trigger via GitHub UI: Actions → Vagrant: Publish Box to HCP
 
 Inputs:
   - image_url:         URL to the .box image file (required)
