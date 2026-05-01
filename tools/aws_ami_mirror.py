@@ -75,7 +75,10 @@ def iter_regions(ec2):
         AWS EC2 client.
     """
     for region in ec2.describe_regions()["Regions"]:
-        yield region["RegionName"]
+        # me-south-1 is gone for the foreseeable future
+        # https://health.aws.com/health/status
+        if region["RegionName"] not in ['me-south-1']:
+            yield region["RegionName"]
 
 
 def get_ami_info(ec2, ami_id):
