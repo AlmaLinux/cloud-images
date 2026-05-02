@@ -17,7 +17,13 @@ on:
           default: ''
 
         release_to_marketplace:
-          description: "Release to Azure Marketplace"
+          description: "Release to Marketplace (configure new VM image version as draft)"
+          required: true
+          type: boolean
+          default: false
+
+        submit_to_preview:
+          description: "Submit offer to Preview & certification (requires Release to Marketplace)"
           required: true
           type: boolean
           default: false
@@ -644,7 +650,7 @@ jobs:
         echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
 
     - name: Submitted offer to preview and certification
-      if: inputs.release_to_marketplace
+      if: inputs.release_to_marketplace && inputs.submit_to_preview
       run: |
         # Submit the draft for review and publishing via the /configure
         # endpoint with a submission resource.
@@ -769,10 +775,17 @@ jobs:
           echo ""
           echo "### Status"
           if [[ "${{ inputs.release_to_marketplace }}" == "true" ]]; then
-            echo "✅ New VM image version configured and submitted to **Preview**."
-            echo ""
-            echo "Check the [offer history](${PC_OFFER_URL}/history) in Partner Center."
-            echo "Once Azure approves the preview, **publish it to Live manually** from there."
+            if [[ "${{ inputs.submit_to_preview }}" == "true" ]]; then
+              echo "✅ New VM image version configured and submitted to **Preview**."
+              echo ""
+              echo "Check the [offer history](${PC_OFFER_URL}/history) in Partner Center."
+              echo "Once Azure approves the preview, **publish it to Live manually** from there."
+            else
+              echo "✅ New VM image version configured as **draft** (not submitted for certification)."
+              echo ""
+              echo "Review the draft in [Partner Center](${PC_OFFER_URL}/overview)."
+              echo "Re-run this workflow with \`submit_to_preview\` enabled, or submit manually, when ready."
+            fi
           else
             echo "❌ **Marketplace release was not requested** (dry run — metadata parsed and SAS URI generated only)"
           fi
@@ -791,4 +804,4 @@ jobs:
           - Offer: [`${{ env.OFFER_ID }}`](https://partner.microsoft.com/en-us/dashboard/commercial-marketplace/offers/${{ env.OFFER_UUID }}/overview) / Plan: `${{ env.PLAN_ID }}`
           ${{ inputs.release_to_marketplace && format('- Package version: `{0}`', env.PACKAGE_VERSION) || '' }}
 
-          ${{ inputs.release_to_marketplace && format('✅ Submitted to **Preview**. Check the [offer history](https://partner.microsoft.com/en-us/dashboard/commercial-marketplace/offers/{0}/history) and publish to Live manually once approved.', env.OFFER_UUID) || '❌ **Marketplace release was not requested** (dry run)' }}
+          ${{ inputs.release_to_marketplace && (inputs.submit_to_preview && format('✅ Submitted to **Preview**. Check the [offer history](https://partner.microsoft.com/en-us/dashboard/commercial-marketplace/offers/{0}/history) and publish to Live manually once approved.', env.OFFER_UUID) || format('✅ Configured as **draft** (not submitted for certification). Review in [Partner Center](https://partner.microsoft.com/en-us/dashboard/commercial-marketplace/offers/{0}/overview).', env.OFFER_UUID)) || '❌ **Marketplace release was not requested** (dry run)' }}
