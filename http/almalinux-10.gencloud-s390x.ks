@@ -183,4 +183,14 @@ cat /dev/null > /etc/machine-id
 # The system should start out with an empty file.
 truncate -s 0 /etc/resolv.conf
 
+# Compact the image: zero out free space so post-build qemu-img convert
+# (or virt-sparsify) can drop unused clusters and produce a small qcow2.
+# The s390x build pipeline does not run packer/cleanup_vm, so do it here.
+echo "Zero-filling free space on / and /boot for image compaction."
+sync
+dd if=/dev/zero of=/zerofill bs=1M oflag=direct status=none || rm -f /zerofill
+dd if=/dev/zero of=/boot/zerofill bs=1M oflag=direct status=none || rm -f /boot/zerofill
+sync
+fstrim -av 2>/dev/null || true
+
 %end

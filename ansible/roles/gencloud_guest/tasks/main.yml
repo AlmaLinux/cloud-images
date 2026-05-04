@@ -5,6 +5,16 @@
     regexp: "^(DEFAULTKERNEL=).*$"
     replace: "\\1kernel"
 
+# linux-firmware is pulled in by kernel-core's hard `Requires:` even though
+# the ppc64le kickstart excludes -iwl*-firmware. The package ships ~1.5 GiB
+# of firmware that is irrelevant on POWER guests. The other GenericCloud
+# arches keep it for now; only ppc64le pays the size penalty.
+- name: Remove linux-firmware on ppc64le
+  when: ansible_facts['architecture'] == 'ppc64le'
+  ansible.builtin.dnf:
+    name: linux-firmware
+    state: absent
+
 # https://bugzilla.redhat.com/show_bug.cgi?id=1849082#c7
 - name: Enabled Xen Project PVHVM drivers only on x86_64
   when: ansible_facts['architecture'] == 'x86_64'
