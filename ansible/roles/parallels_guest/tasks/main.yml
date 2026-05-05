@@ -1,0 +1,42 @@
+---
+- name: Locate the Parallels Tools ISO
+  find:
+    paths: /home/vagrant
+    patterns: "prl-tools-*.iso"
+  register: prl_tools_iso
+
+- name: Fail if the Parallels Tools ISO is missing
+  assert:
+    that: prl_tools_iso.matched > 0
+    fail_msg: "Parallels Tools ISO not found in /home/vagrant. Did parallels-iso builder upload it?"
+
+- name: Create mount point for the Parallels Tools ISO
+  file:
+    path: /mnt/prl-tools
+    state: directory
+    mode: "0755"
+
+- name: Mount the Parallels Tools ISO
+  command: mount -o loop,ro {{ prl_tools_iso.files[0].path | quote }} /mnt/prl-tools
+  args:
+    creates: /mnt/prl-tools/install
+
+- name: Install Parallels Tools (unattended)
+  command: /mnt/prl-tools/install --install-unattended-with-deps
+  args:
+    creates: /usr/lib/parallels-tools/version
+
+- name: Unmount the Parallels Tools ISO
+  command: umount /mnt/prl-tools
+  args:
+    removes: /mnt/prl-tools/install
+
+- name: Remove the Parallels Tools mount point
+  file:
+    path: /mnt/prl-tools
+    state: absent
+
+- name: Remove the Parallels Tools ISO
+  file:
+    path: "{{ prl_tools_iso.files[0].path }}"
+    state: absent
