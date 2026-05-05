@@ -1,4 +1,4 @@
-name: AWS AMI copy to Regions, make Public
+name: "AWS: Copy AMI to Regions and make Public"
 
 on:
   workflow_dispatch:

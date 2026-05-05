@@ -1,4 +1,4 @@
-name: Azure HPC image to Storage Container
+name: "Azure: Upload HPC Image to Storage Container"
 
 on:
   workflow_dispatch:

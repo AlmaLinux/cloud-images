@@ -6,7 +6,7 @@ This repository includes GitHub Actions workflows for building, distributing, an
 
 ## Workflows
 
-### 1. `.github/workflows/build-ami.yml` — Build AMI
+### 1. `.github/workflows/ami-build.yml` — Build AMI
 
 Builds AlmaLinux OS AMIs from source using Packer and Ansible.
 
@@ -28,7 +28,7 @@ Inputs:
   - notify_mattermost: Send notification to Mattermost (default: true)
 ```
 
-### 2. `.github/workflows/copy-ami.yml` — Copy AMI to Regions
+### 2. `.github/workflows/ami-copy.yml` — Copy AMI to Regions
 
 Copies built AMIs to all available AWS regions and makes them public.
 
@@ -142,9 +142,9 @@ The dev/test product is used when `public_product` is set to `false`.
 
 ```mermaid
 graph TD
-    A[1. Run build-ami workflow] --> B[Builds x86_64 + aarch64 AMIs]
+    A[1. Run ami-build workflow] --> B[Builds x86_64 + aarch64 AMIs]
     B --> C[Optional: Test AMIs]
-    C --> D[2. Run copy-ami workflow]
+    C --> D[2. Run ami-copy workflow]
     D --> E[Copy AMIs to all AWS regions]
     E --> F[Make AMIs public]
     F --> G[Generate Wiki AMI tables]
@@ -156,7 +156,7 @@ graph TD
     K --> L
 ```
 
-### Step 1: Build AMIs (`build-ami`)
+### Step 1: Build AMIs (`ami-build`)
 
 1. Checks out the repository
 2. Configures AWS credentials
@@ -174,7 +174,7 @@ The test step:
 - Runs `dnf check-update` to confirm repo access
 - Captures the installed package list as a build artifact
 
-### Step 2: Copy to Regions (`copy-ami`)
+### Step 2: Copy to Regions (`ami-copy`)
 
 1. Copies each AMI to all available AWS regions using `tools/aws_ami_mirror.py`
 2. Makes all copied AMIs public
@@ -221,8 +221,8 @@ Python script that copies an AMI to all available AWS regions and makes it publi
 
 ## Manual Steps
 
-1. **After `build-ami`**: Note the AMI IDs from the job output or Mattermost notification to use as input for the next workflow
-2. **After `copy-ami`**: Review and merge the Wiki PR created in `almalinux/wiki`
+1. **After `ami-build`**: Note the AMI IDs from the job output or Mattermost notification to use as input for the next workflow
+2. **After `ami-copy`**: Review and merge the Wiki PR created in `almalinux/wiki`
 3. **After `ami-to-marketplace`**: Monitor the change set status in the [AWS Marketplace Management Portal](https://aws.amazon.com/marketplace/management/requests/) — AWS reviews and publishes automatically
 
 ## Troubleshooting

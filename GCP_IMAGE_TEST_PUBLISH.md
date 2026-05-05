@@ -2,14 +2,15 @@
 
 ## Overview
 
-This document describes the GitHub Actions workflows used to **test** and **publish** AlmaLinux OS images on Google Cloud Platform (GCP). The process is split into two independent workflows:
+This document describes the GitHub Actions workflows used to **build**, **test**, and **publish** AlmaLinux OS images on Google Cloud Platform (GCP). The process is split into three independent workflows:
 
 | Workflow | File | Purpose |
 | :--- | :--- | :--- |
-| **GCP cloud-image-tests** | `test-gcp.yml` | Run Google's [Cloud Image Tests](https://github.com/GoogleCloudPlatform/cloud-image-tests) (CIT) against images in the dev project across many machine shapes |
-| **GCP Image Publish** | `gcp-publish.yml` | Copy a tested image from the dev project to the production `almalinux-cloud` project and publish its SBOM |
+| **GCP: Build Image** | `gcp-build.yml` | Build the GCP image with Packer, generate an SBOM, upload `root.tar.gz` + SBOM to the dev GCS buckets, and create a test image in the dev project |
+| **GCP: Test Image** | `gcp-test.yml` | Run Google's [Cloud Image Tests](https://github.com/GoogleCloudPlatform/cloud-image-tests) (CIT) against images in the dev project across many machine shapes |
+| **GCP: Publish Image** | `gcp-publish.yml` | Copy a tested image from the dev project to the production `almalinux-cloud` project and publish its SBOM |
 
-Both workflows are triggered manually via `workflow_dispatch`.
+All three workflows are triggered manually via `workflow_dispatch`. The build step uses a dedicated composite action at `.github/actions/gcp-build-steps/action.yml` (see [BUILD_GCP.md](BUILD_GCP.md) for full details); the other cloud/vagrant build pipelines use `.github/actions/shared-steps/action.yml` instead (see [BUILD_IMAGES.md](BUILD_IMAGES.md) and [BUILD_VAGRANT.md](BUILD_VAGRANT.md)).
 
 
 ## GCP Projects
@@ -53,7 +54,7 @@ almalinux-{version_major}[-arm64]
 ```
 
 
-## Workflow 1 — Testing (`test-gcp.yml`)
+## Workflow 1 — Testing (`gcp-test.yml`)
 
 ### Inputs
 
@@ -284,16 +285,16 @@ The GCP image lifecycle spans the main build workflow and these two workflows:
 
 ```mermaid
 flowchart LR
-    A["build.yml<br/>(Packer build)"] --> B["Upload root.tar.gz<br/>+ SBOM to dev buckets"]
+    A["gcp-build.yml<br/>(Packer build)"] --> B["Upload root.tar.gz<br/>+ SBOM to dev buckets"]
     B --> C["gce_image_publish<br/>(test environment)"]
-    C --> D["test-gcp.yml<br/>(CIT testing)"]
+    C --> D["gcp-test.yml<br/>(CIT testing)"]
     D --> E["gcp-publish.yml<br/>(prod release)"]
     E --> F["Image live in<br/>almalinux-cloud"]
 ```
 
-1. **Build** (`build.yml`) — Packer builds the GCP image and generates an SBOM.
-2. **Upload to dev** (shared-steps) — `root.tar.gz` and SBOM are uploaded to GCS dev buckets; a test image is created in the dev project using `gce_image_publish` with `environment=test`.
-3. **Test** (`test-gcp.yml`) — CIT tests are run against the dev image across multiple machine shapes.
+1. **Build** (`gcp-build.yml`) — Packer builds the GCP image and generates an SBOM (via the `gcp-build-steps` composite action).
+2. **Upload to dev** (`gcp-build-steps`) — `root.tar.gz` and SBOM are uploaded to GCS dev buckets; a test image is created in the dev project using `gce_image_publish` with `environment=test`.
+3. **Test** (`gcp-test.yml`) — CIT tests are run against the dev image across multiple machine shapes.
 4. **Publish** (`gcp-publish.yml`) — The image is copied to the prod bucket, published to `almalinux-cloud`, and the SBOM is stored publicly.
 
 
@@ -304,6 +305,6 @@ flowchart LR
 | Auth fails with "permission denied" | Workload Identity Federation misconfigured | Verify pool/provider IDs and service account IAM bindings |
 | CIT test times out | Capacity unavailable for the machine shape | Re-run or skip shape; check GCP quota dashboard |
 | `gce_image_publish` fails | Wrong environment var or missing publish template | Verify `-var:environment` and template file path |
-| SBOM copy fails | SBOM not generated during build | Ensure the build workflow ran with `IMAGE_TYPE=gcp` |
+| SBOM copy fails | SBOM not generated during build | Ensure `gcp-build.yml` completed successfully for this image |
 | Image not visible in `almalinux-cloud` | Publish used wrong environment | Confirm `-var:environment=prod` was passed |
-| "No image found in family" during testing | Image not yet created in dev project | Run `build.yml` for GCP first to create the dev image |
+| "No image found in family" during testing | Image not yet created in dev project | Run `gcp-build.yml` first to create the dev image |
