@@ -1,0 +1,309 @@
+name: "Azure: Test Image"
+
+# Required repository configuration:
+#   secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#            MATTERMOST_WEBHOOK_URL
+#   vars:    MATTERMOST_CHANNEL
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      compute_gallery_path:
+        description: "Compute Gallery Path: gallery_name/vm_image_definition/vm_image_version"
+        required: true
+        type: string
+        default: 'almalinux/almalinux-9-gen2/9.7.2026050101'
+
+      notify_mattermost:
+        description: "Send notification to Mattermost"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: rg-alma-images
+  AZURE_LOCATION: East US
+  AZURE_PORTAL_BASE_URL: https://portal.azure.com/#@/resource
+
+jobs:
+  test-image:
+    name: "Test Azure Compute Gallery Image"
+    runs-on: ubuntu-24.04
+    env:
+      SSH_USER: almalinux
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Validate input
+      run: |
+        COMPUTE_GALLERY_PATH="${{ inputs.compute_gallery_path }}"
+        if [[ ! "${COMPUTE_GALLERY_PATH}" =~ ^[^/]+/[^/]+/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "[Error] Invalid Compute Gallery Path: '${COMPUTE_GALLERY_PATH}'"
+          echo "Expected format: gallery_name/vm_image_definition/vm_image_version"
+          echo "Example: almalinux/almalinux-9-gen2/9.7.2026050101"
+          exit 1
+        fi
+        echo "COMPUTE_GALLERY_PATH=${COMPUTE_GALLERY_PATH}" >> "$GITHUB_ENV"
+
+    - name: Parse path and map architecture
+      run: |
+        IFS='/' read -r GALLERY_NAME VM_IMAGE_DEFINITION VM_IMAGE_VERSION <<< "${COMPUTE_GALLERY_PATH}"
+        IFS='.' read -r ALMA_MAJOR ALMA_MINOR ALMA_PATCH <<< "${VM_IMAGE_VERSION}"
+
+        ALMA_VERSION="${ALMA_MAJOR}.${ALMA_MINOR}"
+        DATESTAMP_ITERATION="${ALMA_PATCH}"
+
+        # Map gallery_name/vm_image_definition -> arch
+        case "${GALLERY_NAME}/${VM_IMAGE_DEFINITION}" in
+          almalinux/almalinux-9-gen2) ALMA_ARCH="x86_64" ;;
+          *)
+            echo "[Error] Unmapped gallery image definition: '${GALLERY_NAME}/${VM_IMAGE_DEFINITION}'"
+            exit 1
+            ;;
+        esac
+
+        # Map arch -> Azure VM size
+        case "${ALMA_ARCH}" in
+          x86_64)  VM_SIZE="Standard_D2as_v5" ;;
+          aarch64) VM_SIZE="Standard_D2ps_v5" ;;
+        esac
+
+        CUSTOM_IMAGE_NAME="AlmaLinux-${ALMA_MAJOR}-Azure-${ALMA_VERSION}-${DATESTAMP_ITERATION}.${ALMA_ARCH}"
+
+        echo "GALLERY_NAME=${GALLERY_NAME}"
+        echo "VM_IMAGE_DEFINITION=${VM_IMAGE_DEFINITION}"
+        echo "VM_IMAGE_VERSION=${VM_IMAGE_VERSION}"
+        echo "ALMA_VERSION=${ALMA_VERSION}"
+        echo "DATESTAMP_ITERATION=${DATESTAMP_ITERATION}"
+        echo "ALMA_ARCH=${ALMA_ARCH}"
+        echo "VM_SIZE=${VM_SIZE}"
+        echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+
+        {
+          echo "GALLERY_NAME=${GALLERY_NAME}"
+          echo "VM_IMAGE_DEFINITION=${VM_IMAGE_DEFINITION}"
+          echo "VM_IMAGE_VERSION=${VM_IMAGE_VERSION}"
+          echo "ALMA_MAJOR=${ALMA_MAJOR}"
+          echo "ALMA_VERSION=${ALMA_VERSION}"
+          echo "DATESTAMP_ITERATION=${DATESTAMP_ITERATION}"
+          echo "ALMA_ARCH=${ALMA_ARCH}"
+          echo "VM_SIZE=${VM_SIZE}"
+          echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+          echo "RELEASE_STRING=AlmaLinux release ${ALMA_VERSION}"
+        } >> "$GITHUB_ENV"
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y netcat-openbsd
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Resolve gallery image version
+      run: |
+        IMAGE_ID=$(az sig image-version show \
+          --resource-group "${RESOURCE_GROUP}" \
+          --gallery-name "${GALLERY_NAME}" \
+          --gallery-image-definition "${VM_IMAGE_DEFINITION}" \
+          --gallery-image-version "${VM_IMAGE_VERSION}" \
+          --query id --output tsv)
+
+        if [ -z "${IMAGE_ID}" ]; then
+          echo "[Error] Gallery image version not found: ${COMPUTE_GALLERY_PATH}"
+          exit 1
+        fi
+
+        echo "Image ID: ${IMAGE_ID}"
+        echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
+
+    - name: Generate ephemeral SSH keypair
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        ssh-keygen -t ed25519 -N '' -C "azure-test-${GITHUB_RUN_ID}" -f ~/.ssh/azure_test
+
+    - name: Launch test VM
+      run: |
+        # Sanitise version for VM name (Azure resource names dislike dots)
+        SAFE_VERSION="${ALMA_VERSION//./}"
+        VM_NAME="azure-test-${SAFE_VERSION}-${DATESTAMP_ITERATION}-${ALMA_ARCH}-${GITHUB_RUN_ID}"
+        echo "VM Name: ${VM_NAME}"
+
+        VM_ID=$(az vm create \
+          --resource-group "${RESOURCE_GROUP}" \
+          --location "${AZURE_LOCATION}" \
+          --name "${VM_NAME}" \
+          --image "${IMAGE_ID}" \
+          --size "${VM_SIZE}" \
+          --admin-username "${SSH_USER}" \
+          --ssh-key-values ~/.ssh/azure_test.pub \
+          --public-ip-sku Standard \
+          --os-disk-size-gb 100 \
+          --nsg-rule SSH \
+          --query id --output tsv)
+
+        echo "VM ID: ${VM_ID}"
+        {
+          echo "VM_NAME=${VM_NAME}"
+          echo "VM_ID=${VM_ID}"
+        } >> "$GITHUB_ENV"
+
+    - name: Resolve VM public IP
+      run: |
+        PUBLIC_IP=$(az vm show \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}" \
+          --show-details \
+          --query publicIps --output tsv)
+
+        if [ -z "${PUBLIC_IP}" ] || [ "${PUBLIC_IP}" = "null" ]; then
+          echo "[Error] VM has no public IP"
+          exit 1
+        fi
+
+        echo "Public IP: ${PUBLIC_IP}"
+        echo "PUBLIC_IP=${PUBLIC_IP}" >> "$GITHUB_ENV"
+
+    - name: Wait for SSH
+      run: |
+        for i in $(seq 1 60); do
+          if nc -z -w2 "${PUBLIC_IP}" 22; then
+            echo "[Info] SSH port reachable after ${i} attempt(s)"
+            break
+          fi
+          if [ "${i}" -eq 60 ]; then
+            echo "[Error] SSH did not become reachable within 10 minutes"
+            exit 1
+          fi
+          sleep 10
+        done
+
+        ssh-keyscan -T 5 "${PUBLIC_IP}" >> ~/.ssh/known_hosts 2>/dev/null
+
+    - name: Run image tests
+      run: |
+        SSH=(ssh -i ~/.ssh/azure_test -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "${SSH_USER}@${PUBLIC_IP}")
+        RELEASE_PACKAGE="almalinux-release"
+
+        echo "[Debug] AlmaLinux release:"
+        ALMA_RELEASE=$("${SSH[@]}" "grep '${RELEASE_STRING}' /etc/almalinux-release")
+        echo "${ALMA_RELEASE}"
+
+        echo "[Debug] System architecture:"
+        SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH}'")
+        echo "${SYSTEM_ARCH}"
+
+        echo "[Debug] Disk and filesystems:"
+        "${SSH[@]}" "sudo lsblk"
+        "${SSH[@]}" 'ROOT_SIZE_BYTES=$(df -B1 --output=size / | tail -n 1 | tr -d " "); MIN_SIZE_BYTES=$((98*1024*1024*1024)); [ "${ROOT_SIZE_BYTES}" -gt "${MIN_SIZE_BYTES}" ] || { echo "[Error] Root filesystem resize check failed: ${ROOT_SIZE_BYTES} bytes (expected > ${MIN_SIZE_BYTES} bytes)"; exit 1; }'
+
+        echo "[Debug] Check for updates:"
+        # dnf check-update returns 100 when updates are available — treat as success
+        rc=0
+        "${SSH[@]}" "sudo dnf check-update" || rc=$?
+        if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 100 ]; then
+          echo "[Error] dnf check-update failed with exit code ${rc}"
+          exit "${rc}"
+        fi
+
+        PKG_FILE="${CUSTOM_IMAGE_NAME}.txt"
+        "${SSH[@]}" "rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/${PKG_FILE}"
+        scp -i ~/.ssh/azure_test -o StrictHostKeyChecking=accept-new \
+          "${SSH_USER}@${PUBLIC_IP}:/tmp/${PKG_FILE}" "./${PKG_FILE}"
+
+        {
+          echo "PKG_FILE=${PKG_FILE}"
+          echo "ALMA_RELEASE=${ALMA_RELEASE}"
+          echo "SYSTEM_ARCH=${SYSTEM_ARCH}"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload packages list artifact
+      if: env.PKG_FILE != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.PKG_FILE }}
+        path: ./${{ env.PKG_FILE }}
+
+    - name: Job summary
+      if: always() && env.CUSTOM_IMAGE_NAME != ''
+      run: |
+        {
+          echo "## Azure Image Test"
+          echo ""
+          echo "- **Compute Gallery Image**: [${COMPUTE_GALLERY_PATH}](${AZURE_PORTAL_BASE_URL}${IMAGE_ID})"
+          echo "- **Size**: \`${VM_SIZE}\`"
+          if [ -n "${VM_ID:-}" ]; then
+            echo "- **Test VM**: [${VM_NAME}](${AZURE_PORTAL_BASE_URL}${VM_ID})"
+            echo "- **Public IP**: \`${PUBLIC_IP:-n/a}\`"
+          fi
+          if [ -n "${ALMA_RELEASE:-}" ]; then
+            echo "- **AlmaLinux release**: \`${ALMA_RELEASE}\`"
+          fi
+          if [ -n "${SYSTEM_ARCH:-}" ]; then
+            echo "- **System architecture**: \`${SYSTEM_ARCH}\`"
+          fi
+          echo "- **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Terminate test VM
+      if: always() && env.VM_NAME != ''
+      run: |
+        OS_DISK=$(az vm show \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}" \
+          --query 'storageProfile.osDisk.name' --output tsv 2>/dev/null || true)
+
+        az vm delete \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}" \
+          --yes --force-deletion true || true
+
+        if [ -n "${OS_DISK}" ]; then
+          az disk delete \
+            --resource-group "${RESOURCE_GROUP}" \
+            --name "${OS_DISK}" \
+            --yes --no-wait || true
+        fi
+
+        az network nic delete \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}VMNic" \
+          --no-wait || true
+
+        az network public-ip delete \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}PublicIP" \
+          --no-wait || true
+
+        az network nsg delete \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}NSG" \
+          --no-wait || true
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: always() && inputs.notify_mattermost && env.CUSTOM_IMAGE_NAME != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.CUSTOM_IMAGE_NAME }}**, Azure image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Compute Gallery Image**: [${{ env.COMPUTE_GALLERY_PATH }}](${{ env.AZURE_PORTAL_BASE_URL }}${{ env.IMAGE_ID }})
+          ${{ env.VM_ID && format('**Test VM**: [{0}]({1}{2})', env.VM_NAME, env.AZURE_PORTAL_BASE_URL, env.VM_ID) || '' }}
+          **Size**: `${{ env.VM_SIZE }}`
+          ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
+          ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
+          **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}
