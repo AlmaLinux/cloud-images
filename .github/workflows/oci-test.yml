@@ -1,0 +1,267 @@
+name: "OCI: Test Image"
+
+# Required repository configuration:
+#   secrets: OCI_CLI_USER, OCI_CLI_TENANCY, OCI_CLI_FINGERPRINT, OCI_CLI_KEY_CONTENT,
+#            OCI_COMPARTMENT_ID, OCI_SUBNET_ID (public subnet OCID in OCI_CLI_REGION),
+#            MATTERMOST_WEBHOOK_URL
+#   vars:    OCI_CLI_REGION, MATTERMOST_CHANNEL
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      image_ocid:
+        description: "Compute Image OCID"
+        required: true
+        type: string
+        default: ''
+
+      notify_mattermost:
+        description: "Send notification to Mattermost"
+        required: true
+        type: boolean
+        default: true
+
+env:
+  OCI_COMPUTE_BASE_URL: https://cloud.oracle.com/compute
+
+jobs:
+  test-image:
+    name: "Test OCI Compute Custom Image"
+    runs-on: ubuntu-24.04
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      SSH_USER: opc
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Validate input
+      run: |
+        IMAGE_OCID="${{ inputs.image_ocid }}"
+        if [[ ! "${IMAGE_OCID}" =~ ^ocid1\.image\. ]]; then
+          echo "[Error] Invalid Compute Image OCID: '${IMAGE_OCID}'"
+          echo "Expected format: ocid1.image.oc1..<unique_id>"
+          exit 1
+        fi
+        echo "IMAGE_OCID=${IMAGE_OCID}" >> "$GITHUB_ENV"
+
+    - name: Install OCI CLI and dependencies
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq netcat-openbsd
+
+        curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
+        chmod +x install.sh
+        ./install.sh --accept-all-defaults
+        echo "$HOME/bin" >> "$GITHUB_PATH"
+
+    - name: Configure OCI CLI
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ secrets.OCI_CLI_KEY_CONTENT }}" > ~/.oci/key.pem
+        chmod 600 ~/.oci/key.pem
+
+        oci --version
+
+    - name: Read image metadata and parse name
+      run: |
+        CUSTOM_IMAGE_NAME=$(oci compute image get \
+          --image-id "${IMAGE_OCID}" \
+          --query 'data."display-name"' --raw-output)
+        echo "Custom Image Name: ${CUSTOM_IMAGE_NAME}"
+
+        # Example: AlmaLinux-10-OCI-10.1-20260502.0.x86_64
+        if [[ ! "${CUSTOM_IMAGE_NAME}" =~ ^AlmaLinux-([0-9]+)-OCI-([0-9.]+)-([0-9]+(\.[0-9]+)?)\.(x86_64|aarch64)$ ]]; then
+          echo "[Error] Unexpected Custom Image Name: '${CUSTOM_IMAGE_NAME}'"
+          echo "Expected: AlmaLinux-<major>-OCI-<version>-<datestamp>[.<iter>].<arch>"
+          exit 1
+        fi
+
+        ALMA_MAJOR="${BASH_REMATCH[1]}"
+        ALMA_VERSION="${BASH_REMATCH[2]}"
+        ALMA_DATE="${BASH_REMATCH[3]}"
+        ALMA_ARCH="${BASH_REMATCH[5]}"
+
+        echo "ALMA_MAJOR=${ALMA_MAJOR}"
+        echo "ALMA_VERSION=${ALMA_VERSION}"
+        echo "ALMA_DATE=${ALMA_DATE}"
+        echo "ALMA_ARCH=${ALMA_ARCH}"
+
+        case "${ALMA_ARCH}" in
+          x86_64)  SHAPE="VM.Standard.E5.Flex" ;;
+          aarch64) SHAPE="VM.Standard.A1.Flex" ;;
+        esac
+
+        {
+          echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+          echo "ALMA_MAJOR=${ALMA_MAJOR}"
+          echo "ALMA_VERSION=${ALMA_VERSION}"
+          echo "ALMA_DATE=${ALMA_DATE}"
+          echo "ALMA_ARCH=${ALMA_ARCH}"
+          echo "SHAPE=${SHAPE}"
+          echo "RELEASE_STRING=AlmaLinux release ${ALMA_VERSION}"
+        } >> "$GITHUB_ENV"
+
+    - name: Generate ephemeral SSH keypair
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        ssh-keygen -t ed25519 -N '' -C "oci-test-${GITHUB_RUN_ID}" -f ~/.ssh/oci_test
+
+    - name: Launch test instance
+      run: |
+        AD=$(oci iam availability-domain list \
+          --compartment-id "${{ secrets.OCI_COMPARTMENT_ID }}" \
+          --query 'data[0].name' --raw-output)
+        echo "Availability Domain: ${AD}"
+
+        INSTANCE_NAME="oci-test-${ALMA_VERSION}-${ALMA_DATE}-${ALMA_ARCH}-${GITHUB_RUN_ID}"
+        echo "Instance Name: ${INSTANCE_NAME}"
+
+        INSTANCE_OCID=$(oci compute instance launch \
+          --availability-domain "${AD}" \
+          --compartment-id "${{ secrets.OCI_COMPARTMENT_ID }}" \
+          --shape "${SHAPE}" \
+          --shape-config '{"ocpus":2,"memoryInGBs":8}' \
+          --image-id "${IMAGE_OCID}" \
+          --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
+          --assign-public-ip true \
+          --boot-volume-size-in-gbs 100 \
+          --display-name "${INSTANCE_NAME}" \
+          --ssh-authorized-keys-file ~/.ssh/oci_test.pub \
+          --wait-for-state RUNNING \
+          --query 'data.id' --raw-output)
+
+        echo "Instance OCID: ${INSTANCE_OCID}"
+        {
+          echo "INSTANCE_OCID=${INSTANCE_OCID}"
+          echo "INSTANCE_NAME=${INSTANCE_NAME}"
+        } >> "$GITHUB_ENV"
+
+    - name: Resolve instance public IP
+      run: |
+        VNIC_OCID=$(oci compute instance list-vnics \
+          --instance-id "${INSTANCE_OCID}" \
+          --query 'data[0].id' --raw-output)
+
+        PUBLIC_IP=$(oci network vnic get \
+          --vnic-id "${VNIC_OCID}" \
+          --query 'data."public-ip"' --raw-output)
+
+        if [ -z "${PUBLIC_IP}" ] || [ "${PUBLIC_IP}" = "null" ]; then
+          echo "[Error] Instance has no public IP"
+          exit 1
+        fi
+
+        echo "Public IP: ${PUBLIC_IP}"
+        echo "PUBLIC_IP=${PUBLIC_IP}" >> "$GITHUB_ENV"
+
+    - name: Wait for SSH
+      run: |
+        for i in $(seq 1 60); do
+          if nc -z -w2 "${PUBLIC_IP}" 22; then
+            echo "[Info] SSH port reachable after ${i} attempt(s)"
+            break
+          fi
+          if [ "${i}" -eq 60 ]; then
+            echo "[Error] SSH did not become reachable within 10 minutes"
+            exit 1
+          fi
+          sleep 10
+        done
+
+        ssh-keyscan -T 5 "${PUBLIC_IP}" >> ~/.ssh/known_hosts 2>/dev/null
+
+    - name: Run image tests
+      run: |
+        SSH=(ssh -i ~/.ssh/oci_test -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "${SSH_USER}@${PUBLIC_IP}")
+        RELEASE_PACKAGE="almalinux-release"
+
+        echo "[Debug] AlmaLinux release:"
+        ALMA_RELEASE=$("${SSH[@]}" "grep '${RELEASE_STRING}' /etc/almalinux-release")
+        echo "${ALMA_RELEASE}"
+
+        echo "[Debug] System architecture:"
+        SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH}'")
+        echo "${SYSTEM_ARCH}"
+
+        echo "[Debug] Disk and filesystems:"
+        "${SSH[@]}" "sudo lsblk"
+        "${SSH[@]}" 'ROOT_SIZE_BYTES=$(df -B1 --output=size / | tail -n 1 | tr -d " "); MIN_SIZE_BYTES=$((98*1024*1024*1024)); [ "${ROOT_SIZE_BYTES}" -gt "${MIN_SIZE_BYTES}" ] || { echo "[Error] Root filesystem resize check failed: ${ROOT_SIZE_BYTES} bytes (expected > ${MIN_SIZE_BYTES} bytes)"; exit 1; }'
+
+        echo "[Debug] Check for updates:"
+        # dnf check-update returns 100 when updates are available — treat as success
+        rc=0
+        "${SSH[@]}" "sudo dnf check-update" || rc=$?
+        if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 100 ]; then
+          echo "[Error] dnf check-update failed with exit code ${rc}"
+          exit "${rc}"
+        fi
+
+        PKG_FILE="${CUSTOM_IMAGE_NAME}.txt"
+        "${SSH[@]}" "rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/${PKG_FILE}"
+        scp -i ~/.ssh/oci_test -o StrictHostKeyChecking=accept-new \
+          "${SSH_USER}@${PUBLIC_IP}:/tmp/${PKG_FILE}" "./${PKG_FILE}"
+
+        {
+          echo "PKG_FILE=${PKG_FILE}"
+          echo "ALMA_RELEASE=${ALMA_RELEASE}"
+          echo "SYSTEM_ARCH=${SYSTEM_ARCH}"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload packages list artifact
+      if: env.PKG_FILE != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.PKG_FILE }}
+        path: ./${{ env.PKG_FILE }}
+
+    - name: Job summary
+      if: always() && env.CUSTOM_IMAGE_NAME != ''
+      run: |
+        {
+          echo "## OCI Image Test"
+          echo ""
+          echo "- **Custom Image**: [${CUSTOM_IMAGE_NAME}](${OCI_COMPUTE_BASE_URL}/images/${IMAGE_OCID}?region=${OCI_CLI_REGION})"
+          echo "- **Shape**: \`${SHAPE}\`"
+          if [ -n "${INSTANCE_OCID:-}" ]; then
+            echo "- **Test Instance**: [${INSTANCE_NAME}](${OCI_COMPUTE_BASE_URL}/instances/${INSTANCE_OCID}?region=${OCI_CLI_REGION})"
+            echo "- **Public IP**: \`${PUBLIC_IP:-n/a}\`"
+          fi
+          if [ -n "${ALMA_RELEASE:-}" ]; then
+            echo "- **AlmaLinux release**: \`${ALMA_RELEASE}\`"
+          fi
+          if [ -n "${SYSTEM_ARCH:-}" ]; then
+            echo "- **System architecture**: \`${SYSTEM_ARCH}\`"
+          fi
+          echo "- **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Terminate test instance
+      if: always() && env.INSTANCE_OCID != ''
+      run: |
+        oci compute instance terminate \
+          --instance-id "${INSTANCE_OCID}" \
+          --force \
+          --wait-for-state TERMINATED
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: always() && inputs.notify_mattermost && env.CUSTOM_IMAGE_NAME != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.CUSTOM_IMAGE_NAME }}**, OCI image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Compute Custom Image**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_COMPUTE_BASE_URL }}/images/${{ env.IMAGE_OCID }}?region=${{ vars.OCI_CLI_REGION }})
+          ${{ env.INSTANCE_OCID && format('**Test Instance**: [{0}]({1}/instances/{2}?region={3})', env.INSTANCE_NAME, env.OCI_COMPUTE_BASE_URL, env.INSTANCE_OCID, vars.OCI_CLI_REGION) || '' }}
+          **Shape**: `${{ env.SHAPE }}`
+          ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
+          ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
+          **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}
