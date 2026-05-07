@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Pin actionlint to a specific release so upstream rule additions
       # don't silently change our lint surface between runs. Bumping the

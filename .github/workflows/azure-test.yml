@@ -4,6 +4,30 @@ name: "Azure: Test Image"
 #   secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
 #            MATTERMOST_WEBHOOK_URL
 #   vars:    MATTERMOST_CHANNEL
+#
+# Required Azure RBAC actions for the service principal behind AZURE_CLIENT_ID
+# (assign at the rg-alma-images resource-group scope):
+#   Microsoft.Compute/galleries/images/read
+#   Microsoft.Compute/virtualMachines/write
+#   Microsoft.Compute/virtualMachines/delete
+#   Microsoft.Compute/virtualMachines/deletePreservedOSDisk/action
+#   Microsoft.Compute/disks/delete
+#   Microsoft.Network/networkInterfaces/write
+#   Microsoft.Network/networkInterfaces/join/action
+#   Microsoft.Network/networkInterfaces/delete
+#   Microsoft.Network/networkSecurityGroups/read
+#   Microsoft.Network/networkSecurityGroups/write
+#   Microsoft.Network/networkSecurityGroups/join/action
+#   Microsoft.Network/networkSecurityGroups/delete
+#   Microsoft.Network/publicIPAddresses/read
+#   Microsoft.Network/publicIPAddresses/write
+#   Microsoft.Network/publicIPAddresses/join/action
+#   Microsoft.Network/publicIPAddresses/delete
+#   Microsoft.Network/virtualNetworks/write
+#   Microsoft.Network/virtualNetworks/subnets/join/action
+#   Microsoft.Resources/deployments/read
+#   Microsoft.Resources/deployments/write
+#   Microsoft.Resources/deployments/operationStatuses/read
 
 on:
   workflow_dispatch:
@@ -51,51 +75,41 @@ jobs:
         fi
         echo "COMPUTE_GALLERY_PATH=${COMPUTE_GALLERY_PATH}" >> "$GITHUB_ENV"
 
-    - name: Parse path and map architecture
+    - name: Parse Compute Gallery Path
       run: |
         IFS='/' read -r GALLERY_NAME VM_IMAGE_DEFINITION VM_IMAGE_VERSION <<< "${COMPUTE_GALLERY_PATH}"
-        IFS='.' read -r ALMA_MAJOR ALMA_MINOR ALMA_PATCH <<< "${VM_IMAGE_VERSION}"
+        IFS='.' read -r ALMA_MAJOR V_PART2 V_PART3 <<< "${VM_IMAGE_VERSION}"
 
-        ALMA_VERSION="${ALMA_MAJOR}.${ALMA_MINOR}"
-        DATESTAMP_ITERATION="${ALMA_PATCH}"
-
-        # Map gallery_name/vm_image_definition -> arch
-        case "${GALLERY_NAME}/${VM_IMAGE_DEFINITION}" in
-          almalinux/almalinux-9-gen2) ALMA_ARCH="x86_64" ;;
+        # Kitten image-definitions use Major.Datestamp.Iteration with no minor
+        # (e.g. 10.20260501.0). Stable AlmaLinux uses Major.Minor.Patch where
+        # Patch encodes the datestamp+iteration (e.g. 9.7.2026050101).
+        case "${VM_IMAGE_DEFINITION}" in
+          *kitten*)
+            ALMA_VERSION="${ALMA_MAJOR}"
+            DATESTAMP_ITERATION="${V_PART2}.${V_PART3}"
+            RELEASE_STRING="AlmaLinux Kitten release ${ALMA_MAJOR}"
+            ;;
           *)
-            echo "[Error] Unmapped gallery image definition: '${GALLERY_NAME}/${VM_IMAGE_DEFINITION}'"
-            exit 1
+            ALMA_VERSION="${ALMA_MAJOR}.${V_PART2}"
+            DATESTAMP_ITERATION="${V_PART3}"
+            RELEASE_STRING="AlmaLinux release ${ALMA_VERSION}"
             ;;
         esac
-
-        # Map arch -> Azure VM size
-        case "${ALMA_ARCH}" in
-          x86_64)  VM_SIZE="Standard_D2as_v5" ;;
-          aarch64) VM_SIZE="Standard_D2ps_v5" ;;
-        esac
-
-        CUSTOM_IMAGE_NAME="AlmaLinux-${ALMA_MAJOR}-Azure-${ALMA_VERSION}-${DATESTAMP_ITERATION}.${ALMA_ARCH}"
 
         echo "GALLERY_NAME=${GALLERY_NAME}"
         echo "VM_IMAGE_DEFINITION=${VM_IMAGE_DEFINITION}"
         echo "VM_IMAGE_VERSION=${VM_IMAGE_VERSION}"
         echo "ALMA_VERSION=${ALMA_VERSION}"
         echo "DATESTAMP_ITERATION=${DATESTAMP_ITERATION}"
-        echo "ALMA_ARCH=${ALMA_ARCH}"
-        echo "VM_SIZE=${VM_SIZE}"
-        echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+        echo "RELEASE_STRING=${RELEASE_STRING}"
 
         {
           echo "GALLERY_NAME=${GALLERY_NAME}"
           echo "VM_IMAGE_DEFINITION=${VM_IMAGE_DEFINITION}"
           echo "VM_IMAGE_VERSION=${VM_IMAGE_VERSION}"
-          echo "ALMA_MAJOR=${ALMA_MAJOR}"
           echo "ALMA_VERSION=${ALMA_VERSION}"
           echo "DATESTAMP_ITERATION=${DATESTAMP_ITERATION}"
-          echo "ALMA_ARCH=${ALMA_ARCH}"
-          echo "VM_SIZE=${VM_SIZE}"
-          echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
-          echo "RELEASE_STRING=AlmaLinux release ${ALMA_VERSION}"
+          echo "RELEASE_STRING=${RELEASE_STRING}"
         } >> "$GITHUB_ENV"
 
     - name: Install dependencies
@@ -104,28 +118,83 @@ jobs:
         sudo apt-get install -y netcat-openbsd
 
     - name: Azure login
-      uses: azure/login@v2
+      uses: azure/login@v3
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Resolve gallery image version
+    - name: Resolve gallery image version and architecture
       run: |
-        IMAGE_ID=$(az sig image-version show \
+        JSON=$(az sig image-version show \
           --resource-group "${RESOURCE_GROUP}" \
           --gallery-name "${GALLERY_NAME}" \
           --gallery-image-definition "${VM_IMAGE_DEFINITION}" \
           --gallery-image-version "${VM_IMAGE_VERSION}" \
-          --query id --output tsv)
+          --output json) || {
+            echo "[Error] Gallery image version not found: ${COMPUTE_GALLERY_PATH}"
+            exit 1
+          }
 
-        if [ -z "${IMAGE_ID}" ]; then
-          echo "[Error] Gallery image version not found: ${COMPUTE_GALLERY_PATH}"
+        IMAGE_ID=$(jq -r '.id // empty' <<< "${JSON}")
+        # az sig image-version show keeps a 'properties' wrapper on some CLI /
+        # API combinations and flattens it on others; query both shapes.
+        SOURCE_URI=$(jq -r '
+          .storageProfile.osDiskImage.source.uri //
+          .properties.storageProfile.osDiskImage.source.uri //
+          empty
+        ' <<< "${JSON}")
+
+        if [ -z "${IMAGE_ID}" ] || [ -z "${SOURCE_URI}" ]; then
+          echo "[Error] Could not extract image-version metadata for ${COMPUTE_GALLERY_PATH}"
+          echo "Raw JSON:"
+          echo "${JSON}"
           exit 1
         fi
 
-        echo "Image ID: ${IMAGE_ID}"
-        echo "IMAGE_ID=${IMAGE_ID}" >> "$GITHUB_ENV"
+        VHD_FILE="${SOURCE_URI##*/}"
+        echo "Image ID:   ${IMAGE_ID}"
+        echo "Source VHD: ${VHD_FILE}"
+
+        # Reverse-engineer architecture from the VHD source filename, using the
+        # same regex pair as the VHD path in .github/workflows/azure-to-gallery.yml.
+        regex_azure='-([0-9]+\.?[0-9]*)-([0-9]{8,9}(\.[0-9])?).*\.(x86_64|aarch64|arm64)'
+        regex_simple='almalinux-([0-9]+\.[0-9]+)-(x86_64|aarch64|arm64)\.([0-9]{8})'
+
+        if [[ $VHD_FILE =~ $regex_azure ]]; then
+          ALMA_ARCH="${BASH_REMATCH[4]}"
+        elif [[ $VHD_FILE =~ $regex_simple ]]; then
+          ALMA_ARCH="${BASH_REMATCH[2]}"
+        else
+          echo "[Error] Could not parse architecture from VHD source: '${VHD_FILE}'"
+          exit 1
+        fi
+
+        # Normalize arm64 -> aarch64 (the in-VM tests grep rpm output that uses
+        # the uname-style arch).
+        [ "${ALMA_ARCH}" = "arm64" ] && ALMA_ARCH="aarch64"
+
+        # Map arch -> Azure VM size
+        case "${ALMA_ARCH}" in
+          x86_64)  VM_SIZE="Standard_D2as_v5" ;;
+          aarch64) VM_SIZE="Standard_D2ps_v5" ;;
+        esac
+
+        # CUSTOM_IMAGE_NAME (used as artifact name and notification label) is
+        # the source VHD filename without the .vhd extension.
+        CUSTOM_IMAGE_NAME="${VHD_FILE%.vhd}"
+
+        echo "ALMA_ARCH=${ALMA_ARCH}"
+        echo "VM_SIZE=${VM_SIZE}"
+        echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+
+        {
+          echo "IMAGE_ID=${IMAGE_ID}"
+          echo "VHD_FILE=${VHD_FILE}"
+          echo "ALMA_ARCH=${ALMA_ARCH}"
+          echo "VM_SIZE=${VM_SIZE}"
+          echo "CUSTOM_IMAGE_NAME=${CUSTOM_IMAGE_NAME}"
+        } >> "$GITHUB_ENV"
 
     - name: Generate ephemeral SSH keypair
       run: |
@@ -135,9 +204,7 @@ jobs:
 
     - name: Launch test VM
       run: |
-        # Sanitise version for VM name (Azure resource names dislike dots)
-        SAFE_VERSION="${ALMA_VERSION//./}"
-        VM_NAME="azure-test-${SAFE_VERSION}-${DATESTAMP_ITERATION}-${ALMA_ARCH}-${GITHUB_RUN_ID}"
+        VM_NAME="azure-test-${ALMA_VERSION}-${DATESTAMP_ITERATION}-${ALMA_ARCH}-${GITHUB_RUN_ID}"
         echo "VM Name: ${VM_NAME}"
 
         VM_ID=$(az vm create \
@@ -194,11 +261,14 @@ jobs:
     - name: Run image tests
       run: |
         SSH=(ssh -i ~/.ssh/azure_test -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "${SSH_USER}@${PUBLIC_IP}")
-        RELEASE_PACKAGE="almalinux-release"
 
         echo "[Debug] AlmaLinux release:"
         ALMA_RELEASE=$("${SSH[@]}" "grep '${RELEASE_STRING}' /etc/almalinux-release")
         echo "${ALMA_RELEASE}"
+
+        echo "[Debug] AlmaLinux release package:"
+        RELEASE_PACKAGE=$("${SSH[@]}" "rpm -qf /etc/almalinux-release")
+        echo "${RELEASE_PACKAGE}"
 
         echo "[Debug] System architecture:"
         SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH}'")
@@ -217,7 +287,7 @@ jobs:
           exit "${rc}"
         fi
 
-        PKG_FILE="${CUSTOM_IMAGE_NAME}.txt"
+        PKG_FILE="${VHD_FILE}.txt"
         "${SSH[@]}" "rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/${PKG_FILE}"
         scp -i ~/.ssh/azure_test -o StrictHostKeyChecking=accept-new \
           "${SSH_USER}@${PUBLIC_IP}:/tmp/${PKG_FILE}" "./${PKG_FILE}"

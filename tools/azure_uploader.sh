@@ -321,6 +321,7 @@ upload_arm_image_version() {
   upload_image_version "${image_def}" "${image_ver}" "${image_uri}"
   echo "Created ${GALLERY_NAME}.${image_def} image definition version: "\
        "${image_ver}"
+  echo "- Created: '${GALLERY_NAME}/${image_def}/${image_ver}'"
 }
 
 # Creates a new Intel image definition version in an Azure compute gallery.
@@ -339,6 +340,7 @@ upload_intel_image_version() {
     upload_image_version "${image_def}" "${image_ver}" "${image_uri}"
     echo "Created ${GALLERY_NAME}.${image_def} image definition version: "\
          "${image_ver}"
+    echo "- Created: '${GALLERY_NAME}/${image_def}/${image_ver}'"
   done
 }
 

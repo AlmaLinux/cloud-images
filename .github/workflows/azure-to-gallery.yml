@@ -22,21 +22,21 @@ on:
           description: "Dry-run mode"
           required: true
           type: boolean
-          default: true
+          default: false
 
-        public_gallery:
+        community_gallery:
           description: |
-            Release to public Gallery
-            (except for AlmaLinux 10 and Kitten)
+            Release to Community (public) Gallery
+            (AlmaLinux 10 and Kitten - to Private Gallery)
           required: true
           type: boolean
-          default: false
+          default: true
 
         notify_mattermost:
           description: "Send notification to Mattermost"
           required: true
           type: boolean
-          default: false
+          default: true
 
 permissions:
   id-token: write
@@ -58,7 +58,7 @@ jobs:
         sudo apt-get install -y curl qemu-utils
 
     - name: Azure login
-      uses: azure/login@v2
+      uses: azure/login@v3
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -166,11 +166,11 @@ jobs:
         [[ "$dry_run" == false ]] && \
           release_options+=' -f'
 
-        # If public_gallery is true, then upload to 'almalinux' public Gallery
-        # TODO: AlmaLinux 10 and Kitten are not released to the public Gallery
-        public_gallery='${{ inputs.public_gallery }}'
+        # If community_gallery is true, then upload to 'almalinux' Community Gallery
+        # TODO: AlmaLinux 10 and Kitten are not released to the Community Gallery
+        community_gallery='${{ inputs.community_gallery }}'
         release_version='${{ env.RELEASE_VERSION }}'
-        [[ "$public_gallery" == true && "$release_version" != "10"* ]] && \
+        [[ "$community_gallery" == true && "$release_version" != "10"* ]] && \
           release_options+=' -g almalinux'
 
         ./azure_uploader.sh ${release_options} \
@@ -187,7 +187,7 @@ jobs:
           RAW*)
             {
               echo 'IMAGE_URI_SUMMARY<<EOF'
-              cat /mnt/azure_uploader.log | grep 'Image URI:' | sed 's/Image/- Image/g'
+              cat /mnt/azure_uploader.log | grep 'Image URI:' | sed 's/Image/- Image/g' || true
               echo EOF
             } >> "$GITHUB_ENV"
             ;;
@@ -199,7 +199,7 @@ jobs:
         # Image definition version
         {
           echo 'IMAGE_INFO_SUMMARY<<EOF'
-          cat /mnt/azure_uploader.log | grep 'Created almalinux' | sed 's/Created/- Created/g'
+          grep -e "- Created:" /mnt/azure_uploader.log || true
           echo EOF
         } >> "$GITHUB_ENV"
 
@@ -213,7 +213,7 @@ jobs:
           [[ ${{ inputs.dry-run-mode }} == 'false' ]] \
             && echo "${{ env.IMAGE_INFO_SUMMARY }}" || true
           echo "- Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅' }}"
-          echo "- The Gallery is public: ${{ inputs.public_gallery && '✅' || '❌' }}"
+          echo "- The Gallery is \"Community\": ${{ inputs.community_gallery && ( startsWith(env.RELEASE_VERSION, '10') && '❌' || '✅' ) || '❌' }}"
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Send notification to Mattermost
@@ -229,4 +229,4 @@ jobs:
           ${{ inputs.dry-run-mode && '' || env.IMAGE_URI_SUMMARY }}
           ${{ inputs.dry-run-mode && '' || env.IMAGE_INFO_SUMMARY }}
           - Released to Gallery: ${{ inputs.dry-run-mode && '❌' || '✅'}}
-          - The Gallery is public: ${{ inputs.public_gallery && '✅' || '❌'}}
+          - The Gallery is "Community": ${{ inputs.community_gallery && ( startsWith(env.RELEASE_VERSION, '10') && '❌' || '✅' ) || '❌'}}
