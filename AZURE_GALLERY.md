@@ -70,6 +70,7 @@ Bash script that handles the actual image conversion, upload, and gallery operat
 - Supports dry-run mode (default) — pass `-f` to execute actual operations
 - Calculates unique image indices to avoid naming collisions
 - Replicates images to multiple target regions
+- For each created image-version, prints a structured `- Created: '<gallery>/<image_def>/<image_ver>'` line that the release workflow grabs into `IMAGE_INFO_SUMMARY` and forwards to Mattermost. The string is in the exact `compute_gallery_path` format consumed by [`AZURE_TEST.md`](AZURE_TEST.md), so the release notification ends with a copy-pasteable test-workflow input.
 
 **Usage:**
 ```bash
