@@ -1,0 +1,334 @@
+name: "GenericCloud image test steps"
+description: "Boots a GenericCloud .qcow2 under QEMU/KVM with a cloud-init seed and runs in-VM smoke tests over SSH"
+
+inputs:
+  image_url:
+    description: "Public S3 URL to the GenericCloud .qcow2 image"
+    required: true
+  image_filename:
+    description: "Image filename (last path segment of image_url)"
+    required: true
+  subtype:
+    description: "Image subtype: gencloud (XFS root) or gencloud_ext4 (ext4 root)"
+    required: true
+  alma_arch:
+    description: "Base image architecture: x86_64 or aarch64 (used by the QEMU case statement)"
+    required: true
+  alma_arch_full:
+    description: "Full image architecture incl. microarch suffix (x86_64, x86_64_v2, or aarch64) - used for the in-VM rpm-arch assertion"
+    required: true
+  release_string:
+    description: "Expected /etc/almalinux-release substring (e.g. 'AlmaLinux release 10.1')"
+    required: true
+  notify_mattermost:
+    description: "Send notification to Mattermost (true/false)"
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: "Mattermost incoming webhook URL"
+    required: false
+    default: ''
+  MATTERMOST_CHANNEL:
+    description: "Mattermost channel for notifications"
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install hypervisor packages
+      shell: bash
+      run: |
+        # Install hypervisor packages
+        sudo apt-get update
+        case "${{ inputs.alma_arch }}" in
+          x86_64)
+            sudo apt-get install -y --no-install-recommends \
+              qemu-system-x86 cloud-image-utils
+            ;;
+          aarch64)
+            sudo apt-get install -y --no-install-recommends \
+              qemu-system-arm qemu-efi-aarch64 cloud-image-utils
+            ;;
+          *)
+            echo "[Error] Unsupported alma_arch: '${{ inputs.alma_arch }}'"
+            exit 1
+            ;;
+        esac
+
+    - name: Verify nested KVM is available
+      shell: bash
+      run: |
+        # Verify nested KVM is available
+        if [ ! -e /dev/kvm ]; then
+          echo "[Error] /dev/kvm not present on this runner; nested KVM is required"
+          exit 1
+        fi
+        ls -l /dev/kvm
+        # The default GH-hosted runner user is in the kvm group already on
+        # ubuntu-24.04; on RunsOn metal it varies. Loosen perms if /dev/kvm
+        # is not writable for the current user.
+        if [ ! -w /dev/kvm ]; then
+          sudo chmod 666 /dev/kvm
+        fi
+
+    - name: Generate ephemeral SSH keypair
+      shell: bash
+      run: |
+        # Generate ephemeral SSH keypair
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        ssh-keygen -t ed25519 -N '' -C "gencloud-test-${GITHUB_RUN_ID}" -f ~/.ssh/gencloud_test
+
+    - name: Download base image
+      shell: bash
+      env:
+        IMAGE_URL: ${{ inputs.image_url }}
+      run: |
+        # Download base image
+        curl -fL --retry 5 --retry-delay 5 -o base.qcow2 "${IMAGE_URL}"
+        qemu-img info base.qcow2
+
+    - name: Create writable qcow2 overlay (100 GiB)
+      shell: bash
+      run: |
+        # Create writable qcow2 overlay (100 GiB)
+        # 100 GiB virtual size so cloud-init growpart yields a root FS
+        # comfortably above the 98 GiB assertion below; the overlay stays
+        # sparse, so this costs no real disk on the runner.
+        qemu-img create -f qcow2 -F qcow2 -b base.qcow2 disk.qcow2 100G
+
+    - name: Build cloud-init seed.iso
+      shell: bash
+      run: |
+        # Build cloud-init seed.iso
+        cat > meta-data <<EOF
+        instance-id: gencloud-test-${GITHUB_RUN_ID}
+        local-hostname: gencloud-test
+        EOF
+
+        PUB=$(cat ~/.ssh/gencloud_test.pub)
+        cat > user-data <<EOF
+        #cloud-config
+        hostname: gencloud-test
+        users:
+          - default
+        ssh_pwauth: false
+        ssh_authorized_keys:
+          - ${PUB}
+        EOF
+
+        cloud-localds seed.iso user-data meta-data
+
+    - name: Boot QEMU/KVM guest (daemonized, hostfwd 2222 -> 22)
+      shell: bash
+      env:
+        ALMA_ARCH: ${{ inputs.alma_arch }}
+      run: |
+        # Boot QEMU/KVM guest (daemonized, hostfwd 2222 -> 22)
+        case "${ALMA_ARCH}" in
+          x86_64)
+            QEMU=qemu-system-x86_64
+            MACHINE_ARGS=(-machine q35,accel=kvm -cpu host)
+            FW_ARGS=()
+            ;;
+          aarch64)
+            QEMU=qemu-system-aarch64
+            MACHINE_ARGS=(-machine virt,accel=kvm -cpu host)
+            FW_ARGS=(-bios /usr/share/AAVMF/AAVMF_CODE.fd)
+            ;;
+        esac
+
+        "${QEMU}" \
+          -name gencloud-test \
+          "${MACHINE_ARGS[@]}" \
+          "${FW_ARGS[@]}" \
+          -smp 2 -m 2048 \
+          -drive file=disk.qcow2,if=virtio,format=qcow2,cache=writeback \
+          -drive file=seed.iso,if=virtio,format=raw,readonly=on \
+          -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+          -device virtio-net-pci,netdev=net0 \
+          -display none \
+          -serial file:console.log \
+          -pidfile qemu.pid \
+          -daemonize
+
+        sleep 2
+        echo "QEMU PID: $(cat qemu.pid)"
+
+    - name: Wait for SSH on 127.0.0.1:2222
+      shell: bash
+      run: |
+        # Wait for SSH on 127.0.0.1:2222
+        # QEMU's SLIRP hostfwd accepts the host-side TCP handshake before
+        # sshd inside the guest is actually ready, so a plain `nc -z` gate
+        # fires too early. Loop ssh-keyscan instead - it only succeeds
+        # once the guest's sshd has produced a host-key banner, and
+        # populates known_hosts in the same step.
+        for i in $(seq 1 60); do
+          if ssh-keyscan -p 2222 -T 5 127.0.0.1 > ~/.ssh/known_hosts.tmp 2>/dev/null \
+             && [ -s ~/.ssh/known_hosts.tmp ]; then
+            mv ~/.ssh/known_hosts.tmp ~/.ssh/known_hosts
+            echo "[Info] SSH ready after ${i} attempt(s)"
+            break
+          fi
+          if [ "${i}" -eq 60 ]; then
+            echo "[Error] SSH did not become reachable within 10 minutes"
+            exit 1
+          fi
+          sleep 10
+        done
+
+    - name: Run image tests
+      shell: bash
+      env:
+        ALMA_ARCH: ${{ inputs.alma_arch }}
+        ALMA_ARCH_FULL: ${{ inputs.alma_arch_full }}
+        RELEASE_STRING: ${{ inputs.release_string }}
+        IMAGE_FILENAME: ${{ inputs.image_filename }}
+        SUBTYPE: ${{ inputs.subtype }}
+      run: |
+        # Run image tests
+        SSH=(ssh -i ~/.ssh/gencloud_test -p 2222 \
+             -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+             "almalinux@127.0.0.1")
+
+        echo "[Debug] AlmaLinux release:"
+        ALMA_RELEASE=$("${SSH[@]}" "grep '${RELEASE_STRING}' /etc/almalinux-release")
+        echo "${ALMA_RELEASE}"
+
+        # The package owning /etc/almalinux-release is 'almalinux-release'
+        # on stable AlmaLinux but 'almalinux-kitten-release' on Kitten,
+        # so query it dynamically rather than hard-coding the name (same
+        # pattern as azure-test.yml).
+        echo "[Debug] AlmaLinux release package:"
+        RELEASE_PACKAGE=$("${SSH[@]}" "rpm -qf /etc/almalinux-release")
+        echo "${RELEASE_PACKAGE}"
+
+        # On v2 microarch builds the release package reports %{ARCH} as
+        # 'x86_64_v2' rather than 'x86_64', so the assertion grep uses
+        # the full arch including the suffix.
+        echo "[Debug] System architecture:"
+        SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH_FULL}'")
+        echo "${SYSTEM_ARCH}"
+
+        echo "[Debug] Disk and filesystems:"
+        "${SSH[@]}" "sudo lsblk"
+        # Root-FS size threshold is 95 GiB on a 100 GiB overlay: the cloud
+        # image's UEFI partition layout (1M BIOS-boot + 200M /boot/efi +
+        # 1G /boot) eats ~1.2 GiB before the root partition, and ext4/xfs
+        # metadata trims another ~1.5 GiB off the usable FS size, so the
+        # observed ceiling on a fully-grown root is ~97 GiB. Anything
+        # under ~10 GiB means cloud-init growpart didn't run.
+        "${SSH[@]}" 'ROOT_SIZE_BYTES=$(df -B1 --output=size / | tail -n 1 | tr -d " "); MIN_SIZE_BYTES=$((95*1024*1024*1024)); [ "${ROOT_SIZE_BYTES}" -gt "${MIN_SIZE_BYTES}" ] || { echo "[Error] Root filesystem resize check failed: ${ROOT_SIZE_BYTES} bytes (expected > ${MIN_SIZE_BYTES} bytes)"; exit 1; }'
+
+        # The gencloud_ext4 variant must boot with an ext4 root - that's
+        # the entire reason it's a separate subtype. Anything else (xfs
+        # leak-through, mismount) means the build pipeline produced the
+        # wrong image.
+        if [ "${SUBTYPE}" = "gencloud_ext4" ]; then
+          echo "[Debug] Root filesystem type (expecting ext4 for gencloud_ext4):"
+          ROOT_FSTYPE=$("${SSH[@]}" "findmnt -no FSTYPE /")
+          echo "${ROOT_FSTYPE}"
+          if [ "${ROOT_FSTYPE}" != "ext4" ]; then
+            echo "[Error] Root filesystem is '${ROOT_FSTYPE}', expected 'ext4' for the gencloud_ext4 variant"
+            exit 1
+          fi
+        fi
+
+        echo "[Debug] Check for updates:"
+        # dnf check-update returns 100 when updates are available - treat as success
+        rc=0
+        "${SSH[@]}" "sudo dnf check-update" || rc=$?
+        if [ "${rc}" -ne 0 ] && [ "${rc}" -ne 100 ]; then
+          echo "[Error] dnf check-update failed with exit code ${rc}"
+          exit "${rc}"
+        fi
+
+        PKG_FILE="${IMAGE_FILENAME}.txt"
+        "${SSH[@]}" "rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/${PKG_FILE}"
+        scp -i ~/.ssh/gencloud_test -P 2222 -o StrictHostKeyChecking=accept-new \
+          "almalinux@127.0.0.1:/tmp/${PKG_FILE}" "./${PKG_FILE}"
+
+        {
+          echo "PKG_FILE=${PKG_FILE}"
+          echo "ALMA_RELEASE=${ALMA_RELEASE}"
+          echo "SYSTEM_ARCH=${SYSTEM_ARCH}"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload packages list artifact
+      if: env.PKG_FILE != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.PKG_FILE }}
+        path: ./${{ env.PKG_FILE }}
+
+    - name: Show guest console log on failure
+      if: failure()
+      shell: bash
+      run: |
+        # Show guest console log on failure
+        echo "===== guest console.log ====="
+        cat console.log || true
+
+    - name: Job summary
+      if: always()
+      shell: bash
+      env:
+        IMAGE_FILENAME: ${{ inputs.image_filename }}
+        IMAGE_URL: ${{ inputs.image_url }}
+        SUBTYPE: ${{ inputs.subtype }}
+        JOB_STATUS: ${{ job.status }}
+      run: |
+        # Job summary
+        {
+          echo "## GenericCloud Image Test"
+          echo ""
+          echo "- **Image**: [${IMAGE_FILENAME}](${IMAGE_URL})"
+          if [ "${SUBTYPE}" = "gencloud_ext4" ]; then
+            echo "- **Subtype**: \`gencloud_ext4\` (ext4 root)"
+          fi
+          if [ -n "${ALMA_RELEASE:-}" ]; then
+            echo "- **AlmaLinux release**: \`${ALMA_RELEASE}\`"
+          fi
+          if [ -n "${SYSTEM_ARCH:-}" ]; then
+            echo "- **System architecture**: \`${SYSTEM_ARCH}\`"
+          fi
+          if [ "${JOB_STATUS}" = "success" ]; then
+            echo "- **Test**: passed ✅"
+          else
+            echo "- **Test**: failed ❌"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Shut down guest
+      if: always()
+      shell: bash
+      run: |
+        # Shut down guest
+        if [ -f qemu.pid ]; then
+          PID=$(cat qemu.pid)
+          if kill -0 "${PID}" 2>/dev/null; then
+            kill "${PID}" 2>/dev/null || true
+            for _ in $(seq 1 15); do
+              kill -0 "${PID}" 2>/dev/null || break
+              sleep 1
+            done
+            kill -0 "${PID}" 2>/dev/null && kill -9 "${PID}" || true
+          fi
+        fi
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: always() && inputs.notify_mattermost == 'true' && inputs.MATTERMOST_WEBHOOK_URL != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ inputs.image_filename }}**, GenericCloud image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Image**: [${{ inputs.image_filename }}](${{ inputs.image_url }})
+          ${{ inputs.subtype == 'gencloud_ext4' && '**Subtype**: `gencloud_ext4` (ext4 root)' || '' }}
+          ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
+          ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
+          **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}

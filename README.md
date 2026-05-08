@@ -39,6 +39,7 @@ This repository includes GitHub Actions workflows that automate building, testin
 | [AZURE_MARKETPLACE.md](AZURE_MARKETPLACE.md) | `azure-to-marketplace.yml` | Publish VHD images (including HPC) to Azure Marketplace via the Partner Center Product Ingestion API |
 | [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) | `oci-marketplace-publish.yml` | Import images into Oracle Cloud Infrastructure and publish to the OCI Marketplace |
 | [OCI_TEST.md](OCI_TEST.md) | `oci-test.yml` | Sanity-test an OCI Compute Custom Image: launch a fresh test instance, run release/arch/disk/`dnf` assertions over SSH, collect the package list, terminate the instance |
+| [GENCLOUD_TEST.md](GENCLOUD_TEST.md) | `gencloud-test.yml`, `gencloud-test-steps/action.yml` | Sanity-test a GenericCloud `.qcow2` image (XFS or ext4 variant) directly under QEMU/KVM on the runner with a cloud-init seed ISO, run release/arch/disk/`dnf` assertions over SSH, collect the package list, shut the guest down |
 | [GCP_IMAGE_TEST_PUBLISH.md](GCP_IMAGE_TEST_PUBLISH.md) | `gcp-test.yml`, `gcp-publish.yml` | Test GCP images across many machine shapes using Cloud Image Tests, then publish to the `almalinux-cloud` project (build step is covered by [BUILD_GCP.md](BUILD_GCP.md)) |
 | [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-publish.yml` | Publish Vagrant boxes to HashiCorp Cloud Platform (Vagrant Cloud) for VirtualBox, libvirt, and VMware Desktop providers |
 | [VMWARE_OVA.md](VMWARE_OVA.md) | _(manual process)_ | Convert Vagrant VMware Desktop `.box` files to vSphere/ESXi-compatible `.ova` templates |
