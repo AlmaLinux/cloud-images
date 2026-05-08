@@ -1,0 +1,167 @@
+name: "OpenNebula: Test Image"
+
+# Required repository configuration:
+#   secrets: MATTERMOST_WEBHOOK_URL
+#   vars:    MATTERMOST_CHANNEL
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      image_url:
+        description: "URL to the OpenNebula .qcow2 image (build's public S3 URL or repo.almalinux.org)"
+        required: true
+        type: string
+        default: ''
+
+      notify_mattermost:
+        description: "Send notification to Mattermost"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  init-data:
+    name: "Parse image URL"
+    runs-on: ubuntu-24.04
+    outputs:
+      image_filename: ${{ steps.parse.outputs.image_filename }}
+      alma_major:     ${{ steps.parse.outputs.alma_major }}
+      alma_version:   ${{ steps.parse.outputs.alma_version }}
+      alma_date:      ${{ steps.parse.outputs.alma_date }}
+      alma_arch:      ${{ steps.parse.outputs.alma_arch }}
+      alma_arch_full: ${{ steps.parse.outputs.alma_arch_full }}
+      release_string: ${{ steps.parse.outputs.release_string }}
+    steps:
+      - name: Validate and parse image URL
+        id: parse
+        env:
+          IMAGE_URL: ${{ inputs.image_url }}
+        run: |
+          if [[ ! "${IMAGE_URL}" =~ ^https?:// ]]; then
+            echo "[Error] image_url must be an http(s) URL"
+            exit 1
+          fi
+
+          IMAGE_FILENAME="${IMAGE_URL##*/}"
+
+          # Two URL shapes are accepted:
+          #   1. Build pipeline S3 layout (per .github/scripts/resolve-image-config.sh):
+          #        .../opennebula/<timestamp>/<filename>
+          #   2. Official repo (repo.almalinux.org) layout:
+          #        .../cloud/<arch>/images/<filename>
+          # OpenNebula has no -ext4 split (unlike GenericCloud), so there is
+          # no second subtype to disambiguate here.
+          if [[ "${IMAGE_URL}" == */opennebula/* ]] \
+            || [[ "${IMAGE_URL}" =~ /cloud/(x86_64|aarch64)/images/ ]]; then
+            :
+          else
+            echo "[Error] URL path must contain one of:"
+            echo "  '/opennebula/'           (build pipeline S3 layout)"
+            echo "  '/cloud/<arch>/images/'  (repo.almalinux.org layout)"
+            exit 1
+          fi
+
+          # Stable:        AlmaLinux-10-OpenNebula-10.1-20260502.0.x86_64.qcow2
+          # Stable v2:     AlmaLinux-10-OpenNebula-10.1-20260502.0.x86_64_v2.qcow2
+          # Stable AL8/9:  AlmaLinux-9-OpenNebula-9.7-20260501.x86_64.qcow2 (no .iter)
+          # Kitten:        AlmaLinux-Kitten-OpenNebula-10-20260502.0.x86_64.qcow2
+          # The trailing '.<iter>' on the datestamp is optional - the build
+          # pipeline emits it for same-day re-runs but AL8/9 published
+          # filenames may omit it. The arch token is x86_64, x86_64_v2, or
+          # aarch64; v2 is part of the arch (not a separate suffix).
+          re_stable='^AlmaLinux-([0-9]+)-OpenNebula-([0-9]+\.[0-9]+)-([0-9]+(\.[0-9]+)?)\.(x86_64|x86_64_v2|aarch64)\.qcow2$'
+          re_kitten='^AlmaLinux-Kitten-OpenNebula-([0-9]+)-([0-9]+(\.[0-9]+)?)\.(x86_64|x86_64_v2|aarch64)\.qcow2$'
+
+          if [[ "${IMAGE_FILENAME}" =~ ${re_stable} ]]; then
+            ALMA_MAJOR="${BASH_REMATCH[1]}"
+            ALMA_VERSION="${BASH_REMATCH[2]}"
+            ALMA_DATE="${BASH_REMATCH[3]}"
+            ALMA_ARCH_FULL="${BASH_REMATCH[5]}"
+            RELEASE_STRING="AlmaLinux release ${ALMA_VERSION}"
+          elif [[ "${IMAGE_FILENAME}" =~ ${re_kitten} ]]; then
+            ALMA_MAJOR="${BASH_REMATCH[1]}"
+            ALMA_VERSION="${ALMA_MAJOR}"
+            ALMA_DATE="${BASH_REMATCH[2]}"
+            ALMA_ARCH_FULL="${BASH_REMATCH[4]}"
+            RELEASE_STRING="AlmaLinux Kitten release ${ALMA_MAJOR}"
+          else
+            echo "[Error] Unexpected OpenNebula filename: '${IMAGE_FILENAME}'"
+            echo "Expected:"
+            echo "  AlmaLinux-<major>-OpenNebula-<version>-<datestamp>[.<iter>].<arch>.qcow2"
+            echo "  AlmaLinux-Kitten-OpenNebula-<major>-<datestamp>[.<iter>].<arch>.qcow2"
+            echo "  <arch> is x86_64, x86_64_v2, or aarch64"
+            exit 1
+          fi
+
+          # Canonical runner-arch: x86_64_v2 builds run on the x86_64 runner.
+          # The raw token is preserved in alma_arch_full for reporting.
+          if [[ "${ALMA_ARCH_FULL}" == x86_64* ]]; then
+            ALMA_ARCH=x86_64
+          else
+            ALMA_ARCH=aarch64
+          fi
+
+          echo "Image filename:    ${IMAGE_FILENAME}"
+          echo "AlmaLinux major:   ${ALMA_MAJOR}"
+          echo "AlmaLinux ver:     ${ALMA_VERSION}"
+          echo "Datestamp:         ${ALMA_DATE}"
+          echo "Architecture:      ${ALMA_ARCH} (filename: ${ALMA_ARCH_FULL})"
+          echo "Release string:    ${RELEASE_STRING}"
+
+          {
+            echo "image_filename=${IMAGE_FILENAME}"
+            echo "alma_major=${ALMA_MAJOR}"
+            echo "alma_version=${ALMA_VERSION}"
+            echo "alma_date=${ALMA_DATE}"
+            echo "alma_arch=${ALMA_ARCH}"
+            echo "alma_arch_full=${ALMA_ARCH_FULL}"
+            echo "release_string=${RELEASE_STRING}"
+          } >> "$GITHUB_OUTPUT"
+
+  test-x86_64:
+    name: "Test OpenNebula x86_64 image"
+    needs: [init-data]
+    if: needs.init-data.outputs.alma_arch == 'x86_64'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/opennebula-test-steps
+        with:
+          image_url:             ${{ inputs.image_url }}
+          image_filename:        ${{ needs.init-data.outputs.image_filename }}
+          alma_arch:             ${{ needs.init-data.outputs.alma_arch }}
+          alma_arch_full:        ${{ needs.init-data.outputs.alma_arch_full }}
+          release_string:        ${{ needs.init-data.outputs.release_string }}
+          notify_mattermost:     ${{ inputs.notify_mattermost }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL:    ${{ vars.MATTERMOST_CHANNEL }}
+
+  test-aarch64:
+    name: "Test OpenNebula aarch64 image"
+    needs: [init-data]
+    if: needs.init-data.outputs.alma_arch == 'aarch64'
+    # AlmaLinux org uses RunsOn metal arm64; forks fall back to the
+    # GitHub-hosted ubuntu-24.04-arm runner. The compute action's first
+    # step asserts /dev/kvm is present and fails fast otherwise.
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-arm64', github.run_id)
+        ||
+        'ubuntu-24.04-arm'
+      }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/opennebula-test-steps
+        with:
+          image_url:             ${{ inputs.image_url }}
+          image_filename:        ${{ needs.init-data.outputs.image_filename }}
+          alma_arch:             ${{ needs.init-data.outputs.alma_arch }}
+          alma_arch_full:        ${{ needs.init-data.outputs.alma_arch_full }}
+          release_string:        ${{ needs.init-data.outputs.release_string }}
+          notify_mattermost:     ${{ inputs.notify_mattermost }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL:    ${{ vars.MATTERMOST_CHANNEL }}
