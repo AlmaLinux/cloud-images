@@ -45,6 +45,8 @@ jobs:
       OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
       OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
       OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+      # Suppress urllib3 FutureWarning so `oci ... 2>&1` captures clean JSON for jq
+      PYTHONWARNINGS: ignore
 
     steps:
     - uses: actions/checkout@v6
