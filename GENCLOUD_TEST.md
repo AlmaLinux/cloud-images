@@ -133,14 +133,15 @@ The 100 GiB virtual size on the overlay (the base image is ~500 MiB; the overlay
 Once SSH is reachable on the guest, the following checks run in sequence (failure of any aborts the workflow):
 
 1. **AlmaLinux release** — `grep '<RELEASE_STRING>' /etc/almalinux-release`
-2. **System architecture** — `rpm -q --qf='%{ARCH}\n' almalinux-release | grep '<ALMA_ARCH>'`
-3. **Disk and filesystems** — `lsblk` listing
-4. **Root filesystem resize** — root must be ≥ 95 GiB (the overlay is 100 GiB; the QEMU image's UEFI layout — 1M BIOS-boot + 200M `/boot/efi` + 1G `/boot` — plus ext4/xfs metadata trims the observed ceiling on a fully-grown root to ~97 GiB)
-5. **Root filesystem type (gencloud_ext4 only)** — `findmnt -no FSTYPE /` must return `ext4`. Skipped for the XFS `gencloud` subtype.
-6. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
-7. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<IMAGE_FILENAME>.txt`, then SCP'd back and uploaded as a workflow artifact
+2. **System architecture** — `rpm -q --qf='%{ARCH}\n' <release_pkg> | grep '<ALMA_ARCH_FULL>'` (release package is `almalinux-release` on stable / `almalinux-kitten-release` on Kitten — looked up dynamically with `rpm -qf /etc/almalinux-release`; `ALMA_ARCH_FULL` carries the `_v2` microarch suffix when present)
+3. **QEMU/KVM cloud-image packages installed** — `rpm -q qemu-guest-agent cloud-init cloud-utils-growpart dracut-config-generic` — the four packages the GenericCloud Ansible flow installs that are specifically about running on QEMU/KVM (see `ansible/roles/gencloud_guest/tasks/main.yml` and `ansible/roles/setup_cloud_init/tasks/main.yml`); a missing package surfaces the exact `package <name> is not installed` line and fails the step
+4. **Disk and filesystems** — `lsblk` listing
+5. **Root filesystem resize** — root must be ≥ 95 GiB (the overlay is 100 GiB; the QEMU image's UEFI layout — 1M BIOS-boot + 200M `/boot/efi` + 1G `/boot` — plus ext4/xfs metadata trims the observed ceiling on a fully-grown root to ~97 GiB)
+6. **Root filesystem type (gencloud_ext4 only)** — `findmnt -no FSTYPE /` must return `ext4`. Skipped for the XFS `gencloud` subtype.
+7. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
+8. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<IMAGE_FILENAME>.txt`, then SCP'd back and uploaded as a workflow artifact
 
-These mirror the assertions [`oci-test.yml`](OCI_TEST.md) and [`azure-test.yml`](AZURE_TEST.md) run, plus the `gencloud_ext4`-specific root-FS-type check that those siblings can't make (Azure / OCI only publish the XFS variant).
+These mirror the assertions [`oci-test.yml`](OCI_TEST.md) and [`azure-test.yml`](AZURE_TEST.md) run, plus two GenericCloud-only checks the cloud-API siblings can't make: the `gencloud_ext4` root-FS-type assertion (Azure / OCI only publish the XFS variant) and the explicit QEMU/KVM package-set check (the cloud-API images have those packages too, but the dependency is most semantically tied to running directly on QEMU/KVM).
 
 ## Workflow Process
 

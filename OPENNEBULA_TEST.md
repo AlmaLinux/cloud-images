@@ -168,14 +168,15 @@ Once SSH is reachable on the guest, the following checks run in sequence (failur
 3. **Disk and filesystems** — `lsblk` listing
 4. **Root filesystem resize** — root must be ≥ 95 GiB (the overlay is 100 GiB; the QEMU image's UEFI layout — 1M BIOS-boot + 200M `/boot/efi` + 1G `/boot` — plus xfs metadata trims the observed ceiling on a fully-grown root to ~97 GiB)
 5. **`one-context` package** — `rpm -q one-context` succeeds; the version is captured into the summary / Mattermost message
-6. **`one-context` services** — `systemctl is-active one-context-local.service one-context-online.service one-context.service` returns `active` for all three
-7. **CONTEXT volume detection** — `lsblk -o NAME,LABEL,FSTYPE` shows the second virtio block device with `LABEL=CONTEXT` and `FSTYPE=iso9660`
-8. **`SET_HOSTNAME` applied** — `hostname` returns `opennebula-test`
-9. **`ETH0_METHOD=dhcp` applied** — `ip -4 -o addr show eth0` shows an inet address; `ip route` shows a default route (the symptom from the [`ETH0_MAC` discussion above](#why-eth0_mac-is-required))
-10. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
-11. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<IMAGE_FILENAME>.txt`, then SCP'd back and uploaded as a workflow artifact
+6. **OpenNebula payload packages** — single `rpm -q` over the full set the build-time `opennebula_guest` Ansible role installs: `almalinux-release-opennebula-addons`, `one-context`, `cloud-utils-growpart`, `parted`, `qemu-guest-agent`, `nfs-utils`, `rsync`, `jq`, `tcpdump`, `tuned`. Fails if any are missing.
+7. **`one-context` services** — `systemctl is-active one-context-local.service one-context-online.service one-context.service` returns `active` for all three
+8. **CONTEXT volume detection** — `lsblk -o NAME,LABEL,FSTYPE` shows the second virtio block device with `LABEL=CONTEXT` and `FSTYPE=iso9660`
+9. **`SET_HOSTNAME` applied** — `hostname` returns `opennebula-test`
+10. **`ETH0_METHOD=dhcp` applied** — `ip -4 -o addr show eth0` shows an inet address; `ip route` shows a default route (the symptom from the [`ETH0_MAC` discussion above](#why-eth0_mac-is-required))
+11. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
+12. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<IMAGE_FILENAME>.txt`, then SCP'd back and uploaded as a workflow artifact
 
-Items 1–4 and 10–11 mirror the assertions [`oci-test.yml`](OCI_TEST.md), [`azure-test.yml`](AZURE_TEST.md), and [`gencloud-test.yml`](GENCLOUD_TEST.md) run. Items 5–9 are OpenNebula-specific and protect against regressions in either the image's bundled `one-context` package or the contextualization invocation.
+Items 1–4 and 11–12 mirror the assertions [`oci-test.yml`](OCI_TEST.md), [`azure-test.yml`](AZURE_TEST.md), and [`gencloud-test.yml`](GENCLOUD_TEST.md) run. Items 5–10 are OpenNebula-specific and protect against regressions in either the image's bundled OpenNebula payload (`one-context` + addons + supporting tools) or the contextualization invocation. The payload list (item 6) is kept in sync with `ansible/roles/opennebula_guest/tasks/main.yml` — when a package is added to or removed from the role, update the test in the same change.
 
 ## Workflow Process
 

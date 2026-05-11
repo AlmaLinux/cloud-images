@@ -274,6 +274,15 @@ jobs:
         SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH}'")
         echo "${SYSTEM_ARCH}"
 
+        echo "[Debug] Azure-specific RPM packages:"
+        # Installed by ansible/roles/azure_guest/tasks/main.yml. rpm -q exits
+        # non-zero (and prints "package X is not installed") if any are missing,
+        # which fails the step under set -e.
+        "${SSH[@]}" "rpm -q WALinuxAgent hyperv-daemons NetworkManager-cloud-setup cifs-utils"
+
+        echo "[Debug] Azure Linux Agent (waagent) service:"
+        "${SSH[@]}" "systemctl is-enabled waagent.service"
+
         echo "[Debug] Disk and filesystems:"
         "${SSH[@]}" "sudo lsblk"
         "${SSH[@]}" 'ROOT_SIZE_BYTES=$(df -B1 --output=size / | tail -n 1 | tr -d " "); MIN_SIZE_BYTES=$((98*1024*1024*1024)); [ "${ROOT_SIZE_BYTES}" -gt "${MIN_SIZE_BYTES}" ] || { echo "[Error] Root filesystem resize check failed: ${ROOT_SIZE_BYTES} bytes (expected > ${MIN_SIZE_BYTES} bytes)"; exit 1; }'

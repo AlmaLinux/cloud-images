@@ -189,6 +189,16 @@ jobs:
         SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH}'")
         echo "${SYSTEM_ARCH}"
 
+        echo "[Debug] OCI-specific packages:"
+        # cloud-init: OCI provisions instances via cloud-init (datasource config at
+        #             /etc/cloud/cloud.cfg.d/99_oci.cfg, installed by setup_cloud_init
+        #             with cloud_platform: oci).
+        # nvme-cli / iscsi-initiator-utils* / device-mapper-multipath: NVMe + iSCSI +
+        #             multipath support required by OCI block storage, installed by
+        #             ansible/roles/oci_guest/tasks/main.yaml.
+        # rpm -q exits non-zero if any package is missing.
+        "${SSH[@]}" "rpm -q cloud-init nvme-cli iscsi-initiator-utils iscsi-initiator-utils-iscsiuio device-mapper-multipath"
+
         echo "[Debug] Disk and filesystems:"
         "${SSH[@]}" "sudo lsblk"
         "${SSH[@]}" 'ROOT_SIZE_BYTES=$(df -B1 --output=size / | tail -n 1 | tr -d " "); MIN_SIZE_BYTES=$((98*1024*1024*1024)); [ "${ROOT_SIZE_BYTES}" -gt "${MIN_SIZE_BYTES}" ] || { echo "[Error] Root filesystem resize check failed: ${ROOT_SIZE_BYTES} bytes (expected > ${MIN_SIZE_BYTES} bytes)"; exit 1; }'

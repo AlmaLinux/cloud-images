@@ -211,6 +211,21 @@ runs:
         SYSTEM_ARCH=$("${SSH[@]}" "rpm -q --qf='%{ARCH}\n' ${RELEASE_PACKAGE} | grep '${ALMA_ARCH_FULL}'")
         echo "${SYSTEM_ARCH}"
 
+        # Verify the QEMU/KVM-specific packages that the GenericCloud
+        # Ansible flow installs are present:
+        #   qemu-guest-agent        host<->guest channel (virtio-serial)
+        #     - ansible/roles/gencloud_guest/tasks/main.yml
+        #   cloud-init              consumes the seed-ISO datasource we boot with
+        #   cloud-utils-growpart    grows root FS on first boot (required for the
+        #                           ROOT_SIZE_BYTES assertion below)
+        #   dracut-config-generic   keeps virtio drivers in initramfs so the
+        #                           image boots under QEMU/KVM at all
+        #     - ansible/roles/setup_cloud_init/tasks/main.yml
+        # Single rpm -q so any missing package fails the step with the
+        # exact 'package <name> is not installed' line in the log.
+        echo "[Debug] QEMU/KVM cloud-image packages installed:"
+        "${SSH[@]}" "rpm -q qemu-guest-agent cloud-init cloud-utils-growpart dracut-config-generic"
+
         echo "[Debug] Disk and filesystems:"
         "${SSH[@]}" "sudo lsblk"
         # Root-FS size threshold is 95 GiB on a 100 GiB overlay: the cloud

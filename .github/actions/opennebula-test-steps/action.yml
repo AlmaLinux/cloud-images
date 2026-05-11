@@ -229,6 +229,28 @@ runs:
         ONE_CONTEXT_VERSION=$("${SSH[@]}" "rpm -q --qf='%{VERSION}-%{RELEASE}' one-context")
         echo "${ONE_CONTEXT_VERSION}"
 
+        # OpenNebula build-time payload (per ansible/roles/opennebula_guest):
+        #   - almalinux-release-opennebula-addons enables the addons repo
+        #     that ships one-context
+        #   - one-context is the contextualization package itself
+        #   - cloud-utils-growpart + parted back the grow-rootfs hook
+        #   - qemu-guest-agent, nfs-utils, rsync, jq, tcpdump, tuned are
+        #     installed by the "additional packages" task
+        # `rpm -q` prints one line per package (version-or-"not installed")
+        # and exits non-zero if any are missing.
+        echo "[Debug] OpenNebula payload packages installed:"
+        "${SSH[@]}" "rpm -q \
+          almalinux-release-opennebula-addons \
+          one-context \
+          cloud-utils-growpart \
+          parted \
+          qemu-guest-agent \
+          nfs-utils \
+          rsync \
+          jq \
+          tcpdump \
+          tuned"
+
         echo "[Debug] one-context services:"
         "${SSH[@]}" "systemctl is-active one-context-local.service one-context-online.service one-context.service"
 

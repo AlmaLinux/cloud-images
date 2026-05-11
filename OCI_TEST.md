@@ -89,10 +89,11 @@ Once SSH is reachable on the test instance, the following checks run in sequence
 
 1. **AlmaLinux release** — `grep '<RELEASE_STRING>' /etc/almalinux-release`
 2. **System architecture** — `rpm -q --qf='%{ARCH}\n' almalinux-release | grep '<ALMA_ARCH>'`
-3. **Disk and filesystems** — `lsblk` listing
-4. **Root filesystem resize** — root must be ≥ 98 GiB (the boot-volume-size-in-gbs is 100 GiB)
-5. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
-6. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<CUSTOM_IMAGE_NAME>.txt`, then SCP'd back and uploaded as a workflow artifact
+3. **OCI-specific packages** — `rpm -q cloud-init nvme-cli iscsi-initiator-utils iscsi-initiator-utils-iscsiuio device-mapper-multipath`. `cloud-init` is OCI's instance provisioning agent (datasource at `/etc/cloud/cloud.cfg.d/99_oci.cfg`); the rest are NVMe / iSCSI / multipath support installed by [`ansible/roles/oci_guest/tasks/main.yaml`](ansible/roles/oci_guest/tasks/main.yaml). `rpm -q` exits non-zero if any package is missing
+4. **Disk and filesystems** — `lsblk` listing
+5. **Root filesystem resize** — root must be ≥ 98 GiB (the boot-volume-size-in-gbs is 100 GiB)
+6. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
+7. **Installed-package list** — `rpm -qa --queryformat '%{NAME}\n' | sort > /tmp/<CUSTOM_IMAGE_NAME>.txt`, then SCP'd back and uploaded as a workflow artifact
 
 ## Workflow Process
 
@@ -169,10 +170,13 @@ OCI's `terminate` deletes the instance, the boot volume (because we created it i
 6. **"Root filesystem resize check failed"**
    - The root filesystem on the test instance did not auto-grow to ≥ 98 GiB. Indicates a `cloud-init` / `growpart` regression in the imported image.
 
-7. **`dnf check-update` exits with non-100, non-0 code**
+7. **`package X is not installed`** (from the OCI-specific packages assertion)
+   - The image is missing one of `cloud-init`, `nvme-cli`, `iscsi-initiator-utils`, `iscsi-initiator-utils-iscsiuio`, or `device-mapper-multipath`. Indicates the `oci_guest` / `setup_cloud_init` Ansible roles did not run (or partially failed) during the image build. Re-build the OCI image and verify the Packer log shows both roles applied without errors.
+
+8. **`dnf check-update` exits with non-100, non-0 code**
    - Repo metadata fetch failure or signed metadata mismatch. Re-run; if persistent, check that the image's repo data is current.
 
-8. **"Termination" step times out**
+9. **"Termination" step times out**
    - OCI is occasionally slow to fully terminate an instance. The workflow runs `--wait-for-state TERMINATED`, so failure here means OCI did not converge — inspect the instance in the OCI Console manually.
 
 ### Linter Warnings
