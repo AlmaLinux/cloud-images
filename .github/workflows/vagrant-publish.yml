@@ -13,13 +13,13 @@ on:
           description: "Dry-run mode"
           required: true
           type: boolean
-          default: true
+          default: false
 
         notify_mattermost:
           description: "Send notification to Mattermost"
           required: true
           type: boolean
-          default: false
+          default: true
 
 env:
   PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}

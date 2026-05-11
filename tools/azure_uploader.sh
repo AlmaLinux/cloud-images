@@ -109,6 +109,13 @@ validate_args() {
     error 'either image path (-i argument) or blob URI (-u argument) is required'
     exit 1
   fi
+  # AlmaLinux 9 aarch64 64k is not released to the Community Public gallery;
+  # force it to the private 'almalinux_ci' gallery.
+  if [[ "${DISTRO_VER}" == 9.* && "${IMAGE_TYPE}" == 'arm64-64k' \
+        && "${GALLERY_NAME}" != 'almalinux_ci' ]]; then
+    echo "Note: forcing gallery to 'almalinux_ci' for AlmaLinux 9 arm64-64k" >&2
+    GALLERY_NAME='almalinux_ci'
+  fi
 }
 
 # Calculates a raw image size rounded to 1 MB.
@@ -549,7 +556,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
           exit 1
         fi
         GALLERY_NAME="${OPTARG}"
-        readonly GALLERY_NAME
         ;;
       r)
         if [[ "${OPTARG}" != "rg-alma-images" && "${OPTARG}" != "rg-alma-images-prod" ]]; then
