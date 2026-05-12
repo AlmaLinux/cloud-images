@@ -32,6 +32,12 @@ on:
         #   type: boolean
         #   default: false
 
+env:
+  # Default zone fallback list for cit-run-with-retry. Multi-region spread so a
+  # single-region capacity event doesn't fail the whole run. Shapes with
+  # narrower availability override this via matrix `zones:` and/or `zone:`.
+  GCP_DEFAULT_ZONES: "us-central1-a us-central1-b us-central1-c us-central1-f us-south1-a us-south1-b us-south1-c us-west1-a us-west1-b us-west1-c northamerica-northeast1-a northamerica-northeast1-b"
+
 jobs:
   init-data:
     runs-on: ubuntu-latest
@@ -87,18 +93,15 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v3'
 
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
-      shell: bash
-      run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -parallel_count 20 \
-          -parallel_stagger 1s \
-          -filter '^(lssd|disk|vmspec)$' \
-          -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}' \
-          ${{ matrix.arch == '' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
+        filter: '^(lssd|disk|vmspec)$'
+        shape_flag: "${{ matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
+        parallel_count: '20'
+        parallel_stagger: '1s'
+        zones: ${{ env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
 
   # this runs tests which are hard-coded to specific shapes in CIT
   # running them against all shapes would be pointless as they are forced to specific shapes anyway
@@ -130,16 +133,13 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v3'
 
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
-      shell: bash
-      run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -parallel_stagger 10s \
-          -filter '^(lssd|disk|vmspec)$' \
-          -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
+        filter: '^(lssd|disk|vmspec)$'
+        parallel_stagger: '10s'
+        zones: ${{ env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
 
   test-gcp-pershape-x86_64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} x86_64 ${{ matrix.shape }}
@@ -215,11 +215,20 @@ jobs:
         # z3 tests not needed, basically c3 with lots of lssd, so covered by c3-lssd tests
         # - z3-highmem-14-standardlssd
         # things with special zone requirements or other special needs
-        # include:
+        include:
+            # Placeholder entry that declares the optional `zone:` / `zones:`
+            # keys on the matrix type so `matrix.zone` / `matrix.zones`
+            # expressions in the cit-run-with-retry call are valid. Empty
+            # values are no-ops at runtime (the action falls back to
+            # env.GCP_DEFAULT_ZONES). Add real overrides below as needed.
+            - shape: n4-standard-2
+              zone: ''
+              zones: ''
             # only available in us-central1-b
             # disabled, never any capacity available
             # - shape: c4d-standard-384-metal
             #   zone: us-central1-b
+            #   zones: us-central1-b
 
     steps:
     # we don't need the checked out files, but this is required for the google auth action to work
@@ -253,17 +262,16 @@ jobs:
         echo "docker_cmd=${docker_cmd}" >> $GITHUB_ENV
 
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
-      shell: bash
-      run: |
-        ${{ env.docker_cmd }} run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -x86_shape ${{ matrix.shape }}                       \
-          -parallel_count ${{ github.run_attempt > 1 && '1' || '1' }} \
-          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
-          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        runtime: ${{ env.docker_cmd }}
+        image: ${{ needs.init-data.outputs.image_path || inputs.image_override }}
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-x86_shape ${{ matrix.shape }}"
+        parallel_count: '1'
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
 
   test-gcp-pershape-aarch64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}
@@ -291,8 +299,9 @@ jobs:
           - shape: c4a-standard-96-metal
             # low quota for this one
             parallel_count: 1
-            # only available in us-central1-b and us-east1-f
-            zone: us-central1-b
+            # # only available in us-central1-b and us-east1-f
+            # zone: us-central1-b
+            # zones: "us-central1-b us-east1-f"
     steps:
     # this isn't a great way to handle this, but GH actions has limitations...
     - name: Skip certain jobs
@@ -320,15 +329,12 @@ jobs:
 
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
       if: steps.checker.outputs.skip != 'true'
-      shell: bash
-      run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -arm64_shape ${{ matrix.shape }}                     \
-          ${{ matrix.zone && format('-zone {0}', matrix.zone) || '' }} \
-          -parallel_count ${{ matrix.parallel_count && format (' {0}', matrix.parallel_count) || '1' }} \
-          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
-          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || ''}}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || '' }}"
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-arm64_shape ${{ matrix.shape }}"
+        parallel_count: ${{ matrix.parallel_count || '1' }}
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}

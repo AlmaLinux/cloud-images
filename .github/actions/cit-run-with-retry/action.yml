@@ -1,0 +1,69 @@
+name: "cloud-image-tests with zone-fallback retry"
+description: "Run Google's cloud-image-tests in a container, retrying in a different GCP zone on capacity- or shape-availability errors"
+
+inputs:
+  project:
+    description: "GCP project ID"
+    required: false
+    default: "almalinux-image-testing-469421"
+  image:
+    description: "cloud-image-tests -images value (full image or family path)"
+    required: true
+  filter:
+    description: "cloud-image-tests -filter regex"
+    required: true
+  shape_flag:
+    description: "Full shape flag, e.g. '-x86_shape c4-standard-8' or '-arm64_shape c4a-standard-4'. Leave empty for tests that hardcode shapes inside CIT."
+    required: false
+    default: ""
+  parallel_count:
+    description: "Optional -parallel_count value; empty omits the flag"
+    required: false
+    default: ""
+  parallel_stagger:
+    description: "Optional -parallel_stagger value; empty omits the flag"
+    required: false
+    default: ""
+  runtime:
+    description: "Container runtime: 'docker' or 'podman'"
+    required: false
+    default: "docker"
+  first_attempt_zone:
+    description: "Zone for attempt 1; empty lets cloud-image-tests auto-pick"
+    required: false
+    default: ""
+  zones:
+    description: "Space-separated fallback zone list for attempts 2..N"
+    required: false
+    default: ""
+  max_attempts:
+    description: "Hard cap on attempts (across first_attempt_zone + zones). If empty, defaults to the total number of distinct zones in the attempt list."
+    required: false
+    default: ""
+  retry_delay_seconds:
+    description: "Fixed delay between attempts"
+    required: false
+    default: "30"
+  creds_path:
+    description: "Host path to GCP creds JSON (pass env.GOOGLE_GHA_CREDS_PATH)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Run cloud-image-tests with zone-fallback retry
+      shell: bash
+      env:
+        RUNTIME: ${{ inputs.runtime }}
+        PROJECT: ${{ inputs.project }}
+        IMAGE: ${{ inputs.image }}
+        FILTER: ${{ inputs.filter }}
+        SHAPE_FLAG: ${{ inputs.shape_flag }}
+        PARALLEL_COUNT: ${{ inputs.parallel_count }}
+        PARALLEL_STAGGER: ${{ inputs.parallel_stagger }}
+        FIRST_ATTEMPT_ZONE: ${{ inputs.first_attempt_zone }}
+        ZONES: ${{ inputs.zones }}
+        MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+        RETRY_DELAY_SECONDS: ${{ inputs.retry_delay_seconds }}
+        CREDS_PATH: ${{ inputs.creds_path }}
+      run: "${{ github.action_path }}/../../scripts/cit-run-with-retry.sh"
