@@ -31,7 +31,18 @@ RETRYABLE_PATTERN='ZONE_RESOURCE_POOL_EXHAUSTED(_WITH_DETAILS)?|does not have en
 : "${FILTER:?FILTER required}"
 : "${CREDS_PATH:?CREDS_PATH required}"
 SHAPE_FLAG="${SHAPE_FLAG:-}"
-RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-30}"
+RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
+RANDOMIZE_ZONES="${RANDOMIZE_ZONES:-true}"
+
+# Optionally shuffle the fallback zone list so retries spread across zones
+# rather than always hitting the same one first. first_attempt_zone is added
+# afterward, so it stays pinned to the head when set.
+if [[ "${RANDOMIZE_ZONES}" == "true" && -n "${ZONES:-}" ]]; then
+  # Intentional word splitting: ZONES is a space-separated list and each
+  # zone needs to be its own printf argument so shuf has lines to shuffle.
+  # shellcheck disable=SC2086
+  ZONES=$(printf '%s\n' ${ZONES} | shuf | tr '\n' ' ')
+fi
 
 attempts=()
 if [[ -n "${FIRST_ATTEMPT_ZONE:-}" ]]; then

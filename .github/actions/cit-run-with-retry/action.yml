@@ -36,6 +36,10 @@ inputs:
     description: "Space-separated fallback zone list for attempts 2..N"
     required: false
     default: ""
+  randomize_zones:
+    description: "Shuffle the fallback `zones` list before iterating (first_attempt_zone is preserved at the head). Set to 'false' to keep the listed order."
+    required: false
+    default: "true"
   max_attempts:
     description: "Hard cap on attempts (across first_attempt_zone + zones). If empty, defaults to the total number of distinct zones in the attempt list."
     required: false
@@ -43,7 +47,7 @@ inputs:
   retry_delay_seconds:
     description: "Fixed delay between attempts"
     required: false
-    default: "30"
+    default: "5"
   creds_path:
     description: "Host path to GCP creds JSON (pass env.GOOGLE_GHA_CREDS_PATH)"
     required: true
@@ -63,6 +67,7 @@ runs:
         PARALLEL_STAGGER: ${{ inputs.parallel_stagger }}
         FIRST_ATTEMPT_ZONE: ${{ inputs.first_attempt_zone }}
         ZONES: ${{ inputs.zones }}
+        RANDOMIZE_ZONES: ${{ inputs.randomize_zones }}
         MAX_ATTEMPTS: ${{ inputs.max_attempts }}
         RETRY_DELAY_SECONDS: ${{ inputs.retry_delay_seconds }}
         CREDS_PATH: ${{ inputs.creds_path }}
