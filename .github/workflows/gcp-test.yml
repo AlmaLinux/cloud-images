@@ -294,7 +294,8 @@ jobs:
           #- c4a-standard-4-lssd
           # pretty limited quotas for this one
           # let's just test one shape flavor
-          - t2a-standard-4
+          # can never get capacity for this shape, even with low parallelism, so skipping for now
+          # - t2a-standard-4
         include:
           - shape: c4a-standard-96-metal
             # low quota for this one
