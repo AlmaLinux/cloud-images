@@ -296,6 +296,7 @@ jobs:
           # let's just test one shape flavor
           # can never get capacity for this shape, even with low parallelism, so skipping for now
           # - t2a-standard-4
+          - n4a-standard-4
         include:
           - shape: c4a-standard-96-metal
             # low quota for this one
