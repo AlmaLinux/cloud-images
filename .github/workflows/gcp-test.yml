@@ -26,6 +26,14 @@ on:
           description: 'Image to test, overrides version_major to test a direct image instead.  Architecture must be set properly for the image being passed.  This must be a full path to a GCP image, for example, projects/almalinux-dev-images-469421/global/images/almalinux-9-v20230920'
           required: false
           default: ''
+        x86_shape_override:
+          description: 'x86_64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4-standard-8.'
+          required: false
+          default: ''
+        aarch64_shape_override:
+          description: 'aarch64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4a-standard-8.'
+          required: false
+          default: ''
         # notify_mattermost:
         #   description: "Send notification to Mattermost"
         #   required: true
@@ -137,6 +145,9 @@ jobs:
       with:
         image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
         filter: '^(lssd|disk|vmspec)$'
+        # If an arch-matching shape_override input is set, pin the shape;
+        # otherwise leave empty and let cloud-image-tests pick its hardcoded shapes.
+        shape_flag: "${{ matrix.arch == 'aarch64' && inputs.aarch64_shape_override != '' && format('-arm64_shape {0}', inputs.aarch64_shape_override) || matrix.arch == 'x86_64' && inputs.x86_shape_override != '' && format('-x86_shape {0}', inputs.x86_shape_override) || '' }}"
         parallel_stagger: '10s'
         zones: ${{ env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
@@ -301,9 +312,13 @@ jobs:
           - shape: c4a-standard-96-metal
             # low quota for this one
             parallel_count: 1
-            # # only available in us-central1-b and us-east1-f
-            # zone: us-central1-b
-            # zones: "us-central1-b us-east1-f"
+            # `zone:` / `zones:` declared as empty strings so the keys exist
+            # on the matrix type (for the cit-run-with-retry expressions
+            # below). Set a real value here to pin the first attempt for
+            # this shape. Original guidance: only available in us-central1-b
+            # and us-east1-f.
+            zone: ''
+            zones: ''
     steps:
     # this isn't a great way to handle this, but GH actions has limitations...
     - name: Skip certain jobs
