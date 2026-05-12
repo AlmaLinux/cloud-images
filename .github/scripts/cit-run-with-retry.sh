@@ -34,6 +34,14 @@ SHAPE_FLAG="${SHAPE_FLAG:-}"
 RETRY_DELAY_SECONDS="${RETRY_DELAY_SECONDS:-5}"
 RANDOMIZE_ZONES="${RANDOMIZE_ZONES:-true}"
 
+# Extract just the shape name from SHAPE_FLAG (e.g. "-x86_shape c4-standard-8"
+# -> "c4-standard-8"). Empty when no shape is pinned (CIT picks internally).
+SHAPE_NAME=""
+if [[ -n "${SHAPE_FLAG}" ]]; then
+  # shellcheck disable=SC2034  # _ is the throwaway flag token
+  read -r _ SHAPE_NAME _ <<< "${SHAPE_FLAG}"
+fi
+
 # Optionally shuffle the fallback zone list so retries spread across zones
 # rather than always hitting the same one first. first_attempt_zone is added
 # afterward, so it stays pinned to the head when set.
@@ -69,6 +77,21 @@ for i in "${!attempts[@]}"; do
   zone="${attempts[i]}"
   zone_arg=()
   [[ -n "${zone}" ]] && zone_arg=(-zone "${zone}")
+
+  # Pre-flight: when both a zone and a shape are pinned, ask GCP whether the
+  # shape exists in that zone before paying the CIT setup cost. Skips ahead
+  # on mismatch without burning the retry-delay sleep.
+  if [[ -n "${zone}" && -n "${SHAPE_NAME}" ]] && command -v gcloud >/dev/null 2>&1; then
+    if ! gcloud compute machine-types describe "${SHAPE_NAME}" \
+           --zone="${zone}" \
+           --project="${PROJECT}" \
+           --format='value(name)' \
+           --quiet >/dev/null 2>&1; then
+      echo "::warning::Shape '${SHAPE_NAME}' not offered in zone '${zone}'; skipping (attempt ${attempt_num}/${MAX_ATTEMPTS})"
+      continue
+    fi
+  fi
+
   log=$(mktemp)
   echo "::group::cloud-image-tests attempt ${attempt_num}/${MAX_ATTEMPTS} zone='${zone:-auto}'"
   set -o pipefail
