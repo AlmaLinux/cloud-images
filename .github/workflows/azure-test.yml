@@ -343,23 +343,24 @@ jobs:
           --name "${VM_NAME}" \
           --query 'storageProfile.osDisk.name' --output tsv 2>/dev/null || true)
 
+        # 1. Delete the VM. --force-deletion detaches the NIC immediately so
+        #    the NIC delete below can proceed.
         az vm delete \
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}" \
           --yes --force-deletion true || true
 
-        if [ -n "${OS_DISK}" ]; then
-          az disk delete \
-            --resource-group "${RESOURCE_GROUP}" \
-            --name "${OS_DISK}" \
-            --yes --no-wait || true
-        fi
-
+        # 2. Delete the NIC and *wait* for it to finish. The NIC still
+        #    references the Public IP (via its ipConfiguration) and the NSG
+        #    (via networkSecurityGroup) at this point — deleting either of
+        #    those before the NIC is gone fails with ResourceInUse, which the
+        #    || true would silently mask and leave the resources stranded.
         az network nic delete \
           --resource-group "${RESOURCE_GROUP}" \
-          --name "${VM_NAME}VMNic" \
-          --no-wait || true
+          --name "${VM_NAME}VMNic" || true
 
+        # 3. Public IP, NSG, and OS disk are now unreferenced and can be
+        #    deleted concurrently.
         az network public-ip delete \
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}PublicIP" \
@@ -369,6 +370,13 @@ jobs:
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}NSG" \
           --no-wait || true
+
+        if [ -n "${OS_DISK}" ]; then
+          az disk delete \
+            --resource-group "${RESOURCE_GROUP}" \
+            --name "${OS_DISK}" \
+            --yes --no-wait || true
+        fi
 
     - name: Send notification to Mattermost
       uses: mattermost/action-mattermost-notify@master
