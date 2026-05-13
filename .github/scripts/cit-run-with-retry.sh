@@ -20,10 +20,13 @@
 #   MAX_ATTEMPTS         hard cap on attempts
 #   RETRY_DELAY_SECONDS  fixed delay between attempts
 #   CREDS_PATH           host path to GCP creds JSON
+#   QUOTA_LOG_FILE       optional JSONL file to append quota-failure records to.
+#                        Used by the workflow to aggregate a quota summary.
 
 set -uo pipefail
 
-RETRYABLE_PATTERN='ZONE_RESOURCE_POOL_EXHAUSTED(_WITH_DETAILS)?|does not have enough resources available to fulfill the request|Machine type [^ ]+ does not exist in zone|/machineTypes/[^ ]+ was not found'
+RETRYABLE_PATTERN="ZONE_RESOURCE_POOL_EXHAUSTED(_WITH_DETAILS)?|does not have enough resources available to fulfill the request|Machine type [^ ]+ does not exist in zone|/machineTypes/[^ ]+ was not found|Code: INTERNAL_ERROR|Please try again or contact Google Support|Code: QUOTA_EXCEEDED|Quota '[^']+' exceeded"
+QUOTA_PATTERN="Quota '[^']+' exceeded"
 
 : "${RUNTIME:?RUNTIME required}"
 : "${PROJECT:?PROJECT required}"
@@ -41,6 +44,51 @@ if [[ -n "${SHAPE_FLAG}" ]]; then
   # shellcheck disable=SC2034  # _ is the throwaway flag token
   read -r _ SHAPE_NAME _ <<< "${SHAPE_FLAG}"
 fi
+
+# Append one JSONL record per quota failure found in $1 (the captured log)
+# to ${QUOTA_LOG_FILE}. Each record carries: shape, attempted zone, the
+# quota's location (region/zone parsed from the message), the quota name,
+# and a timestamp. Aggregated end-of-run by the summarize-quota-failures
+# job in the workflow.
+record_quota_failures() {
+  local log_file="$1"
+  [[ -z "${QUOTA_LOG_FILE:-}" ]] && return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  [[ -f "${log_file}" ]] || return 0
+
+  local now
+  now=$(date -u +%FT%TZ)
+
+  # Extract (quota_name, location) pairs from each matching line. Location is
+  # parsed from "in region X" / "in zone X"; falls back to the attempted zone.
+  while IFS=$'\t' read -r quota_name location; do
+    [[ -z "${quota_name}" ]] && continue
+    [[ -z "${location}" ]] && location="${zone}"
+    jq -nc \
+      --arg shape "${SHAPE_NAME:-unknown}" \
+      --arg zone "${zone:-}" \
+      --arg location "${location}" \
+      --arg quota "${quota_name}" \
+      --arg time "${now}" \
+      '{shape: $shape, zone: $zone, location: $location, quota: $quota, time: $time}' \
+      >> "${QUOTA_LOG_FILE}"
+  done < <(grep -E "${QUOTA_PATTERN}" "${log_file}" | awk '
+    {
+      qstart = index($0, "Quota \x27")
+      if (qstart == 0) next
+      rest = substr($0, qstart + 7)
+      qend = index(rest, "\x27")
+      if (qend == 0) next
+      quota = substr(rest, 1, qend - 1)
+      loc = ""
+      if (match($0, /in (region|zone) [a-z0-9-]+/)) {
+        loc = substr($0, RSTART, RLENGTH)
+        sub(/in (region|zone) /, "", loc)
+      }
+      print quota "\t" loc
+    }
+  ')
+}
 
 # Optionally shuffle the fallback zone list so retries spread across zones
 # rather than always hitting the same one first. first_attempt_zone is added
@@ -111,6 +159,11 @@ for i in "${!attempts[@]}"; do
   exit_code=${PIPESTATUS[0]}
   set +o pipefail
   echo "::endgroup::"
+
+  # Log any quota failures *before* the retry decision so the end-of-run
+  # summary captures every quota hit, including ones that ultimately
+  # succeeded on a later zone with more headroom.
+  record_quota_failures "${log}"
 
   if (( exit_code == 0 )); then
     rm -f "${log}"

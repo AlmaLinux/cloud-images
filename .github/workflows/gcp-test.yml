@@ -110,6 +110,16 @@ jobs:
         parallel_stagger: '1s'
         zones: ${{ env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quota-failures-initialtest-${{ matrix.arch }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   # this runs tests which are hard-coded to specific shapes in CIT
   # running them against all shapes would be pointless as they are forced to specific shapes anyway
@@ -151,6 +161,16 @@ jobs:
         parallel_stagger: '10s'
         zones: ${{ env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quota-failures-nonpershape-${{ matrix.arch }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   test-gcp-pershape-x86_64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} x86_64 ${{ matrix.shape }}
@@ -283,6 +303,16 @@ jobs:
         first_attempt_zone: ${{ matrix.zone || '' }}
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: quota-failures-pershape-x86_64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   test-gcp-pershape-aarch64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}
@@ -355,3 +385,77 @@ jobs:
         first_attempt_zone: ${{ matrix.zone || '' }}
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always() && steps.checker.outputs.skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: quota-failures-pershape-aarch64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
+
+  # Aggregates the per-job JSONL quota-failure logs into a single markdown
+  # table on the run's summary page. Useful for filing quota-increase
+  # requests: groups by (location, quota, shape) so the highest-impact
+  # caps surface first.
+  summarize-quota-failures:
+    name: Summarize quota failures
+    needs:
+      - test-gcp-initialtest
+      - test-gcp-nonpershape
+      - test-gcp-pershape-x86_64
+      - test-gcp-pershape-aarch64
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Download all quota-failure artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: quota-failures-*
+        path: quota-failures
+        merge-multiple: true
+
+    - name: Write summary
+      shell: bash
+      run: |
+        set -uo pipefail
+        shopt -s nullglob
+        files=(quota-failures/*.jsonl quota-failures/**/*.jsonl)
+        if (( ${#files[@]} == 0 )); then
+          {
+            echo "## Quota failure summary"
+            echo
+            echo "No quota failures recorded in this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        cat "${files[@]}" > all-quota-failures.jsonl
+        total=$(wc -l < all-quota-failures.jsonl)
+
+        {
+          echo "## Quota failure summary"
+          echo
+          echo "**Total quota failure events:** ${total}"
+          echo
+          echo "Group key: (location, quota, shape). Counts include retries."
+          echo "Use this to scope quota-increase requests."
+          echo
+          echo "| Location | Quota | Shape | Count |"
+          echo "|----------|-------|-------|-------|"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        jq -s -r '
+          group_by([.location, .quota, .shape])
+          | map({
+              location: .[0].location,
+              quota: .[0].quota,
+              shape: .[0].shape,
+              count: length
+            })
+          | sort_by(-.count, .location, .quota, .shape)
+          | .[]
+          | "| \(.location // "?") | \(.quota) | \(.shape // "?") | \(.count) |"
+        ' all-quota-failures.jsonl >> "$GITHUB_STEP_SUMMARY"

@@ -51,6 +51,10 @@ inputs:
   creds_path:
     description: "Host path to GCP creds JSON (pass env.GOOGLE_GHA_CREDS_PATH)"
     required: true
+  quota_log_file:
+    description: "Optional path to a JSONL file the script appends quota-failure records to. Used by the workflow to upload an artifact and aggregate an end-of-run quota summary."
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -71,4 +75,5 @@ runs:
         MAX_ATTEMPTS: ${{ inputs.max_attempts }}
         RETRY_DELAY_SECONDS: ${{ inputs.retry_delay_seconds }}
         CREDS_PATH: ${{ inputs.creds_path }}
+        QUOTA_LOG_FILE: ${{ inputs.quota_log_file }}
       run: "${{ github.action_path }}/../../scripts/cit-run-with-retry.sh"
