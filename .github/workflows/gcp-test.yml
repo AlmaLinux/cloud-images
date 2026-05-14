@@ -114,7 +114,7 @@ jobs:
 
     - name: Upload quota-failure log
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: quota-failures-initialtest-${{ matrix.arch }}
         path: ${{ runner.temp }}/quota-failures.jsonl
@@ -165,7 +165,7 @@ jobs:
 
     - name: Upload quota-failure log
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: quota-failures-nonpershape-${{ matrix.arch }}
         path: ${{ runner.temp }}/quota-failures.jsonl
@@ -307,7 +307,7 @@ jobs:
 
     - name: Upload quota-failure log
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: quota-failures-pershape-x86_64-${{ matrix.shape }}
         path: ${{ runner.temp }}/quota-failures.jsonl
@@ -391,7 +391,7 @@ jobs:
 
     - name: Upload quota-failure log
       if: always() && steps.checker.outputs.skip != 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: quota-failures-pershape-aarch64-${{ matrix.shape }}
         path: ${{ runner.temp }}/quota-failures.jsonl
