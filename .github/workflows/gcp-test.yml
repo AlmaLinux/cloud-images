@@ -330,6 +330,7 @@ jobs:
           # let's test one shape flavor + lssd
           # metal gets large-CPUs detection check
           - c4a-standard-4
+          - c4a-standard-72
           # all lssd shapes fail
           # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/345
           #- c4a-standard-4-lssd
@@ -338,17 +339,18 @@ jobs:
           # can never get capacity for this shape, even with low parallelism, so skipping for now
           # - t2a-standard-4
           - n4a-standard-4
-        include:
-          - shape: c4a-standard-96-metal
-            # low quota for this one
-            parallel_count: 1
-            # `zone:` / `zones:` declared as empty strings so the keys exist
-            # on the matrix type (for the cit-run-with-retry expressions
-            # below). Set a real value here to pin the first attempt for
-            # this shape. Original guidance: only available in us-central1-b
-            # and us-east1-f.
-            zone: ''
-            zones: ''
+        # include:
+        #   # doing standard-72 instead because we can never get capacity on -metal
+        #   - shape: c4a-standard-72
+        #     # low quota for this one
+        #     parallel_count: 1
+        #     # `zone:` / `zones:` declared as empty strings so the keys exist
+        #     # on the matrix type (for the cit-run-with-retry expressions
+        #     # below). Set a real value here to pin the first attempt for
+        #     # this shape. Original guidance: only available in us-central1-b
+        #     # and us-east1-f.
+        #     zone: ''
+        #     zones: ''
     steps:
     # this isn't a great way to handle this, but GH actions has limitations...
     - name: Skip certain jobs
