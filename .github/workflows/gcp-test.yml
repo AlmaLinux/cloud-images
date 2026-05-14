@@ -186,7 +186,7 @@ jobs:
         shape:
         - n4-standard-2
         - n4-standard-80
-        - n2-standard-2
+        - n2-standard-4
         - n2-standard-128
         - n2d-standard-2
         - n2d-standard-224
