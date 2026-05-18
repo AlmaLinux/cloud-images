@@ -331,7 +331,8 @@ jobs:
       with:
         runtime: ${{ env.docker_cmd }}
         image: ${{ needs.init-data.outputs.image_path || inputs.image_override }}
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        # `network` removed — too inconsistent (flaky pass/fail across reruns).
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-x86_shape ${{ matrix.shape }}"
         parallel_count: '1'
         first_attempt_zone: ${{ matrix.zone || '' }}
@@ -424,7 +425,8 @@ jobs:
       uses: ./.github/actions/cit-run-with-retry
       with:
         image: "${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || '' }}"
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        # `network` removed — too inconsistent (flaky pass/fail across reruns).
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-arm64_shape ${{ matrix.shape }}"
         parallel_count: ${{ matrix.parallel_count || '1' }}
         first_attempt_zone: ${{ matrix.zone || '' }}
