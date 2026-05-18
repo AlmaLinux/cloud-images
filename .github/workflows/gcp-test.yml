@@ -34,6 +34,14 @@ on:
           description: 'aarch64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4a-standard-8.'
           required: false
           default: ''
+        cit_git_repo:
+          description: 'owner/repo of a cloud-image-tests fork to build instead of pulling the prebuilt image. Empty = use gcr.io/compute-image-tools/cloud-image-tests:latest. Full URLs are NOT accepted (actions/checkout takes owner/repo only). Example: GoogleCloudPlatform/cloud-image-tests'
+          required: false
+          default: ''
+        cit_git_ref:
+          description: 'Branch, tag, or commit SHA inside cit_git_repo. Empty = repository default branch. Ignored when cit_git_repo is empty.'
+          required: false
+          default: ''
         # notify_mattermost:
         #   description: "Send notification to Mattermost"
         #   required: true
@@ -70,12 +78,62 @@ jobs:
         echo "Determined image path: ${image_path}"
         echo "image_path=${image_path}" >> $GITHUB_OUTPUT
 
+  # Optional: build cloud-image-tests from a user-supplied git repo+ref and
+  # publish a docker tarball as an artifact. All test jobs `needs:` this; when
+  # cit_git_repo is empty this job is skipped, which GitHub Actions treats as
+  # non-blocking (skipped != failed), so test jobs run as today.
+  build-cit:
+    name: Build cloud-image-tests from source
+    if: inputs.cit_git_repo != ''
+    needs: init-data
+    # family=m8azn + cpu=4 -> m8azn.xlarge (highest single-thread perf in AWS,
+    # best for Go compile). Note: runs-on's inline labels do NOT support
+    # `instance=<type>` — only `family=` + `cpu=`/`ram=`/etc. To pin a
+    # different AWS size, change cpu (4=xlarge, 8=2xlarge, 16=4xlarge, ...).
+    # volume=500g grows the actual root EBS volume (where /home/runner lives)
+    # rather than attaching a secondary disk. Requires runs-on >= 2.9 — the
+    # older `disk=` selector mounts an additional volume at /runs-on/ which
+    # doesn't help when /home/runner/_diag/ fills up on the small fixed root.
+    # Forks fall back to the default GH-hosted runner. Tune size based on
+    # the runs-on cost/performance summary printed by the step below.
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=m8azn/cpu=48/extras=tmpfs/spot=false/image=ubuntu24-full-x64', github.run_id) || 'ubuntu-24.04' }}"
+    steps:
+    - name: Show runs-on cost/performance summary
+      if: github.repository_owner == 'AlmaLinux'
+      uses: runs-on/action@v1
+
+    - name: Checkout CIT source
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.cit_git_repo }}
+        ref: ${{ inputs.cit_git_ref }}
+        path: cit-src
+
+    - name: Build CIT image
+      shell: bash
+      run: docker build -t cit-custom:run-${{ github.run_id }} cit-src
+
+    - name: Save image to tarball
+      shell: bash
+      # zstd -T0: multi-threaded compression on all available cores. Much
+      # faster than pigz/gzip both compressing and decompressing. Preinstalled
+      # on ubuntu24-full-x64 and on the AlmaLinux/Ubuntu test runners.
+      run: docker save cit-custom:run-${{ github.run_id }} | zstd -T0 -3 --long=27 -o cit-image.tar.zst
+
+    - name: Upload CIT image artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: cit-custom-image
+        path: cit-image.tar.zst
+        retention-days: 1
+        compression-level: 0
+
   # this runs an initial set of smoke tests against a shape that we can use with high concurrency
   # this is to speed up the feedback loop in case something obvious can be caught quickly with a new image
   # without having to wait on the full run of per-shape tests which takes a while
   test-gcp-initialtest:
     name: AlmaLinux ${{ inputs.image_override || format('{0} {1}', inputs.version_major, matrix.arch) }} Initial Tests
-    needs: init-data
+    needs: [init-data, build-cit]
     permissions:
       id-token: write
       contents: read
@@ -100,6 +158,17 @@ jobs:
     - name: 'Set up Google Cloud SDK'
       uses: 'google-github-actions/setup-gcloud@v3'
 
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != ''
+      shell: bash
+      run: zstd -d -c cit-image.tar.zst | docker load
+
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
       uses: ./.github/actions/cit-run-with-retry
       with:
@@ -111,6 +180,7 @@ jobs:
         zones: ${{ env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
         quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
 
     - name: Upload quota-failure log
       if: always()
@@ -125,7 +195,7 @@ jobs:
   # running them against all shapes would be pointless as they are forced to specific shapes anyway
   test-gcp-nonpershape:
     name: AlmaLinux ${{ inputs.image_override || format('{0} {1}', inputs.version_major, matrix.arch) }} Non-Per-Shape Tests
-    needs: init-data
+    needs: [init-data, build-cit]
     permissions:
       id-token: write
       contents: read
@@ -150,6 +220,17 @@ jobs:
     - name: 'Set up Google Cloud SDK'
       uses: 'google-github-actions/setup-gcloud@v3'
 
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != ''
+      shell: bash
+      run: zstd -d -c cit-image.tar.zst | docker load
+
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
       uses: ./.github/actions/cit-run-with-retry
       with:
@@ -162,6 +243,7 @@ jobs:
         zones: ${{ env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
         quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
 
     - name: Upload quota-failure log
       if: always()
@@ -174,11 +256,11 @@ jobs:
 
   test-gcp-pershape-x86_64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} x86_64 ${{ matrix.shape }}
-    needs: [init-data,test-gcp-initialtest]
+    needs: [init-data, test-gcp-initialtest, build-cit]
     permissions:
       id-token: write
       contents: read
-    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/volume=100g/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
     if: inputs.arch == 'ALL' || inputs.arch == 'x86_64'
     strategy:
       fail-fast: false
@@ -280,7 +362,8 @@ jobs:
         # Runner OS specific configuration
         if [ -e /etc/redhat-release ]; then
           sudo setenforce 0
-          sudo dnf -y install podman
+          # we don't need scriptlets, just slows down install on selinux scriptlets that we won't be using
+          sudo dnf -y --setopt=tsflags=noscripts install podman zstd
           runner_user=$USER
           sudo loginctl enable-linger $runner_user
           docker_cmd=podman
@@ -291,6 +374,18 @@ jobs:
           exit 1
         fi
         echo "docker_cmd=${docker_cmd}" >> $GITHUB_ENV
+
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != ''
+      shell: bash
+      # build-cit emits a docker-save tarball; podman 4.x+ reads it natively.
+      run: zstd -d -c cit-image.tar.zst | ${{ env.docker_cmd }} load
 
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
       uses: ./.github/actions/cit-run-with-retry
@@ -304,6 +399,7 @@ jobs:
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
         quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
 
     - name: Upload quota-failure log
       if: always()
@@ -316,7 +412,7 @@ jobs:
 
   test-gcp-pershape-aarch64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}
-    needs: [init-data, test-gcp-initialtest]
+    needs: [init-data, test-gcp-initialtest, build-cit]
     permissions:
       id-token: write
       contents: read
@@ -373,6 +469,17 @@ jobs:
       if: steps.checker.outputs.skip != 'true'
       uses: 'google-github-actions/setup-gcloud@v3'
 
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != '' && steps.checker.outputs.skip != 'true'
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != '' && steps.checker.outputs.skip != 'true'
+      shell: bash
+      run: zstd -d -c cit-image.tar.zst | docker load
+
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
       if: steps.checker.outputs.skip != 'true'
       uses: ./.github/actions/cit-run-with-retry
@@ -385,6 +492,7 @@ jobs:
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
         quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
 
     - name: Upload quota-failure log
       if: always() && steps.checker.outputs.skip != 'true'

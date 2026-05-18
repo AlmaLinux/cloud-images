@@ -55,6 +55,10 @@ inputs:
     description: "Optional path to a JSONL file the script appends quota-failure records to. Used by the workflow to upload an artifact and aggregate an end-of-run quota summary."
     required: false
     default: ""
+  image_ref:
+    description: "Container image to run. Defaults to the prebuilt upstream image; pass a custom tag (e.g. `cit-custom:run-<run_id>`) when the workflow built CIT from source via the build-cit job."
+    required: false
+    default: "gcr.io/compute-image-tools/cloud-image-tests:latest"
 
 runs:
   using: composite
@@ -76,4 +80,5 @@ runs:
         RETRY_DELAY_SECONDS: ${{ inputs.retry_delay_seconds }}
         CREDS_PATH: ${{ inputs.creds_path }}
         QUOTA_LOG_FILE: ${{ inputs.quota_log_file }}
+        CIT_IMAGE: ${{ inputs.image_ref }}
       run: "${{ github.action_path }}/../../scripts/cit-run-with-retry.sh"
