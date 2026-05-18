@@ -26,11 +26,25 @@ on:
           description: 'Image to test, overrides version_major to test a direct image instead.  Architecture must be set properly for the image being passed.  This must be a full path to a GCP image, for example, projects/almalinux-dev-images-469421/global/images/almalinux-9-v20230920'
           required: false
           default: ''
+        x86_shape_override:
+          description: 'x86_64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4-standard-8.'
+          required: false
+          default: ''
+        aarch64_shape_override:
+          description: 'aarch64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4a-standard-8.'
+          required: false
+          default: ''
         # notify_mattermost:
         #   description: "Send notification to Mattermost"
         #   required: true
         #   type: boolean
         #   default: false
+
+env:
+  # Default zone fallback list for cit-run-with-retry. Multi-region spread so a
+  # single-region capacity event doesn't fail the whole run. Shapes with
+  # narrower availability override this via matrix `zones:` and/or `zone:`.
+  GCP_DEFAULT_ZONES: "us-central1-a us-central1-b us-central1-c us-central1-f us-south1-a us-south1-b us-south1-c us-west1-a us-west1-b us-west1-c northamerica-northeast1-a northamerica-northeast1-b europe-west1-b europe-west1-c europe-west1-d europe-west2-a europe-west2-b europe-west2-c europe-west3-a europe-west3-b europe-west3-c europe-west4-a europe-west4-b europe-west4-c"
 
 jobs:
   init-data:
@@ -87,18 +101,25 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v3'
 
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
-      shell: bash
-      run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -parallel_count 20 \
-          -parallel_stagger 1s \
-          -filter '^(lssd|disk|vmspec)$' \
-          -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}' \
-          ${{ matrix.arch == '' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
+        filter: '^(lssd|disk|vmspec)$'
+        shape_flag: "${{ matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
+        parallel_count: '20'
+        parallel_stagger: '1s'
+        zones: ${{ env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-initialtest-${{ matrix.arch }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   # this runs tests which are hard-coded to specific shapes in CIT
   # running them against all shapes would be pointless as they are forced to specific shapes anyway
@@ -130,16 +151,26 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v3'
 
     - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
-      shell: bash
-      run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -parallel_stagger 10s \
-          -filter '^(lssd|disk|vmspec)$' \
-          -images '${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || ''}}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
+        filter: '^(lssd|disk|vmspec)$'
+        # If an arch-matching shape_override input is set, pin the shape;
+        # otherwise leave empty and let cloud-image-tests pick its hardcoded shapes.
+        shape_flag: "${{ matrix.arch == 'aarch64' && inputs.aarch64_shape_override != '' && format('-arm64_shape {0}', inputs.aarch64_shape_override) || matrix.arch == 'x86_64' && inputs.x86_shape_override != '' && format('-x86_shape {0}', inputs.x86_shape_override) || '' }}"
+        parallel_stagger: '10s'
+        zones: ${{ env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-nonpershape-${{ matrix.arch }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   test-gcp-pershape-x86_64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} x86_64 ${{ matrix.shape }}
@@ -155,7 +186,7 @@ jobs:
         shape:
         - n4-standard-2
         - n4-standard-80
-        - n2-standard-2
+        - n2-standard-4
         - n2-standard-128
         - n2d-standard-2
         - n2d-standard-224
@@ -215,11 +246,20 @@ jobs:
         # z3 tests not needed, basically c3 with lots of lssd, so covered by c3-lssd tests
         # - z3-highmem-14-standardlssd
         # things with special zone requirements or other special needs
-        # include:
+        include:
+            # Placeholder entry that declares the optional `zone:` / `zones:`
+            # keys on the matrix type so `matrix.zone` / `matrix.zones`
+            # expressions in the cit-run-with-retry call are valid. Empty
+            # values are no-ops at runtime (the action falls back to
+            # env.GCP_DEFAULT_ZONES). Add real overrides below as needed.
+            - shape: n4-standard-2
+              zone: ''
+              zones: ''
             # only available in us-central1-b
             # disabled, never any capacity available
             # - shape: c4d-standard-384-metal
             #   zone: us-central1-b
+            #   zones: us-central1-b
 
     steps:
     # we don't need the checked out files, but this is required for the google auth action to work
@@ -253,17 +293,26 @@ jobs:
         echo "docker_cmd=${docker_cmd}" >> $GITHUB_ENV
 
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
-      shell: bash
-      run: |
-        ${{ env.docker_cmd }} run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -x86_shape ${{ matrix.shape }}                       \
-          -parallel_count ${{ github.run_attempt > 1 && '1' || '1' }} \
-          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
-          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        runtime: ${{ env.docker_cmd }}
+        image: ${{ needs.init-data.outputs.image_path || inputs.image_override }}
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-x86_shape ${{ matrix.shape }}"
+        parallel_count: '1'
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-pershape-x86_64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
 
   test-gcp-pershape-aarch64:
     name: ${{ inputs.image_override || format('{0}', inputs.version_major) }} aarch64 ${{ matrix.shape }}
@@ -281,18 +330,27 @@ jobs:
           # let's test one shape flavor + lssd
           # metal gets large-CPUs detection check
           - c4a-standard-4
+          - c4a-standard-72
           # all lssd shapes fail
           # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/345
           #- c4a-standard-4-lssd
           # pretty limited quotas for this one
           # let's just test one shape flavor
-          - t2a-standard-4
-        include:
-          - shape: c4a-standard-96-metal
-            # low quota for this one
-            parallel_count: 1
-            # only available in us-central1-b and us-east1-f
-            zone: us-central1-b
+          # can never get capacity for this shape, even with low parallelism, so skipping for now
+          # - t2a-standard-4
+          - n4a-standard-4
+        # include:
+        #   # doing standard-72 instead because we can never get capacity on -metal
+        #   - shape: c4a-standard-72
+        #     # low quota for this one
+        #     parallel_count: 1
+        #     # `zone:` / `zones:` declared as empty strings so the keys exist
+        #     # on the matrix type (for the cit-run-with-retry expressions
+        #     # below). Set a real value here to pin the first attempt for
+        #     # this shape. Original guidance: only available in us-central1-b
+        #     # and us-east1-f.
+        #     zone: ''
+        #     zones: ''
     steps:
     # this isn't a great way to handle this, but GH actions has limitations...
     - name: Skip certain jobs
@@ -320,15 +378,86 @@ jobs:
 
     - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
       if: steps.checker.outputs.skip != 'true'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || '' }}"
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-arm64_shape ${{ matrix.shape }}"
+        parallel_count: ${{ matrix.parallel_count || '1' }}
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+
+    - name: Upload quota-failure log
+      if: always() && steps.checker.outputs.skip != 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-pershape-aarch64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
+
+  # Aggregates the per-job JSONL quota-failure logs into a single markdown
+  # table on the run's summary page. Useful for filing quota-increase
+  # requests: groups by (location, quota, shape) so the highest-impact
+  # caps surface first.
+  summarize-quota-failures:
+    name: Summarize quota failures
+    needs:
+      - test-gcp-initialtest
+      - test-gcp-nonpershape
+      - test-gcp-pershape-x86_64
+      - test-gcp-pershape-aarch64
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Download all quota-failure artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: quota-failures-*
+        path: quota-failures
+        merge-multiple: true
+
+    - name: Write summary
       shell: bash
       run: |
-        docker run \
-          -v ${{ env.GOOGLE_GHA_CREDS_PATH }}:/creds/auth.json \
-          -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json   \
-          gcr.io/compute-image-tools/cloud-image-tests:latest  \
-          -project almalinux-image-testing-469421              \
-          -arm64_shape ${{ matrix.shape }}                     \
-          ${{ matrix.zone && format('-zone {0}', matrix.zone) || '' }} \
-          -parallel_count ${{ matrix.parallel_count && format (' {0}', matrix.parallel_count) || '1' }} \
-          -filter '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata)$' \
-          -images '${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || ''}}'
+        set -uo pipefail
+        shopt -s nullglob
+        files=(quota-failures/*.jsonl quota-failures/**/*.jsonl)
+        if (( ${#files[@]} == 0 )); then
+          {
+            echo "## Quota failure summary"
+            echo
+            echo "No quota failures recorded in this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        cat "${files[@]}" > all-quota-failures.jsonl
+        total=$(wc -l < all-quota-failures.jsonl)
+
+        {
+          echo "## Quota failure summary"
+          echo
+          echo "**Total quota failure events:** ${total}"
+          echo
+          echo "Group key: (location, quota, shape). Counts include retries."
+          echo "Use this to scope quota-increase requests."
+          echo
+          echo "| Location | Quota | Shape | Count |"
+          echo "|----------|-------|-------|-------|"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        jq -s -r '
+          group_by([.location, .quota, .shape])
+          | map({
+              location: .[0].location,
+              quota: .[0].quota,
+              shape: .[0].shape,
+              count: length
+            })
+          | sort_by(-.count, .location, .quota, .shape)
+          | .[]
+          | "| \(.location // "?") | \(.quota) | \(.shape // "?") | \(.count) |"
+        ' all-quota-failures.jsonl >> "$GITHUB_STEP_SUMMARY"
