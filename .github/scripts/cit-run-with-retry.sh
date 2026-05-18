@@ -22,6 +22,9 @@
 #   CREDS_PATH           host path to GCP creds JSON
 #   QUOTA_LOG_FILE       optional JSONL file to append quota-failure records to.
 #                        Used by the workflow to aggregate a quota summary.
+#   CIT_IMAGE            container image to run. Defaults to the upstream
+#                        prebuilt; set to a locally-loaded tag when the
+#                        workflow's build-cit job is active.
 
 set -uo pipefail
 
@@ -148,7 +151,7 @@ for i in "${!attempts[@]}"; do
   "${RUNTIME}" run \
     -v "${CREDS_PATH}:/creds/auth.json" \
     -e GOOGLE_APPLICATION_CREDENTIALS=/creds/auth.json \
-    gcr.io/compute-image-tools/cloud-image-tests:latest \
+    "${CIT_IMAGE:-gcr.io/compute-image-tools/cloud-image-tests:latest}" \
     -project "${PROJECT}" \
     ${PARALLEL_COUNT:+-parallel_count ${PARALLEL_COUNT}} \
     ${PARALLEL_STAGGER:+-parallel_stagger ${PARALLEL_STAGGER}} \
