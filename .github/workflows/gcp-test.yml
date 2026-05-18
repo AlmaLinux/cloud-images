@@ -27,11 +27,11 @@ on:
           required: false
           default: ''
         x86_shape_override:
-          description: 'x86_64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4-standard-8.'
+          description: 'x86_64 shape used by test-gcp-initialtest (the smoke-test job). Empty = default c4-standard-8.'
           required: false
           default: ''
         aarch64_shape_override:
-          description: 'aarch64 shape to use for jobs that do not iterate over matrix.shape (e.g. test-gcp-nonpershape). Empty = let cloud-image-tests choose. Example: c4a-standard-8.'
+          description: 'aarch64 shape used by test-gcp-initialtest (the smoke-test job). Empty = default c4a-standard-8.'
           required: false
           default: ''
         cit_git_repo:
@@ -174,7 +174,9 @@ jobs:
       with:
         image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
         filter: '^(lssd|disk|vmspec)$'
-        shape_flag: "${{ matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
+        # When an arch-matching shape_override input is set, pin that shape;
+        # otherwise default to the smoke-test shape for the arch.
+        shape_flag: "${{ matrix.arch == 'aarch64' && inputs.aarch64_shape_override != '' && format('-arm64_shape {0}', inputs.aarch64_shape_override) || matrix.arch == 'x86_64' && inputs.x86_shape_override != '' && format('-x86_shape {0}', inputs.x86_shape_override) || matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
         parallel_count: '20'
         parallel_stagger: '1s'
         zones: ${{ env.GCP_DEFAULT_ZONES }}
@@ -187,69 +189,6 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: quota-failures-initialtest-${{ matrix.arch }}
-        path: ${{ runner.temp }}/quota-failures.jsonl
-        if-no-files-found: ignore
-        retention-days: 7
-
-  # this runs tests which are hard-coded to specific shapes in CIT
-  # running them against all shapes would be pointless as they are forced to specific shapes anyway
-  test-gcp-nonpershape:
-    name: AlmaLinux ${{ inputs.image_override || format('{0} {1}', inputs.version_major, matrix.arch) }} Non-Per-Shape Tests
-    needs: [init-data, build-cit]
-    permissions:
-      id-token: write
-      contents: read
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # this sets the arch matrix based on the input
-        # if input is ALL, then set to both x86_64 and aarch64
-        # otherwise set to the selected arch
-        arch: ${{ fromJSON(inputs.arch == 'ALL' && '["x86_64","aarch64"]' || format('["{0}"]', inputs.arch)) }}
-    steps:
-    # we don't need the checked out files, but this is required for the google auth action to work
-    - uses: 'actions/checkout@v6'
-
-    - id: 'google-auth-image-testing'
-      uses: 'google-github-actions/auth@v3'
-      with:
-        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
-        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
-
-    - name: 'Set up Google Cloud SDK'
-      uses: 'google-github-actions/setup-gcloud@v3'
-
-    - name: Download custom CIT image
-      if: inputs.cit_git_repo != ''
-      uses: actions/download-artifact@v7
-      with:
-        name: cit-custom-image
-
-    - name: Load custom CIT image
-      if: inputs.cit_git_repo != ''
-      shell: bash
-      run: zstd -d -c cit-image.tar.zst | docker load
-
-    - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
-      uses: ./.github/actions/cit-run-with-retry
-      with:
-        image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
-        filter: '^(lssd|disk|vmspec)$'
-        # If an arch-matching shape_override input is set, pin the shape;
-        # otherwise leave empty and let cloud-image-tests pick its hardcoded shapes.
-        shape_flag: "${{ matrix.arch == 'aarch64' && inputs.aarch64_shape_override != '' && format('-arm64_shape {0}', inputs.aarch64_shape_override) || matrix.arch == 'x86_64' && inputs.x86_shape_override != '' && format('-x86_shape {0}', inputs.x86_shape_override) || '' }}"
-        parallel_stagger: '10s'
-        zones: ${{ env.GCP_DEFAULT_ZONES }}
-        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
-        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
-        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
-
-    - name: Upload quota-failure log
-      if: always()
-      uses: actions/upload-artifact@v7
-      with:
-        name: quota-failures-nonpershape-${{ matrix.arch }}
         path: ${{ runner.temp }}/quota-failures.jsonl
         if-no-files-found: ignore
         retention-days: 7
@@ -511,7 +450,6 @@ jobs:
     name: Summarize quota failures
     needs:
       - test-gcp-initialtest
-      - test-gcp-nonpershape
       - test-gcp-pershape-x86_64
       - test-gcp-pershape-aarch64
     if: always()
