@@ -100,7 +100,7 @@ jobs:
     steps:
     - name: Show runs-on cost/performance summary
       if: github.repository_owner == 'AlmaLinux'
-      uses: runs-on/action@v1
+      uses: runs-on/action@v2
 
     - name: Checkout CIT source
       uses: actions/checkout@v6
