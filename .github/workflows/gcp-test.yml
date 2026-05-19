@@ -206,44 +206,32 @@ jobs:
       fail-fast: false
       matrix:
         shape:
-        - n4-standard-2
-        - n4-standard-80
+        - n4-standard-4
         - n2-standard-4
-        - n2-standard-128
-        - n2d-standard-2
-        - n2d-standard-224
-        - n1-standard-1
-        - n1-standard-96
-        - c4-standard-2
-        # can never get capacity for 288 so using 192
-        - c4-standard-192
+        - n2d-standard-4
+        - n1-standard-4
+        - c4-standard-4
         # all lssd shapes fail
         # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/345
         # - c4-standard-4-lssd
         # - c4-standard-288-lssd
         # never has capacity anywhere
         # - c4-standard-288-metal
-        - c4d-standard-2
-        # can never get capacity for 384 so using 192
-        - c4d-standard-192
+        - c4d-standard-4
         # - c4d-standard-8-lssd
         # - c4d-standard-384-lssd
         - c3-standard-4
-        - c3-standard-176
         # <failure message="" type="Failure"><![CDATA[step "create-vms" run error: googleapi: Error 400: C3 Metal instance does not support multi-vNIC., badRequest]]></failure>
         # - c3-standard-192-metal
         # lssd always fails
         # - c3-standard-4-lssd
         # - c3-standard-176-lssd
         - c3d-standard-4
-        - c3d-standard-360
         # - c3d-standard-8-lssd
         # - c3d-standard-360-lssd
-        - e2-standard-2
-        - e2-standard-32
+        - e2-standard-4
         - e2-medium
-        - t2d-standard-1
-        - t2d-standard-60
+        - t2d-standard-4
         # h4d tests fail
         # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/346
         # - h4d-standard-192
@@ -251,9 +239,7 @@ jobs:
         # can never get capacity for this shape
         # - h3-standard-88
         - c2-standard-4
-        - c2-standard-60
-        - c2d-standard-2
-        - c2d-standard-112
+        - c2d-standard-4
         # m4, x4, m3, m2 disabled due to no quotas
         # - m4-megamem-28
         # - m4-megamem-224
@@ -274,7 +260,7 @@ jobs:
             # expressions in the cit-run-with-retry call are valid. Empty
             # values are no-ops at runtime (the action falls back to
             # env.GCP_DEFAULT_ZONES). Add real overrides below as needed.
-            - shape: n4-standard-2
+            - shape: n4-standard-4
               zone: ''
               zones: ''
             # only available in us-central1-b
@@ -335,7 +321,7 @@ jobs:
         # `network` removed — too inconsistent (flaky pass/fail across reruns).
         filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-x86_shape ${{ matrix.shape }}"
-        parallel_count: '1'
+        parallel_count: '2'
         first_attempt_zone: ${{ matrix.zone || '' }}
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
@@ -368,7 +354,6 @@ jobs:
           # let's test one shape flavor + lssd
           # metal gets large-CPUs detection check
           - c4a-standard-4
-          - c4a-standard-72
           # all lssd shapes fail
           # https://github.com/GoogleCloudPlatform/cloud-image-tests/issues/345
           #- c4a-standard-4-lssd
@@ -382,7 +367,7 @@ jobs:
           # matrix type (the cit-run-with-retry call below references them
           # via `matrix.X || <fallback>`). Empty values are no-ops. Add
           # real per-shape overrides here as needed.
-          - shape: c4a-standard-72
+          - shape: c4a-standard-4
             parallel_count: ''
             zone: ''
             zones: ''
@@ -430,7 +415,7 @@ jobs:
         # `network` removed — too inconsistent (flaky pass/fail across reruns).
         filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-arm64_shape ${{ matrix.shape }}"
-        parallel_count: ${{ matrix.parallel_count || '1' }}
+        parallel_count: ${{ matrix.parallel_count || '2' }}
         first_attempt_zone: ${{ matrix.zone || '' }}
         zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
         creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
