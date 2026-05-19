@@ -182,6 +182,7 @@ runs:
         done
 
     - name: Run image tests
+      id: run_tests
       shell: bash
       env:
         ALMA_ARCH: ${{ inputs.alma_arch }}
@@ -230,17 +231,23 @@ runs:
         echo "${ONE_CONTEXT_VERSION}"
 
         # OpenNebula build-time payload (per ansible/roles/opennebula_guest):
-        #   - almalinux-release-opennebula-addons enables the addons repo
-        #     that ships one-context
+        #   - almalinux-release-opennebula-addons (stable AL) or
+        #     almalinux-kitten-release-opennebula-addons (Kitten) enables
+        #     the addons repo that ships one-context
         #   - one-context is the contextualization package itself
         #   - cloud-utils-growpart + parted back the grow-rootfs hook
         #   - qemu-guest-agent, nfs-utils, rsync, jq, tcpdump, tuned are
         #     installed by the "additional packages" task
         # `rpm -q` prints one line per package (version-or-"not installed")
         # and exits non-zero if any are missing.
+        if [[ "${RELEASE_STRING}" == *Kitten* ]]; then
+          RELEASE_ADDONS_PKG=almalinux-kitten-release-opennebula-addons
+        else
+          RELEASE_ADDONS_PKG=almalinux-release-opennebula-addons
+        fi
         echo "[Debug] OpenNebula payload packages installed:"
         "${SSH[@]}" "rpm -q \
-          almalinux-release-opennebula-addons \
+          ${RELEASE_ADDONS_PKG} \
           one-context \
           cloud-utils-growpart \
           parted \
@@ -311,7 +318,13 @@ runs:
         IMAGE_FILENAME: ${{ inputs.image_filename }}
         IMAGE_URL: ${{ inputs.image_url }}
         ALMA_ARCH_FULL: ${{ inputs.alma_arch_full }}
-        JOB_STATUS: ${{ job.status }}
+        # job.status doesn't reflect failures of steps inside the same
+        # composite action (the parent job's status flips only after this
+        # composite returns) - so read the test step's own outcome.
+        # When a step BEFORE run_tests fails (install, KVM probe, ...),
+        # run_tests is skipped and its outcome is "skipped", which is
+        # correctly treated as "not success" below.
+        TESTS_OUTCOME: ${{ steps.run_tests.outcome }}
       run: |
         # Job summary
         {
@@ -328,7 +341,7 @@ runs:
           if [ -n "${ONE_CONTEXT_VERSION:-}" ]; then
             echo "- **one-context**: \`${ONE_CONTEXT_VERSION}\`"
           fi
-          if [ "${JOB_STATUS}" = "success" ]; then
+          if [ "${TESTS_OUTCOME}" = "success" ]; then
             echo "- **Test**: passed ✅"
           else
             echo "- **Test**: failed ❌"
@@ -367,4 +380,4 @@ runs:
           ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
           ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
           ${{ env.ONE_CONTEXT_VERSION && format('**one-context**: `{0}`', env.ONE_CONTEXT_VERSION) || '' }}
-          **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}
+          **Test**: ${{ steps.run_tests.outcome == 'success' && 'passed ✅' || 'failed ❌' }}

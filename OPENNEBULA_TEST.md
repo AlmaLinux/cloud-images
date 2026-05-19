@@ -168,7 +168,7 @@ Once SSH is reachable on the guest, the following checks run in sequence (failur
 3. **Disk and filesystems** — `lsblk` listing
 4. **Root filesystem resize** — root must be ≥ 95 GiB (the overlay is 100 GiB; the QEMU image's UEFI layout — 1M BIOS-boot + 200M `/boot/efi` + 1G `/boot` — plus xfs metadata trims the observed ceiling on a fully-grown root to ~97 GiB)
 5. **`one-context` package** — `rpm -q one-context` succeeds; the version is captured into the summary / Mattermost message
-6. **OpenNebula payload packages** — single `rpm -q` over the full set the build-time `opennebula_guest` Ansible role installs: `almalinux-release-opennebula-addons`, `one-context`, `cloud-utils-growpart`, `parted`, `qemu-guest-agent`, `nfs-utils`, `rsync`, `jq`, `tcpdump`, `tuned`. Fails if any are missing.
+6. **OpenNebula payload packages** — single `rpm -q` over the full set the build-time `opennebula_guest` Ansible role installs: the addons-repo enabler (`almalinux-release-opennebula-addons` for stable AlmaLinux, `almalinux-kitten-release-opennebula-addons` for Kitten — the test picks the right name from `RELEASE_STRING`), `one-context`, `cloud-utils-growpart`, `parted`, `qemu-guest-agent`, `nfs-utils`, `rsync`, `jq`, `tcpdump`, `tuned`. Fails if any are missing.
 7. **`one-context` services** — `systemctl is-active one-context-local.service one-context-online.service one-context.service` returns `active` for all three
 8. **CONTEXT volume detection** — `lsblk -o NAME,LABEL,FSTYPE` shows the second virtio block device with `LABEL=CONTEXT` and `FSTYPE=iso9660`
 9. **`SET_HOSTNAME` applied** — `hostname` returns `opennebula-test`
