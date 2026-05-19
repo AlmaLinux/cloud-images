@@ -201,6 +201,7 @@ jobs:
       contents: read
     runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/volume=100g/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
     if: inputs.arch == 'ALL' || inputs.arch == 'x86_64'
+    timeout-minutes: 720
     strategy:
       fail-fast: false
       matrix:
@@ -358,6 +359,7 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     if: inputs.arch == 'ALL' || inputs.arch == 'aarch64'
+    timeout-minutes: 720
     strategy:
       fail-fast: false
       matrix:
