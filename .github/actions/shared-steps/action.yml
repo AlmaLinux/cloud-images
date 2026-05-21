@@ -536,6 +536,48 @@ runs:
           aws s3api put-object-tagging --bucket ${{ inputs.AWS_S3_BUCKET }} --key ${{ env.AWS_S3_PATH }}/${object} --tagging 'TagSet={Key=public,Value=yes}'
         done
 
+    - name: Compute test status string
+      id: test_status
+      shell: bash
+      env:
+        IS_VAGRANT: ${{ contains(inputs.type, 'vagrant') && 'true' || 'false' }}
+        RUN_TEST: ${{ inputs.run_test }}
+        GOT_PKGS_LIST: ${{ env.got_pkgs_list || 'false' }}
+      run: |
+        # Pick the right "Tests ..." label for the workflow summary and the
+        # Mattermost notification.
+        #
+        # Vagrant builds run a real `vagrant up` smoke test inside the build
+        # runner - that runs only when `inputs.run_test == 'true'`. When it's
+        # off, there is genuinely no test to report.
+        #
+        # All other build types (oci / gencloud / gencloud_ext4 / opennebula
+        # / azure / hyperv) run the OFFLINE test step earlier in this action
+        # unconditionally (mount the image via qemu-nbd, grep release + arch
+        # via rpm --dbpath). `got_pkgs_list=true` means the offline test
+        # reached the end and produced the packages list - i.e., it passed.
+        # `got_pkgs_list=false` means it failed somewhere. `inputs.run_test`
+        # has no bearing on whether the offline test ran.
+        if [ "${IS_VAGRANT}" = "true" ]; then
+          if [ "${RUN_TEST}" = "true" ]; then
+            if [ "${GOT_PKGS_LIST}" = "true" ]; then
+              status="Tests passed ✅"
+            else
+              status="Tests failed ❌"
+            fi
+          else
+            status="Tests N/A ⚠️"
+          fi
+        else
+          if [ "${GOT_PKGS_LIST}" = "true" ]; then
+            status="Tests (offline) passed ✅"
+          else
+            status="Tests (offline) failed ❌"
+          fi
+        fi
+        echo "test_status=${status}" >> "$GITHUB_OUTPUT"
+        echo "[Debug] Resolved test status: ${status}"
+
     - name: Print workflow summary
       uses: actions/github-script@v8
       env:
@@ -556,14 +598,8 @@ runs:
             summary
               .addLink('${{ env.IMAGE_NAME }}.txt', 'https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }}.txt');
           }
-          if (process.env.got_pkgs_list === 'true') {
-            summary
-              .addRaw('Tests ${{ inputs.run_test == 'true' && 'passed ✅' || 'N/A ⚠️' }}');
-          }
-          if (process.env.got_pkgs_list === 'false') {
-            summary
-              .addRaw('Tests ${{ inputs.run_test == 'true' && 'failed ❌' || 'N/A ⚠️' }}');
-          }
+          summary
+            .addRaw('${{ steps.test_status.outputs.test_status }}');
           summary.write();
 
     - name: Prepare Mattermost notification message
@@ -584,7 +620,7 @@ runs:
             echo "- Image: [${{ env.IMAGE_NAME }}](https://${{ inputs.AWS_S3_BUCKET }}.s3-accelerate.dualstack.amazonaws.com/${{ env.AWS_S3_PATH }}/${{ env.IMAGE_NAME }})"
             echo "${{ env.got_pkgs_list == 'true' && format('- Packages list: [{0}.txt](https://{1}.s3-accelerate.dualstack.amazonaws.com/{2}/{3}.txt)', env.IMAGE_NAME, inputs.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || ''}}"
           fi
-          echo "- Tests ${{ inputs.run_test == 'true' && ( env.got_pkgs_list == 'true' && 'passed ✅' || 'failed ❌' ) || 'N/A ⚠️' }}"
+          echo "- ${{ steps.test_status.outputs.test_status }}"
 
           echo EOF
         } >> "$GITHUB_ENV"
