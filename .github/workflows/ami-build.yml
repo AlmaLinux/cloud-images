@@ -238,8 +238,18 @@ jobs:
 
           echo "[Debug] AlmaLinux release:"
           grep "${OS_RELEASE}" /etc/almalinux-release || exit 1
+          # Capture the full /etc/almalinux-release line (including code name)
+          # so the job-summary / Mattermost-notification steps below can show
+          # the same string the user sees from `cat /etc/almalinux-release`.
+          ALMA_RELEASE=$(head -n1 /etc/almalinux-release)
+          echo "ALMA_RELEASE=${ALMA_RELEASE}" >> "$GITHUB_ENV"
+
           echo "[Debug] System architecture:"
-          rpm -q --qf='%{ARCH}\n' $(rpm -qf /etc/almalinux-release) | grep '${{ env.AMI_ARCH }}' || exit 1
+          SYSTEM_ARCH=$(rpm -q --qf='%{ARCH}' $(rpm -qf /etc/almalinux-release))
+          echo "  ${SYSTEM_ARCH}"
+          echo "${SYSTEM_ARCH}" | grep '${{ env.AMI_ARCH }}' || exit 1
+          echo "SYSTEM_ARCH=${SYSTEM_ARCH}" >> "$GITHUB_ENV"
+
           echo "[Debug] Check for updates:"
           dnf check-update || exit 1
 
@@ -249,3 +259,50 @@ jobs:
           compression-level: 1
           name: ${{ env.PKGS_LIST_FILE }}
           path: ${{ env.PKGS_LIST_FILE }}
+
+      - name: Get AMI Name
+        if: always() && env.AMI_ID != ''
+        run: |
+          AMI_NAME=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Name' --output text)
+          if [[ "${AMI_NAME}" == "" || "${AMI_NAME}" == "None" ]]; then
+            AMI_NAME="${{ env.AMI_ID }}"
+          fi
+          echo "[Debug] AMI Name: '${AMI_NAME}'"
+          echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+      - name: Job summary
+        if: always() && env.AMI_ID != ''
+        env:
+          INSTANCE_TYPE: ${{ contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium' }}
+        run: |
+          {
+            echo "## AMI Image Test"
+            echo ""
+            echo "- **AMI Name**: \`${AMI_NAME:-${AMI_ID}}\`"
+            echo "- **AMI ID**: \`${AMI_ID}\`"
+            echo "- **Instance Type**: \`${INSTANCE_TYPE}\`"
+            if [ -n "${ALMA_RELEASE:-}" ]; then
+              echo "- **AlmaLinux release**: \`${ALMA_RELEASE}\`"
+            fi
+            if [ -n "${SYSTEM_ARCH:-}" ]; then
+              echo "- **System architecture**: \`${SYSTEM_ARCH}\`"
+            fi
+            echo "- **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send notification to Mattermost
+        uses: mattermost/action-mattermost-notify@master
+        if: always() && inputs.notify_mattermost && env.AMI_ID != ''
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+          TEXT: |
+            :almalinux: **${{ env.AMI_NAME }}**, AMI image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            **AMI Name**: `${{ env.AMI_NAME }}`
+            **AMI ID**: `${{ env.AMI_ID }}`
+            **Instance Type**: `${{ contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium' }}`
+            ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
+            ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
+            **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}
