@@ -156,7 +156,7 @@ jobs:
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64', github.run_id)
+          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=40g', github.run_id)
         ||
         github.run_id
       }}
