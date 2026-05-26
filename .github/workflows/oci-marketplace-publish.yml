@@ -292,7 +292,7 @@ jobs:
         case "${ALMA_VERSION}" in
           8.10) ALMA_CODE_NAME="Cerulean Leopard" ;;
           9.8) ALMA_CODE_NAME="Olive Jaguar" ;;
-          10.1) ALMA_CODE_NAME="Heliotrope Lion" ;;
+          10.2) ALMA_CODE_NAME="Lavender Lion" ;;
           *) echo "[Error] Unsupported AlmaLinux version: '${ALMA_VERSION}'"; exit 1 ;;
         esac
 
