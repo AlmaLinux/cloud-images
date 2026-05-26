@@ -182,7 +182,7 @@ The workflow maps versions to AlmaLinux code names (used in release notes links 
 | Version | Code Name |
 |---------|-----------|
 | 8.10 | Cerulean Leopard |
-| 9.7 | Moss Jungle Cat |
+| 9.8 | Olive Jaguar |
 | 10.1 | Heliotrope Lion |
 
 ## Supported Listings
