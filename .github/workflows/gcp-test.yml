@@ -137,6 +137,16 @@ jobs:
   test-gcp-initialtest:
     name: AlmaLinux ${{ inputs.image_override || format('{0} {1}', inputs.version_major, matrix.arch) }} Initial Tests
     needs: [init-data, build-cit]
+    # A skipped needed job skips its dependents by default, even without a
+    # custom `if`. build-cit is skipped whenever cit_git_repo is empty, which
+    # would otherwise skip this job (and everything that needs it). !cancelled()
+    # overrides that propagation; we then require init-data to have succeeded
+    # and accept build-cit as either succeeded or skipped (only a real build
+    # failure should block).
+    if: >-
+      !cancelled()
+      && needs.init-data.result == 'success'
+      && (needs.build-cit.result == 'success' || needs.build-cit.result == 'skipped')
     permissions:
       id-token: write
       contents: read
