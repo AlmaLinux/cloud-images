@@ -80,8 +80,11 @@ jobs:
 
   # Optional: build cloud-image-tests from a user-supplied git repo+ref and
   # publish a docker tarball as an artifact. All test jobs `needs:` this; when
-  # cit_git_repo is empty this job is skipped, which GitHub Actions treats as
-  # non-blocking (skipped != failed), so test jobs run as today.
+  # cit_git_repo is empty this job is skipped. A skipped need is only
+  # non-blocking for jobs with NO custom `if` (e.g. test-gcp-initialtest). Jobs
+  # with a custom `if` (the per-shape jobs) get an implicit success() prepended,
+  # which DOES treat a skipped need as failure — so those jobs use !cancelled()
+  # + an explicit needs.test-gcp-initialtest.result check instead.
   build-cit:
     name: Build cloud-image-tests from source
     if: inputs.cit_git_repo != ''
@@ -200,7 +203,16 @@ jobs:
       id-token: write
       contents: read
     runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/volume=100g/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
-    if: inputs.arch == 'ALL' || inputs.arch == 'x86_64'
+    # A custom job-level `if` makes GitHub implicitly prepend success(), which
+    # returns false when ANY needs job is skipped — and build-cit IS skipped
+    # whenever cit_git_repo is empty, which would wrongly skip every shape.
+    # The !cancelled() status function suppresses that implicit success(); we
+    # then gate explicitly on test-gcp-initialtest so a failed smoke test still
+    # blocks, while build-cit's skipped/success state is intentionally ignored.
+    if: >-
+      !cancelled()
+      && needs.test-gcp-initialtest.result == 'success'
+      && (inputs.arch == 'ALL' || inputs.arch == 'x86_64')
     timeout-minutes: 720
     strategy:
       fail-fast: false
@@ -344,7 +356,16 @@ jobs:
       id-token: write
       contents: read
     runs-on: ubuntu-24.04
-    if: inputs.arch == 'ALL' || inputs.arch == 'aarch64'
+    # A custom job-level `if` makes GitHub implicitly prepend success(), which
+    # returns false when ANY needs job is skipped — and build-cit IS skipped
+    # whenever cit_git_repo is empty, which would wrongly skip every shape.
+    # The !cancelled() status function suppresses that implicit success(); we
+    # then gate explicitly on test-gcp-initialtest so a failed smoke test still
+    # blocks, while build-cit's skipped/success state is intentionally ignored.
+    if: >-
+      !cancelled()
+      && needs.test-gcp-initialtest.result == 'success'
+      && (inputs.arch == 'ALL' || inputs.arch == 'aarch64')
     timeout-minutes: 720
     strategy:
       fail-fast: false
