@@ -132,7 +132,7 @@ jobs:
     steps:
     - name: Setup and start runner
       if: github.repository_owner != 'AlmaLinux'
-      uses: NextChapterSoftware/ec2-action-builder@v1.10
+      uses: unblocked/ec2-action-builder@v1.12
       with:
         github_token: ${{ secrets.GIT_HUB_TOKEN }}
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
