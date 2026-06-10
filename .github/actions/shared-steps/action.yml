@@ -196,7 +196,7 @@ runs:
       shell: bash
       run: |
         # Unload KVM modules
-        sudo lsmod | grep kvm
+        sudo lsmod | grep kvm || true
         sudo modprobe -r kvm_intel kvm || sudo modprobe -r kvm_amd kvm || true
 
     - name: Install VirtualBox from its repository
