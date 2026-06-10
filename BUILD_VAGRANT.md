@@ -253,6 +253,56 @@ Note: the `vagrant up` may not work on stock GH runner, so the VirtualBox *test*
 
 `hyperv-build.yml` hard-codes `run_test: 'false'` — see [Job layout → hyperv-build.yml](#hyperv-buildyml) above.
 
+## Debugging: watching the VirtualBox VM console
+
+When the `virtualbox-iso` Packer build hangs (most commonly at `Waiting for SSH to become available...`), seeing the VM's screen usually identifies the cause immediately — e.g. the VM parked at the GRUB menu because the `boot_command` keystrokes were typed before the menu was up.
+
+### One-off screenshot (no Extension Pack needed)
+
+While the VM is still running (e.g. mid-hang, before Packer tears it down), a screenshot can be taken on the build host with base VirtualBox:
+
+```bash
+sudo VBoxManage list runningvms
+sudo VBoxManage controlvm "<vm-name>" screenshotpng /tmp/screen.png
+```
+
+Note this only works during a live hang — once the `packer build` step fails, Packer stops and unregisters the VM, so there is nothing left to capture.
+
+### Interactive: VRDP (requires the Oracle Extension Pack)
+
+Packer starts each VM with VRDE enabled and prints the console address in the build log:
+
+```
+==> virtualbox-iso.almalinux_…: view the screen of the VM, connect via VRDP without a password to
+==> virtualbox-iso.almalinux_…: rdp://127.0.0.1:5932
+```
+
+That endpoint only works if the **Oracle VirtualBox Extension Pack** is installed on the build host — base VirtualBox has no RDP server, and with the pack missing the VM starts normally but nothing ever listens on the advertised port (the only symptom is a silent `Connection refused`).
+
+> **Licensing.** The Extension Pack is under Oracle's PUEL license: free for **personal and educational use only**. Organizational / CI use requires a commercial Oracle license — which is why the workflows do **not** install it, and why it must stay out of org-level automation. Installing it manually on your own debug runner for occasional personal use is a different situation; make your own call.
+
+Install (version must match the VirtualBox version exactly):
+
+```bash
+VER=$(VBoxManage --version | sed 's/r.*//')   # e.g. 7.1.18
+PACK="Oracle_VirtualBox_Extension_Pack-${VER}.vbox-extpack"
+curl -fsSLO "https://download.virtualbox.org/virtualbox/${VER}/${PACK}"
+echo y | sudo VBoxManage extpack install --replace "${PACK}"
+sudo VBoxManage list extpacks                  # must show 'Usable: true'
+```
+
+Notes:
+
+- VRDE loads at **VM start** — a VM already running when the pack was installed will not start listening; only the next build picks it up.
+- The VRDP server binds to the build host's loopback (`127.0.0.1:59xx`, port assigned per build). From a workstation, tunnel it over SSH and connect with any RDP client (no credentials — auth type is `null`):
+
+  ```bash
+  ssh -N -L 5932:127.0.0.1:5932 <user>@<build-host>
+  # then RDP to localhost:5932
+  ```
+
+- Find the current port on the host with `sudo VBoxManage showvminfo "<vm-name>" | grep VRDE`.
+
 ## S3 upload layout
 
 Mirrors the cloud-image workflows:
@@ -298,7 +348,7 @@ All uploaded objects are tagged `public=yes`. Downstream publishing to Vagrant C
 
 1. **Vagrant job sits in `Queued` forever** — the label on the manual runner doesn't match `matrix_sh` exactly. Double-check the `--labels` argument to `./config.sh` and that `--no-default-labels` was passed.
 2. **`vagrant up` fails with SSH timeout (libvirt/VirtualBox/VMware)** — known flake; re-run the job.
-3. The `packer build` for **VirtualBox** sits on **`Waiting for SSH to become available...`**, and then fails in an hour because of **`Timeout waiting for SSH.`**. That's a known issue. Re-run the job.
+3. The `packer build` for **VirtualBox** sits on **`Waiting for SSH to become available...`**, and then fails in an hour because of **`Timeout waiting for SSH.`**. That's a known issue. Re-run the job. To see what the VM is actually doing while it hangs, grab a screenshot or watch the console live — see [Debugging: watching the VirtualBox VM console](#debugging-watching-the-virtualbox-vm-console). A common root cause is the `boot_command` keystrokes landing before the GRUB menu is up on a slow host (fixed by the larger `boot_wait` default; can be raised further with `-var boot_wait=45s`).
 4. **VirtualBox or VMware build fails with "VT-x is disabled"** — KVM is still loaded. The workflow tries to unload `kvm_intel` / `kvm_amd` automatically; if another process is holding the modules open the unload is a no-op. Stop any nested VMs on the host and re-run.
 5. **VMware Install step fails with `No such file or directory` on the bundle tarball** — the VMware Workstation bundle isn't staged at `/actions-runner/_work/cloud-images/VMware-Workstation-Full-<ws_version>-<ws_build>.x86_64.bundle.tar`. Download it once (matching the `ws_version` / `ws_build` values at the top of the `Install VMware` step in [`.github/actions/shared-steps/action.yml`](.github/actions/shared-steps/action.yml)) and place it at that path on the runner.
 6. **`hyperv-build.yml` can't find the Packer template** — double-check the `version_major` input; Hyper-V builds only the variants listed in the table above.
