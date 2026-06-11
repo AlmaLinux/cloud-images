@@ -137,7 +137,7 @@ variable "boot_wait" {
   description = "Time to wait before typing boot command"
 
   type    = string
-  default = "10s"
+  default = "30s"
 }
 
 variable "cpus" {
