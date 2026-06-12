@@ -1,0 +1,277 @@
+name: "Azure: release built image to Compute Gallery"
+description: >
+  Converts the locally-built Azure .raw image to a fixed VHD, uploads it to
+  the Azure storage container, and creates Compute Gallery image-definition
+  version(s) via tools/azure_uploader.sh. Designed to run right after
+  ./.github/actions/shared-steps inside an Azure build job, consuming the
+  .raw file that build produced on this very runner - no S3 round-trip.
+  Writes a per-image manifest artifact consumed by the downstream test and
+  marketplace stages of the unified Azure workflow.
+
+inputs:
+  image_file:
+    description: "Path to the built .raw image on this runner (shared-steps env.IMAGE_FILE)"
+    required: true
+  variant:
+    description: "Build variant, e.g. 8, 9, 9-64k, 10, 10-64k, 10-kitten, 10-kitten-64k"
+    required: true
+  arch:
+    description: "Image architecture: x86_64 or aarch64"
+    required: true
+  community_gallery:
+    description: "Release to the Community (public) gallery when eligible (true/false)"
+    required: true
+    default: 'true'
+  notify_mattermost:
+    description: "Send notification to Mattermost (true/false)"
+    required: true
+    default: 'true'
+  AZURE_CLIENT_ID:
+    description: "Azure OIDC client id"
+    required: true
+  AZURE_TENANT_ID:
+    description: "Azure tenant id"
+    required: true
+  AZURE_SUBSCRIPTION_ID:
+    description: "Azure subscription id"
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: "Mattermost webhook URL (required when notify_mattermost is true)"
+    required: false
+    default: ''
+  MATTERMOST_CHANNEL:
+    description: "Mattermost channel (required when notify_mattermost is true)"
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install azure-cli if missing
+      shell: bash
+      run: |
+        # Install azure-cli if missing
+        #
+        # The x86_64 ubuntu24-full-x64 RunsOn image ships az. EL9 runners
+        # don't:
+        #   - x86_64: install from Microsoft's official RPM repo.
+        #   - aarch64: Microsoft publishes no aarch64 RPMs - install via
+        #     pip into an ISOLATED venv. A bare `pip install azure-cli`
+        #     into the system prefix can resolve against pre-existing
+        #     system site-packages and produce a CLI whose `az storage`
+        #     module crashes with "'NoneType' object is not iterable".
+        if command -v az >/dev/null 2>&1; then
+          echo "[Debug] azure-cli present: $(az version --query '\"azure-cli\"' --output tsv 2>/dev/null || az --version | head -1)"
+          exit 0
+        fi
+
+        if [ -f /etc/redhat-release ] && [ "$(uname -m)" = "x86_64" ]; then
+          echo "[Debug] azure-cli not found - installing from the Microsoft RPM repo"
+          sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+          sudo dnf -y -q install https://packages.microsoft.com/config/rhel/9.0/packages-microsoft-prod.rpm || true
+          sudo dnf -y -q install azure-cli
+        elif [ -f /etc/redhat-release ]; then
+          echo "[Debug] azure-cli not found - installing via pip into an isolated venv"
+          sudo dnf -y -q install python3-pip gcc python3-devel
+          sudo python3 -m venv /opt/azure-cli-venv
+          sudo /opt/azure-cli-venv/bin/pip install --quiet --upgrade pip
+          sudo /opt/azure-cli-venv/bin/pip install --quiet azure-cli
+          sudo ln -sf /opt/azure-cli-venv/bin/az /usr/local/bin/az
+        else
+          echo "[Debug] azure-cli not found - installing via Microsoft's apt script"
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+        fi
+
+        az --version | head -1
+        # Fail fast if the storage module is broken (the symptom of a
+        # poisoned dependency set) instead of dying mid-upload later.
+        az storage blob list --help >/dev/null
+        echo "[Debug] az storage module OK"
+
+    - name: Azure login
+      uses: azure/login@v3
+      with:
+        client-id: ${{ inputs.AZURE_CLIENT_ID }}
+        tenant-id: ${{ inputs.AZURE_TENANT_ID }}
+        subscription-id: ${{ inputs.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Prepare gallery release parameters
+      shell: bash
+      run: |
+        # Prepare gallery release parameters
+        image_file='${{ inputs.image_file }}'
+        variant='${{ inputs.variant }}'
+        arch='${{ inputs.arch }}'
+
+        test -f "${image_file}" || { echo "[Error] image file not found: ${image_file}"; exit 1; }
+
+        # Image type comes straight from the build inputs - no filename
+        # guessing needed (unlike the standalone azure-to-gallery.yml which
+        # starts from a bare URL).
+        case "${arch}" in
+          x86_64) image_type="default" ;;
+          aarch64)
+            image_type="arm64"
+            [[ "${variant}" == *-64k ]] && image_type="arm64-64k"
+            ;;
+          *) echo "[Error] Unknown architecture: ${arch}"; exit 1 ;;
+        esac
+
+        # Distribution version for azure_uploader.sh -d. Parse from the
+        # (self-produced, modern-format) filename:
+        #   AlmaLinux-9-Azure-9.8-20260526.0.x86_64.raw       -> 9.8
+        #   AlmaLinux-10-Azure-10.2-20260526.0-64k.aarch64.raw -> 10.2
+        #   AlmaLinux-Kitten-Azure-10-20260526.0.x86_64.raw   -> 10
+        base=$(basename "${image_file}")
+        regex='-([0-9]+\.?[0-9]*)-([0-9]{8,9}(\.[0-9])?).*\.(x86_64|aarch64)'
+        if [[ ${base} =~ ${regex} ]]; then
+          release_version="${BASH_REMATCH[1]}"
+          timestamp="${BASH_REMATCH[2]}"
+        else
+          echo "[Error] Could not parse '${base}' file name!"
+          exit 1
+        fi
+
+        # AlmaLinux release string for reporting
+        case "${release_version}" in
+          10) release_string="AlmaLinux Kitten OS ${release_version} ${arch}" ;;
+          *)  release_string="AlmaLinux OS ${release_version} ${arch}" ;;
+        esac
+
+        # Community gallery: AlmaLinux 10 and Kitten are not released to the
+        # Community Gallery (same rule as azure-to-gallery.yml). The uploader
+        # additionally self-enforces AL9 arm64-64k -> almalinux_ci.
+        gallery_opt=''
+        if [[ '${{ inputs.community_gallery }}' == 'true' && "${release_version}" != 10* ]]; then
+          gallery_opt='-g almalinux'
+        fi
+
+        # Kitten aarch64-64k has no Azure Marketplace plan - exclude it from
+        # the publish stage up front.
+        marketplace_eligible=true
+        [[ "${variant}" == *kitten* && "${image_type}" == "arm64-64k" ]] \
+          && marketplace_eligible=false
+
+        {
+          echo "GLR_IMAGE_FILE=${image_file}"
+          echo "GLR_IMAGE_BASENAME=${base}"
+          echo "GLR_RELEASE_VERSION=${release_version}"
+          echo "GLR_TIMESTAMP=${timestamp}"
+          echo "GLR_IMAGE_TYPE=${image_type}"
+          echo "GLR_RELEASE_STRING=${release_string}"
+          echo "GLR_GALLERY_OPT=${gallery_opt}"
+          echo "GLR_MARKETPLACE_ELIGIBLE=${marketplace_eligible}"
+        } >> "$GITHUB_ENV"
+
+        echo "[Debug] type=${image_type} version=${release_version} gallery_opt='${gallery_opt}' eligible=${marketplace_eligible}"
+
+    - name: Release the image to the Gallery
+      shell: bash
+      run: |
+        # Release the image to the Gallery
+        #
+        # Run azure_uploader.sh next to the .raw file so the converted .vhd
+        # lands on the same (large) volume. -f = perform, not dry-run.
+        workdir=$(dirname "${GLR_IMAGE_FILE}")
+
+        # The output directory and the .raw inside it are owned by root -
+        # packer runs under sudo in shared-steps. Take ownership so the
+        # uploader (running as the runner user) can resize the .raw in
+        # place, write the converted .vhd next to it, and upload it.
+        sudo chown -R "$(id -u):$(id -g)" "${workdir}"
+
+        cp -a "${GITHUB_WORKSPACE}/tools/azure_uploader.sh" "${workdir}/"
+        chmod +x "${workdir}/azure_uploader.sh"
+        cd "${workdir}"
+
+        ./azure_uploader.sh -f \
+          -d "${GLR_RELEASE_VERSION}" \
+          -t "${GLR_IMAGE_TYPE}" \
+          -i "$(basename "${GLR_IMAGE_FILE}")" \
+          ${GLR_GALLERY_OPT} \
+          |& tee ./azure_uploader.log
+
+        echo "GLR_LOG=${workdir}/azure_uploader.log" >> "$GITHUB_ENV"
+
+    - name: Collect gallery results, write manifest
+      shell: bash
+      run: |
+        # Collect gallery results, write manifest
+        test -f "${GLR_LOG}"
+
+        # VHD blob URL ("Image URI: https://...vhd")
+        blob_url=$(grep 'Image URI:' "${GLR_LOG}" | head -1 | sed -E 's/^Image URI: //')
+        [ -n "${blob_url}" ] || { echo "[Error] No 'Image URI:' in uploader log"; exit 1; }
+
+        # Image definition versions ("- Created: 'gallery/definition/version'")
+        mapfile -t created < <(grep -oE "Created: '[^']+'" "${GLR_LOG}" \
+                                 | sed -E "s/^Created: '(.+)'$/\1/" | sort -u)
+        [ "${#created[@]}" -gt 0 ] || { echo "[Error] No 'Created:' lines in uploader log"; exit 1; }
+
+        # Test path: one per image. Intel images create gen1 + gen2
+        # definitions - test only gen2. ARM images create a single gen2
+        # definition. AlmaLinux 10 x86_64 definitions carry no gen suffix.
+        test_path=''
+        for p in "${created[@]}"; do
+          [[ "${p}" == *-gen1/* ]] && continue
+          test_path="${p}"
+          break
+        done
+        [ -n "${test_path}" ] || test_path="${created[0]}"
+
+        image_key="${{ inputs.variant }}-${{ inputs.arch }}"
+
+        jq -n \
+          --arg image_key   "${image_key}" \
+          --arg image_file  "${GLR_IMAGE_BASENAME}" \
+          --arg variant     "${{ inputs.variant }}" \
+          --arg arch        "${{ inputs.arch }}" \
+          --arg image_type  "${GLR_IMAGE_TYPE}" \
+          --arg blob_url    "${blob_url}" \
+          --arg test_path   "${test_path}" \
+          --argjson created "$(printf '%s\n' "${created[@]}" | jq -R . | jq -s .)" \
+          --argjson eligible "${GLR_MARKETPLACE_ELIGIBLE}" \
+          '{image_key: $image_key, image_file: $image_file, variant: $variant,
+            arch: $arch, image_type: $image_type, blob_url: $blob_url,
+            test_path: $test_path, created_paths: $created,
+            marketplace_eligible: $eligible}' \
+          | tee "azure-manifest-${image_key}.json"
+
+        echo "GLR_MANIFEST=azure-manifest-${image_key}.json" >> "$GITHUB_ENV"
+        echo "GLR_BLOB_URL=${blob_url}" >> "$GITHUB_ENV"
+        {
+          echo 'GLR_CREATED_SUMMARY<<EOF'
+          printf -- "- Created: '%s'\n" "${created[@]}"
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+        # Job summary
+        {
+          echo "**${GLR_RELEASE_STRING}** \`${GLR_TIMESTAMP}\` released to Compute Gallery:"
+          echo "- Image file: ${GLR_IMAGE_BASENAME}"
+          echo "- Image URI: ${blob_url}"
+          printf -- "- Created: '%s'\n" "${created[@]}"
+          echo "- The Gallery is \"Community\": ${GLR_GALLERY_OPT:+✅}${GLR_GALLERY_OPT:-❌}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Store gallery manifest as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.GLR_MANIFEST }}
+        path: ${{ env.GLR_MANIFEST }}
+        if-no-files-found: error
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost == 'true' && inputs.MATTERMOST_WEBHOOK_URL != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.GLR_RELEASE_STRING }}** `${{ env.GLR_TIMESTAMP }}` Azure image, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - Image file: `${{ env.GLR_IMAGE_BASENAME }}`
+          - Image URI: ${{ env.GLR_BLOB_URL }}
+          ${{ env.GLR_CREATED_SUMMARY }}
+          - Released to Gallery: ✅
+          - The Gallery is "Community": ${{ env.GLR_GALLERY_OPT != '' && '✅' || '❌' }}

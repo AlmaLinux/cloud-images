@@ -1,0 +1,484 @@
+name: "Azure: Build, Release, Test, Publish"
+
+# Unified Azure pipeline: build the .raw images with Packer, release each
+# built image to the Compute Gallery directly from the build runner (no S3
+# round-trip), boot-test every gallery-released image, and publish every
+# image that passed its test to the Azure Marketplace.
+#
+# Stage gating:
+#   release_to_gallery=false  -> build-only run (gallery / test / publish skip)
+#   release_to_marketplace=false -> build + gallery + test (publish skips)
+#   submit_to_preview=true    -> only honored when release_to_marketplace=true
+#
+# Stage implementations live in composite actions:
+#   .github/actions/shared-steps            - Packer build (all clouds)
+#   .github/actions/azure-gallery-steps     - tools/azure_uploader.sh wrapper
+#   .github/actions/azure-test-steps        - gallery image boot test
+#   .github/actions/azure-marketplace-steps - Partner Center publish
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        date_time_stamp:
+          description: 'Custom date+time stamp, YYYYMMDDhhmmss'
+          required: false
+          default: ''
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+
+        self-hosted:
+          description: "Build aarch64 image on self-hosted runner"
+          required: true
+          type: boolean
+          default: true
+
+        store_as_artifact:
+          description: "Store images to the workflow Artifacts"
+          required: true
+          type: boolean
+          default: false
+
+        upload_to_s3:
+          description: "Upload to S3 Bucket"
+          required: true
+          type: boolean
+          default: true
+
+        release_to_gallery:
+          description: "Release to Compute Gallery (gates test and publish)"
+          required: true
+          type: boolean
+          default: true
+
+        community_gallery:
+          description: "Use Community gallery (AlmaLinux 10/Kitten always go Private)"
+          required: true
+          type: boolean
+          default: true
+
+        release_to_marketplace:
+          description: "Publish tested images to Marketplace as drafts"
+          required: true
+          type: boolean
+          default: true
+
+        submit_to_preview:
+          description: "Also submit drafts to Preview/certification"
+          required: true
+          type: boolean
+          default: false
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  init-data:
+    name: Initialize common data
+    runs-on: ubuntu-24.04
+    outputs:
+      time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
+      date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+    steps:
+      - name: Date+time stamp
+        id: date-time-stamp
+        run: |
+          # date+time stamp, YYYYMMDDhhmmss
+          if [ "${{ inputs.date_time_stamp }}" != "" ]; then
+            date_time_stamp="${{ inputs.date_time_stamp }}"
+          else
+            date_time_stamp=$(date -u '+%Y%m%d%H%M%S')
+          fi
+          echo "time_stamp=${date_time_stamp}" >> $GITHUB_OUTPUT
+
+          # date stamp, YYYYMMDD
+          date_stamp=${date_time_stamp:0:-6}
+          echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+  build-gh-hosted:
+    name: ${{ inputs.version_major }} azure-x86_64 image
+    permissions:
+      id-token: write
+      contents: read
+    needs: [init-data]
+    # use runs-on runners if within the almalinux org, otherwise GH runners.
+    # volume=80g: the gallery stage converts the 30 GiB .raw to a fixed VHD on
+    # the same volume, roughly doubling the image footprint - leave headroom.
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=r8i.2xlarge/image=ubuntu24-full-x64/volume=80g/nested-virt', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ inputs.version_major }} azure-x86_64 image
+        with:
+          type: azure
+          variant: ${{ inputs.version_major }}
+          arch: x86_64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/azure-gallery-steps
+        name: Release ${{ inputs.version_major }} azure-x86_64 image to Gallery
+        if: ${{ inputs.release_to_gallery }}
+        with:
+          image_file: ${{ env.IMAGE_FILE }}
+          variant: ${{ inputs.version_major }}
+          arch: x86_64
+          community_gallery: ${{ inputs.community_gallery }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
+  # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
+  start-self-hosted-runner:
+    name: ${{ matrix.variant }} azure-aarch64 runner
+    if: ${{ inputs.self-hosted }}
+    runs-on: ubuntu-24.04
+    needs: [init-data]
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: >-
+          ${{ fromJSON(
+            ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' )
+              && format('["{0}", "{0}-64k"]', inputs.version_major)
+              || format('["{0}"]', inputs.version_major)
+          ) }}
+
+    steps:
+    - name: Setup and start runner
+      if: github.repository_owner != 'AlmaLinux'
+      uses: unblocked/ec2-action-builder@v1.12
+      with:
+        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ vars.AWS_REGION }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_AARCH64 }}
+
+        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }} # Availability Zones list for 'a1.metal' Instance Type
+        ec2_instance_type: a1.metal
+
+        ec2_root_disk_size_gb: "80"         # the gallery stage needs room for the raw image + its fixed-VHD conversion
+        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
+        ec2_instance_ttl: 30                # Optional (default is 60 minutes)
+        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
+        ec2_instance_tags: >                # Required for IAM role resource permission scoping
+          [
+            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
+          ]
+
+  build-self-hosted:
+    name: ${{ matrix.variant }} azure-aarch64 image
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.self-hosted }}
+    needs: [init-data, start-self-hosted-runner]
+    # If almalinux org, use RunsOn with almalinux-9-aarch64 on a1.metal.
+    # volume=80g (was 40g in azure-build.yml): the gallery stage converts the
+    # .raw to a fixed VHD on the same volume.
+    #
+    # Otherwise use AWS EC2 Self-Hosted aarch64 runner set up with the 'start-self-hosted-runner' job above
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=80g', github.run_id)
+        ||
+        github.run_id
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: >-
+          ${{ fromJSON(
+            ( inputs.version_major == '9' || inputs.version_major == '10' || inputs.version_major == '10-kitten' )
+              && format('["{0}", "{0}-64k"]', inputs.version_major)
+              || format('["{0}"]', inputs.version_major)
+          ) }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ matrix.variant }} azure-aarch64 image
+        with:
+          type: azure
+          variant: ${{ matrix.variant }}
+          arch: aarch64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: aws-ec2
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/azure-gallery-steps
+        name: Release ${{ matrix.variant }} azure-aarch64 image to Gallery
+        if: ${{ inputs.release_to_gallery }}
+        with:
+          image_file: ${{ env.IMAGE_FILE }}
+          variant: ${{ matrix.variant }}
+          arch: aarch64
+          community_gallery: ${{ inputs.community_gallery }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  # Aggregate the per-image manifests the gallery stage produced. Matrix-job
+  # outputs collapse (last writer wins), so each build leg uploads an
+  # azure-manifest-<variant>-<arch>.json artifact instead, and this job merges
+  # them into the JSON matrices the test and publish stages fan out over.
+  collect-images:
+    name: Collect released images
+    runs-on: ubuntu-24.04
+    needs: [build-gh-hosted, build-self-hosted]
+    # !cancelled(): aggregate whatever succeeded even when a sibling build
+    # leg failed or the aarch64 jobs were skipped (self-hosted=false).
+    if: ${{ !cancelled() && inputs.release_to_gallery }}
+    outputs:
+      test_matrix: ${{ steps.aggregate.outputs.test_matrix }}
+      test_count: ${{ steps.aggregate.outputs.test_count }}
+    steps:
+      - name: Download gallery manifests
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: azure-manifest-*
+          merge-multiple: true
+          path: manifests
+
+      - name: Aggregate manifests
+        id: aggregate
+        run: |
+          # Aggregate manifests
+          mkdir -p manifests
+          shopt -s nullglob
+          files=(manifests/*.json)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "[Warning] No gallery manifests found - nothing to test or publish."
+            echo "test_matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "test_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          test_matrix=$(jq -s -c \
+            '[ .[] | {image_key, image_file, test_path, blob_url, eligible: .marketplace_eligible} ]' \
+            "${files[@]}")
+
+          echo "[Debug] test matrix:"
+          echo "${test_matrix}" | jq '.'
+
+          echo "test_matrix=${test_matrix}" >> "$GITHUB_OUTPUT"
+          echo "test_count=$(echo "${test_matrix}" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+  test-image:
+    name: Test ${{ matrix.image_key }} image
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    needs: [collect-images]
+    if: ${{ !cancelled() && needs.collect-images.result == 'success' && fromJSON(needs.collect-images.outputs.test_count) > 0 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.collect-images.outputs.test_matrix) }}
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/azure-test-steps
+        name: Test ${{ matrix.test_path }}
+        with:
+          compute_gallery_path: ${{ matrix.test_path }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+      # Default `if: success()` - the record exists only when the test leg
+      # passed, which is what gates this image into the publish stage.
+      - name: Record passed test
+        run: |
+          # Record passed test
+          jq -n \
+            --arg image_key  '${{ matrix.image_key }}' \
+            --arg image_file '${{ matrix.image_file }}' \
+            --arg blob_url   '${{ matrix.blob_url }}' \
+            --argjson eligible ${{ matrix.eligible }} \
+            '{image_key: $image_key, image_file: $image_file,
+              blob_url: $blob_url, eligible: $eligible}' \
+            | tee "azure-test-passed-${{ matrix.image_key }}.json"
+
+      - name: Store passed-test record as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: azure-test-passed-${{ matrix.image_key }}
+          path: azure-test-passed-${{ matrix.image_key }}.json
+          if-no-files-found: error
+
+  # Build the publish matrix from the per-image passed-test records: publish
+  # every image that passed its test (and has a Marketplace plan), even when
+  # a sibling image's test failed.
+  collect-passed:
+    name: Collect passed images
+    runs-on: ubuntu-24.04
+    needs: [test-image]
+    if: ${{ !cancelled() && inputs.release_to_marketplace && needs.test-image.result != 'skipped' }}
+    outputs:
+      publish_matrix: ${{ steps.aggregate.outputs.publish_matrix }}
+      publish_count: ${{ steps.aggregate.outputs.publish_count }}
+    steps:
+      - name: Download passed-test records
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: azure-test-passed-*
+          merge-multiple: true
+          path: passed
+
+      - name: Aggregate passed-test records
+        id: aggregate
+        run: |
+          # Aggregate passed-test records
+          mkdir -p passed
+          shopt -s nullglob
+          files=(passed/*.json)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "[Warning] No image passed its test - nothing to publish."
+            echo "publish_matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "publish_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          publish_matrix=$(jq -s -c \
+            '[ .[] | select(.eligible == true) | {image_key, image_file, blob_url} ]' \
+            "${files[@]}")
+
+          skipped=$(jq -s -c '[ .[] | select(.eligible != true) | .image_key ]' "${files[@]}")
+          if [ "$(echo "${skipped}" | jq 'length')" -gt 0 ]; then
+            echo "[Info] Skipping marketplace publish (no Marketplace plan): $(echo "${skipped}" | jq -r 'join(", ")')"
+          fi
+
+          echo "[Debug] publish matrix:"
+          echo "${publish_matrix}" | jq '.'
+
+          echo "publish_matrix=${publish_matrix}" >> "$GITHUB_OUTPUT"
+          echo "publish_count=$(echo "${publish_matrix}" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+  publish-image:
+    name: Publish ${{ matrix.image_key }} image
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    needs: [collect-passed]
+    if: ${{ !cancelled() && needs.collect-passed.result == 'success' && fromJSON(needs.collect-passed.outputs.publish_count) > 0 }}
+    strategy:
+      fail-fast: false
+      # Serialise: aarch64 and aarch64-64k share the almalinux-arm offer, and
+      # parallel Product Ingestion configure calls collide on the offer's
+      # draft revision.
+      max-parallel: 1
+      matrix:
+        include: ${{ fromJSON(needs.collect-passed.outputs.publish_matrix) }}
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/azure-marketplace-steps
+        name: Publish ${{ matrix.image_file }} to Marketplace
+        with:
+          image_blob_url: ${{ matrix.blob_url }}
+          release_to_marketplace: 'true'
+          submit_to_preview: ${{ inputs.submit_to_preview }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  pipeline-summary:
+    name: Pipeline summary
+    runs-on: ubuntu-24.04
+    needs: [build-gh-hosted, build-self-hosted, collect-images, test-image, collect-passed, publish-image]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Print pipeline summary
+        run: |
+          # Print pipeline summary
+          {
+            echo "## Azure: Build, Release, Test, Publish"
+            echo ""
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            echo "| Build x86_64 | ${{ needs.build-gh-hosted.result }} |"
+            echo "| Build aarch64 | ${{ needs.build-self-hosted.result }} |"
+            echo "| Release to Gallery | ${{ inputs.release_to_gallery && needs.collect-images.result || 'disabled' }} |"
+            echo "| Test (${{ needs.collect-images.outputs.test_count || 0 }} image(s)) | ${{ needs.test-image.result }} |"
+            echo "| Publish to Marketplace (${{ needs.collect-passed.outputs.publish_count || 0 }} image(s)) | ${{ inputs.release_to_marketplace && needs.publish-image.result || 'disabled' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
