@@ -204,9 +204,20 @@ jobs:
 
     - name: Launch test VM
       run: |
-        VM_NAME="azure-test-${ALMA_VERSION}-${DATESTAMP_ITERATION}-${ALMA_ARCH}-${GITHUB_RUN_ID}"
+        # The name must be unique per matrix leg within the run: version +
+        # datestamp + arch is NOT enough (aarch64 and aarch64-64k images
+        # share all three and would race to create identically-named
+        # VM/VNet/subnet resources -> ARM Conflict). The image definition
+        # is unique per leg, so build the name from it. Longest case
+        # ("azure-test-almalinux-ci-kitten-10-arm64-64k-gen2-<run id>")
+        # stays within the 64-character Linux VM name limit.
+        VM_NAME="azure-test-${VM_IMAGE_DEFINITION}-${GITHUB_RUN_ID}"
         echo "VM Name: ${VM_NAME}"
 
+        # Explicit per-VM VNet/subnet names: without --vnet-name, az vm
+        # create REUSES any existing VNet in the resource group, and
+        # parallel runs (or matrix legs) then race on the same VNet/subnet
+        # writes -> ARM DeploymentFailed / Conflict ("concurrent request").
         VM_ID=$(az vm create \
           --resource-group "${RESOURCE_GROUP}" \
           --location "${AZURE_LOCATION}" \
@@ -218,6 +229,8 @@ jobs:
           --public-ip-sku Standard \
           --os-disk-size-gb 100 \
           --nsg-rule SSH \
+          --vnet-name "${VM_NAME}VNet" \
+          --subnet "${VM_NAME}Subnet" \
           --query id --output tsv)
 
         echo "VM ID: ${VM_ID}"
@@ -359,8 +372,10 @@ jobs:
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}VMNic" || true
 
-        # 3. Public IP, NSG, and OS disk are now unreferenced and can be
-        #    deleted concurrently.
+        # 3. Public IP, NSG, OS disk, and the per-VM VNet are now
+        #    unreferenced and can be deleted concurrently. (The VNet is
+        #    per-VM - created explicitly at launch to keep parallel test
+        #    legs from contending on a shared VNet.)
         az network public-ip delete \
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}PublicIP" \
@@ -370,6 +385,10 @@ jobs:
           --resource-group "${RESOURCE_GROUP}" \
           --name "${VM_NAME}NSG" \
           --no-wait || true
+
+        az network vnet delete \
+          --resource-group "${RESOURCE_GROUP}" \
+          --name "${VM_NAME}VNet" || true
 
         if [ -n "${OS_DISK}" ]; then
           az disk delete \
