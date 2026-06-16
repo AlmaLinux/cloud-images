@@ -257,7 +257,7 @@ jobs:
         oci compute instance terminate \
           --instance-id "${INSTANCE_OCID}" \
           --force \
-          --wait-for-state TERMINATED
+          --wait-for-state SUCCEEDED
 
     - name: Send notification to Mattermost
       uses: mattermost/action-mattermost-notify@master
