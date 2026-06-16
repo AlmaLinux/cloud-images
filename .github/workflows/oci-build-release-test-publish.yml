@@ -1,0 +1,468 @@
+name: "OCI: Build, Release to Compute, Test, Publish to Listings"
+
+# Unified OCI pipeline: build the qcow2 images with Packer, create a
+# Compute Custom Image from each one directly on the build runner (upload to
+# Object Storage + import + capability schema + shape compatibility, no S3
+# round-trip), boot-test every Compute Image, and publish every image that
+# passed its test to the Oracle Cloud Marketplace as a draft revision.
+#
+# Stage gating:
+#   create_compute_image=false   -> build-only run (compute-image / test / publish skip)
+#   release_to_marketplace=false -> build + compute-image + test (publish skips)
+#
+# Test runs for every Compute Image; there is no separate run_test input.
+# Publishing covers exactly the images that passed their test - a failed
+# sibling test does not block the images that passed.
+#
+# Stage implementations live in composite actions:
+#   .github/actions/shared-steps             - Packer build (all clouds)
+#   .github/actions/oci-compute-image-steps  - Object Storage upload + image import
+#   .github/actions/oci-test-steps           - Compute Image boot test
+#   .github/actions/oci-marketplace-steps    - Marketplace draft publish
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        date_time_stamp:
+          description: 'Custom date+time stamp, YYYYMMDDhhmmss'
+          required: false
+          default: ''
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10
+            - 9
+            - 8
+
+        self-hosted:
+          description: "Build aarch64 image on self-hosted runner"
+          required: true
+          type: boolean
+          default: true
+
+        store_as_artifact:
+          description: "Store images to the workflow Artifacts"
+          required: true
+          type: boolean
+          default: false
+
+        upload_to_s3:
+          description: "Upload to S3 Bucket"
+          required: true
+          type: boolean
+          default: true
+
+        create_compute_image:
+          description: "Create OCI Compute Image (gates test and publish)"
+          required: true
+          type: boolean
+          default: true
+
+        release_to_marketplace:
+          description: "Release the image to Marketplace listing"
+          required: true
+          type: boolean
+          default: true
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  init-data:
+    name: Initialize common data
+    runs-on: ubuntu-24.04
+    outputs:
+      time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
+      date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+    steps:
+      - name: Date+time stamp
+        id: date-time-stamp
+        run: |
+          # date+time stamp, YYYYMMDDhhmmss
+          if [ "${{ inputs.date_time_stamp }}" != "" ]; then
+            date_time_stamp="${{ inputs.date_time_stamp }}"
+          else
+            date_time_stamp=$(date -u '+%Y%m%d%H%M%S')
+          fi
+          echo "time_stamp=${date_time_stamp}" >> $GITHUB_OUTPUT
+
+          # date stamp, YYYYMMDD
+          date_stamp=${date_time_stamp:0:-6}
+          echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+  build-gh-hosted:
+    name: ${{ inputs.version_major }} oci-x86_64 image
+    permissions:
+      id-token: write
+      contents: read
+    needs: [init-data]
+    # use runs-on runners if within the almalinux org, otherwise GH runners
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ inputs.version_major }} oci-x86_64 image
+        with:
+          type: oci
+          variant: ${{ inputs.version_major }}
+          arch: x86_64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/oci-compute-image-steps
+        name: Create ${{ inputs.version_major }} oci-x86_64 Compute Image
+        if: ${{ inputs.create_compute_image }}
+        with:
+          arch: x86_64
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_OBJECT_STORAGE_BUCKET: ${{ vars.OCI_OBJECT_STORAGE_BUCKET }}
+          OCI_OBJECT_STORAGE_NAMESPACE: ${{ secrets.OCI_OBJECT_STORAGE_NAMESPACE }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
+  # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
+  start-self-hosted-runner:
+    name: ${{ inputs.version_major }} oci-aarch64 runner
+    if: ${{ inputs.self-hosted }}
+    runs-on: ubuntu-24.04
+    needs: [init-data]
+
+    steps:
+    - name: Setup and start runner
+      if: github.repository_owner != 'AlmaLinux'
+      uses: unblocked/ec2-action-builder@v1.12
+      with:
+        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ vars.AWS_REGION }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_AARCH64 }}
+
+        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }} # Availability Zones list for 'a1.metal' Instance Type
+        ec2_instance_type: a1.metal
+
+        ec2_root_disk_size_gb: "16"         # override default size which is too small for actions and tests stuff
+        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
+        ec2_instance_ttl: 30                # Optional (default is 60 minutes)
+        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
+        ec2_instance_tags: >                # Required for IAM role resource permission scoping
+          [
+            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
+          ]
+
+  build-self-hosted:
+    name: ${{ inputs.version_major }} oci-aarch64 image
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.self-hosted }}
+    needs: [init-data, start-self-hosted-runner]
+    # If almalinux org, use RunsOn with almalinux-9-aarch64 on a1.metal
+    #
+    # Otherwise use AWS EC2 Self-Hosted aarch64 runner set up with the 'start-self-hosted-runner' job above
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=40g', github.run_id)
+        ||
+        github.run_id
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ inputs.version_major }} oci-aarch64 image
+        with:
+          type: oci
+          variant: ${{ inputs.version_major }}
+          arch: aarch64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: 'false'
+          runner: aws-ec2
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/oci-compute-image-steps
+        name: Create ${{ inputs.version_major }} oci-aarch64 Compute Image
+        if: ${{ inputs.create_compute_image }}
+        with:
+          arch: aarch64
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_OBJECT_STORAGE_BUCKET: ${{ vars.OCI_OBJECT_STORAGE_BUCKET }}
+          OCI_OBJECT_STORAGE_NAMESPACE: ${{ secrets.OCI_OBJECT_STORAGE_NAMESPACE }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  # Aggregate the per-image manifests the compute-image stage produced.
+  # Matrix-job outputs collapse (last writer wins), so each build leg uploads
+  # an oci-manifest-<arch>.json artifact instead, and this job merges them
+  # into the minimal JSON matrix the test stage fans out over (the full
+  # manifest is carried forward as the passed-test artifact).
+  collect-images:
+    name: Collect Compute Images
+    runs-on: ubuntu-24.04
+    needs: [build-gh-hosted, build-self-hosted]
+    # !cancelled(): aggregate whatever succeeded even when a sibling build
+    # leg failed or the aarch64 jobs were skipped (self-hosted=false).
+    if: ${{ !cancelled() && inputs.create_compute_image }}
+    outputs:
+      test_matrix: ${{ steps.aggregate.outputs.test_matrix }}
+      test_count: ${{ steps.aggregate.outputs.test_count }}
+    steps:
+      - name: Download compute-image manifests
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: oci-manifest-*
+          merge-multiple: true
+          path: manifests
+
+      - name: Aggregate manifests
+        id: aggregate
+        run: |
+          # Aggregate manifests
+          mkdir -p manifests
+          shopt -s nullglob
+          files=(manifests/*.json)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "[Warning] No compute-image manifests found - nothing to test or publish."
+            echo "test_matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "test_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Minimal matrix: just what the test stage needs to launch + name.
+          # The full manifest is re-uploaded as the passed-test record.
+          test_matrix=$(jq -s -c \
+            '[ .[] | {image_key, compute_image_ocid} ]' \
+            "${files[@]}")
+
+          echo "[Debug] test matrix:"
+          echo "${test_matrix}" | jq '.'
+
+          echo "test_matrix=${test_matrix}" >> "$GITHUB_OUTPUT"
+          echo "test_count=$(echo "${test_matrix}" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+  test-image:
+    name: Test ${{ matrix.image_key }} image
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    needs: [collect-images]
+    if: ${{ !cancelled() && needs.collect-images.result == 'success' && fromJSON(needs.collect-images.outputs.test_count) > 0 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.collect-images.outputs.test_matrix) }}
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/oci-test-steps
+        name: Test ${{ matrix.compute_image_ocid }}
+        with:
+          image_ocid: ${{ matrix.compute_image_ocid }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+      # Default `if: success()` - this runs only when the test leg passed,
+      # which is what gates this image into the publish stage. Carry the full
+      # manifest forward unchanged as the passed-test record.
+      - name: Fetch manifest for passed image
+        uses: actions/download-artifact@v7
+        with:
+          name: oci-manifest-${{ matrix.image_key }}.json
+          path: passed
+
+      - name: Record passed test
+        run: |
+          # Record passed test (full manifest, renamed for the publish stage)
+          cp "passed/oci-manifest-${{ matrix.image_key }}.json" \
+             "oci-test-passed-${{ matrix.image_key }}.json"
+          cat "oci-test-passed-${{ matrix.image_key }}.json"
+
+      - name: Store passed-test record as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: oci-test-passed-${{ matrix.image_key }}
+          path: oci-test-passed-${{ matrix.image_key }}.json
+          if-no-files-found: error
+
+  # Build the publish matrix from the per-image passed-test records: publish
+  # every image that passed its test, even when a sibling image's test failed.
+  collect-passed:
+    name: Collect passed images
+    runs-on: ubuntu-24.04
+    needs: [test-image]
+    if: ${{ !cancelled() && inputs.release_to_marketplace && needs.test-image.result != 'skipped' }}
+    outputs:
+      publish_matrix: ${{ steps.aggregate.outputs.publish_matrix }}
+      publish_count: ${{ steps.aggregate.outputs.publish_count }}
+    steps:
+      - name: Download passed-test records
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: oci-test-passed-*
+          merge-multiple: true
+          path: passed
+
+      - name: Aggregate passed-test records
+        id: aggregate
+        run: |
+          # Aggregate passed-test records
+          mkdir -p passed
+          shopt -s nullglob
+          files=(passed/*.json)
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "[Warning] No image passed its test - nothing to publish."
+            echo "publish_matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "publish_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The full manifest carries every field the marketplace stage needs.
+          publish_matrix=$(jq -s -c '.' "${files[@]}")
+
+          echo "[Debug] publish matrix:"
+          echo "${publish_matrix}" | jq '.'
+
+          echo "publish_matrix=${publish_matrix}" >> "$GITHUB_OUTPUT"
+          echo "publish_count=$(echo "${publish_matrix}" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+  publish-image:
+    name: Publish ${{ matrix.image_key }} image
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    needs: [collect-passed]
+    if: ${{ !cancelled() && needs.collect-passed.result == 'success' && fromJSON(needs.collect-passed.outputs.publish_count) > 0 }}
+    strategy:
+      fail-fast: false
+      # Parallel: each arch publishes to its own listing
+      # ("AlmaLinux OS <major> (<arch>)"), so draft revisions never collide.
+      matrix:
+        include: ${{ fromJSON(needs.collect-passed.outputs.publish_matrix) }}
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/oci-marketplace-steps
+        name: Publish ${{ matrix.custom_image_name }} to Marketplace
+        with:
+          compute_image_ocid: ${{ matrix.compute_image_ocid }}
+          custom_image_name: ${{ matrix.custom_image_name }}
+          object_name: ${{ matrix.object_name }}
+          alma_major: ${{ matrix.alma_major }}
+          alma_version: ${{ matrix.alma_version }}
+          alma_date: ${{ matrix.alma_date }}
+          alma_release: ${{ matrix.alma_release }}
+          alma_code_name: ${{ matrix.alma_code_name }}
+          alma_arch: ${{ matrix.arch }}
+          display_arch: ${{ matrix.display_arch }}
+          image_display_name: ${{ matrix.image_display_name }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          OCI_CLI_REGION: ${{ vars.OCI_CLI_REGION }}
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  pipeline-summary:
+    name: Pipeline summary
+    runs-on: ubuntu-24.04
+    needs: [build-gh-hosted, build-self-hosted, collect-images, test-image, collect-passed, publish-image]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Print pipeline summary
+        run: |
+          # Print pipeline summary
+          {
+            echo "## OCI: Build, Release to Compute, Test, Publish to Listings"
+            echo ""
+            echo "| Stage | Result |"
+            echo "|---|---|"
+            echo "| Build x86_64 | ${{ needs.build-gh-hosted.result }} |"
+            echo "| Build aarch64 | ${{ needs.build-self-hosted.result }} |"
+            echo "| Create Compute Image | ${{ inputs.create_compute_image && needs.collect-images.result || 'disabled' }} |"
+            echo "| Test (${{ needs.collect-images.outputs.test_count || 0 }} image(s)) | ${{ needs.test-image.result }} |"
+            echo "| Publish to Marketplace (${{ needs.collect-passed.outputs.publish_count || 0 }} image(s)) | ${{ inputs.release_to_marketplace && needs.publish-image.result || 'disabled' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

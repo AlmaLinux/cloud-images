@@ -1,0 +1,652 @@
+name: "OCI: publish to Marketplace"
+description: >
+  Wrap an already-imported OCI Compute Custom Image into a Marketplace
+  Artifact, then clone the live listing revision into a new draft, update
+  its version details, add the package, and submit it for Oracle review.
+  Extracted from the marketplace steps of
+  .github/workflows/oci-marketplace-publish.yml; takes the compute-image
+  identity from the build stage's manifest instead of resolving it from a
+  source OCID/URL.
+
+inputs:
+  compute_image_ocid:
+    description: "Compute Image OCID to publish"
+    required: true
+  custom_image_name:
+    description: "Compute Custom Image display name"
+    required: true
+  object_name:
+    description: "Object Storage path of the uploaded qcow2"
+    required: false
+    default: ''
+  alma_major:
+    description: "AlmaLinux major version (8 / 9 / 10)"
+    required: true
+  alma_version:
+    description: "AlmaLinux version (e.g. 10.1)"
+    required: true
+  alma_date:
+    description: "Build datestamp (e.g. 20260502.0)"
+    required: true
+  alma_release:
+    description: "Release timestamp"
+    required: true
+  alma_code_name:
+    description: "AlmaLinux code name"
+    required: true
+  alma_arch:
+    description: "Architecture (x86_64 / aarch64)"
+    required: true
+  display_arch:
+    description: "Display architecture (x86_64 / AArch64)"
+    required: true
+  image_display_name:
+    description: "Human-readable image name for notifications"
+    required: true
+  notify_mattermost:
+    description: "Send notification to Mattermost (true/false)"
+    required: true
+    default: 'true'
+  OCI_CLI_USER:
+    description: "OCI CLI user OCID"
+    required: true
+  OCI_CLI_TENANCY:
+    description: "OCI CLI tenancy OCID"
+    required: true
+  OCI_CLI_FINGERPRINT:
+    description: "OCI CLI API key fingerprint"
+    required: true
+  OCI_CLI_KEY_CONTENT:
+    description: "OCI CLI API private key (PEM)"
+    required: true
+  OCI_CLI_REGION:
+    description: "OCI region"
+    required: true
+  OCI_COMPARTMENT_ID:
+    description: "OCI compartment OCID"
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: "Mattermost webhook URL"
+    required: false
+    default: ''
+  MATTERMOST_CHANNEL:
+    description: "Mattermost channel"
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set OCI CLI environment
+      shell: bash
+      run: |
+        # oci reads auth from the environment; composites can't use the
+        # secrets/vars contexts, so export the inputs to $GITHUB_ENV once.
+        # The marketplace step bodies reference these via ${{ env.* }}.
+        {
+          echo "OCI_CLI_USER=${{ inputs.OCI_CLI_USER }}"
+          echo "OCI_CLI_TENANCY=${{ inputs.OCI_CLI_TENANCY }}"
+          echo "OCI_CLI_FINGERPRINT=${{ inputs.OCI_CLI_FINGERPRINT }}"
+          echo "OCI_CLI_REGION=${{ inputs.OCI_CLI_REGION }}"
+          echo "PYTHONWARNINGS=ignore"
+          echo "OCI_PUBLISHER_BASE_URL=https://cloud.oracle.com/publisher"
+          echo "OCI_COMPUTE_BASE_URL=https://cloud.oracle.com/compute"
+          echo "IMAGE_OCID=${{ inputs.compute_image_ocid }}"
+          echo "CUSTOM_IMAGE_NAME=${{ inputs.custom_image_name }}"
+          echo "OBJECT_NAME=${{ inputs.object_name }}"
+          echo "ALMA_MAJOR=${{ inputs.alma_major }}"
+          echo "ALMA_VERSION=${{ inputs.alma_version }}"
+          echo "ALMA_DATE=${{ inputs.alma_date }}"
+          echo "ALMA_RELEASE=${{ inputs.alma_release }}"
+          echo "ALMA_CODE_NAME=${{ inputs.alma_code_name }}"
+          echo "ALMA_ARCH=${{ inputs.alma_arch }}"
+          echo "DISPLAY_ARCH=${{ inputs.display_arch }}"
+          echo "IMAGE_DISPLAY_NAME=${{ inputs.image_display_name }}"
+        } >> "$GITHUB_ENV"
+        {
+          echo "OCI_CLI_KEY_CONTENT<<__OCI_KEY_EOF__"
+          echo "${{ inputs.OCI_CLI_KEY_CONTENT }}"
+          echo "__OCI_KEY_EOF__"
+        } >> "$GITHUB_ENV"
+
+    - name: Install OCI CLI and dependencies
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq
+
+        curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
+        chmod +x install.sh
+        ./install.sh --accept-all-defaults
+        echo "$HOME/bin" >> "$GITHUB_PATH"
+
+    - name: Configure OCI CLI
+      shell: bash
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ inputs.OCI_CLI_KEY_CONTENT }}" > ~/.oci/key.pem
+        chmod 600 ~/.oci/key.pem
+        "$HOME/bin/oci" --version
+
+    - name: Create the new Artifact
+      shell: bash
+      run: |
+        # Get the image shape compatibility entries (already configured correctly
+        # by the compute-image stage). Include memory and OCPU constraints —
+        # required for Flex shapes.
+        oci compute image-shape-compatibility-entry list \
+          --image-id ${{ env.IMAGE_OCID }} \
+          --all \
+        | jq --arg img "${{ env.IMAGE_OCID }}" '{
+            sourceImageId: $img,
+            isSnapshotAllowed: true,
+            username: "opc",
+            imageShapeCompatibilityEntries: [
+              .data[] |
+              select(.shape | endswith(".Generic") | not) |
+              {shape: .shape} +
+              (if ."memory-constraints" then {
+                memoryConstraints: {
+                  minInGBs: ."memory-constraints"."min-in-gbs",
+                  maxInGBs: ."memory-constraints"."max-in-gbs"
+                }
+              } else {} end) +
+              (if ."ocpu-constraints" then {
+                ocpuConstraints: {
+                  min: ."ocpu-constraints".min,
+                  max: ."ocpu-constraints".max
+                }
+              } else {} end)
+            ]
+          }' > /tmp/artifact_payload.json
+
+        echo "[Debug] Artifact payload:"
+        jq '.' /tmp/artifact_payload.json
+
+        COMPARTMENT_ID="${{ inputs.OCI_COMPARTMENT_ID }}"
+        REQUEST_ID=$(oci marketplace-publisher artifact \
+          create-artifact-create-machine-image-artifact-details \
+          --compartment-id ${COMPARTMENT_ID} \
+          --display-name '${{ env.CUSTOM_IMAGE_NAME }}' \
+          --machine-image file:///tmp/artifact_payload.json \
+          --query '"opc-work-request-id"' \
+          --raw-output)
+        echo "[Debug] Request ID: ${REQUEST_ID}"
+
+        ARTIFACT_ID=$(oci marketplace-publisher work-request get \
+          --work-request-id ${REQUEST_ID} \
+          | jq -r '.data.resources[0].identifier' 2>/dev/null || echo "ERROR")
+
+        if [ -z "${ARTIFACT_ID}" ] || [ "${ARTIFACT_ID}" = "null" ] || [ "${ARTIFACT_ID}" = "ERROR" ]; then
+          echo "[Error] Failed to extract Artifact ID from work request"
+          exit 1
+        fi
+
+        echo "ARTIFACT_ID=${ARTIFACT_ID}" >> $GITHUB_ENV
+        echo "[Debug] Artifact ID: ${ARTIFACT_ID}"
+
+        echo "[Debug] Waiting for artifact to become AVAILABLE..."
+        MAX_WAIT_SECONDS=2700
+        POLL_INTERVAL=30
+        ELAPSED=0
+
+        while [ $ELAPSED -lt $MAX_WAIT_SECONDS ]; do
+          ARTIFACT_STATE=$(oci marketplace-publisher artifact get \
+          --artifact-id ${ARTIFACT_ID} | jq -r '.data.status' 2>/dev/null || echo "ERROR")
+
+          echo "[Debug] Current state: ${ARTIFACT_STATE} (elapsed: ${ELAPSED}s)"
+
+          if [ "${ARTIFACT_STATE}" = "AVAILABLE" ]; then
+            echo "[Debug] ✅ Artifact is now AVAILABLE"
+            break
+          elif [ "${ARTIFACT_STATE}" = "ERROR" ] || [ "${ARTIFACT_STATE}" = "DELETED" ]; then
+            echo "[Error] ❌ Artifact import failed with state: ${ARTIFACT_STATE}"
+            exit 1
+          fi
+
+          sleep $POLL_INTERVAL
+          ELAPSED=$((ELAPSED + POLL_INTERVAL))
+        done
+
+        if [ $ELAPSED -ge $MAX_WAIT_SECONDS ]; then
+          echo "[Error] ⏱️ Timeout waiting for artifact to become AVAILABLE after ${MAX_WAIT_SECONDS}s"
+          exit 1
+        fi
+
+    - name: Get latest version of Terms Collection
+      shell: bash
+      run: |
+        # Get the most recent, ACTIVE Term Collection
+        TERMS_COLLECTION_DATA=$(oci marketplace-publisher term-collection list-terms \
+          --all \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }})
+        TERMS_COLLECTION_ID=$(echo "${TERMS_COLLECTION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE")) | sort_by(.["time-created"]) | reverse | .[0].id' 2>/dev/null \
+          || echo "ERROR")
+        TERMS_COLLECTION_NAME=$(echo "${TERMS_COLLECTION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE")) | sort_by(.["time-created"]) | reverse | .[0].name' 2>/dev/null \
+          || echo "ERROR")
+
+        if [ -z "${TERMS_COLLECTION_ID}" ] || [ "${TERMS_COLLECTION_ID}" = "ERROR" ] || [ "${TERMS_COLLECTION_ID}" = "null" ]; then
+          echo "[Error] Failed to get latest ACTIVE version of Terms Collection"
+          exit 1
+        fi
+
+        echo "TERMS_COLLECTION_ID=${TERMS_COLLECTION_ID}" >> $GITHUB_ENV
+        echo "TERMS_COLLECTION_NAME=${TERMS_COLLECTION_NAME}" >> $GITHUB_ENV
+        echo "[Debug] Terms Collection ID: ${TERMS_COLLECTION_ID}"
+        echo "[Debug] Terms Collection Name: ${TERMS_COLLECTION_NAME}"
+
+        TERM_VERSION_DATA=$(oci marketplace-publisher term-version-collection list-term-versions \
+          --all \
+          --term-id ${TERMS_COLLECTION_ID} \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }})
+        TERM_VERSION_ID=$(echo "${TERM_VERSION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE")) | sort_by(.["time-created"]) | reverse | .[0].id' 2>/dev/null \
+          || echo "ERROR")
+        TERM_VERSION_NAME=$(echo "${TERM_VERSION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE")) | sort_by(.["time-created"]) | reverse | .[0]."display-name"' 2>/dev/null \
+          || echo "ERROR")
+
+        if [ -z "${TERM_VERSION_ID}" ] || [ "${TERM_VERSION_ID}" = "ERROR" ] || [ "${TERM_VERSION_ID}" = "null" ]; then
+          echo "[Error] Failed to get latest ACTIVE version of Term Version"
+          exit 1
+        fi
+
+        echo "TERM_VERSION_ID=${TERM_VERSION_ID}" >> $GITHUB_ENV
+        echo "TERM_VERSION_NAME=${TERM_VERSION_NAME}" >> $GITHUB_ENV
+        echo "[Debug] Term Version ID: ${TERM_VERSION_ID}"
+        echo "[Debug] Term Version Name: ${TERM_VERSION_NAME}"
+
+    - name: Get latest Revision of need Listing
+      shell: bash
+      run: |
+        # Get the most recent, ACTIVE, OCI_APPLICATION type Listing matching name pattern
+        ARCH_STRING="${{ env.DISPLAY_ARCH }}"
+        [ "${{ env.ALMA_ARCH }}" = "aarch64" -a "${{ env.ALMA_MAJOR }}" = "10" ] \
+          && ARCH_STRING="${{ env.DISPLAY_ARCH }}/ARM64"
+        LISTING_NAME="AlmaLinux OS ${{ env.ALMA_MAJOR }} (${ARCH_STRING})"
+        LISTING_OCID=$(oci marketplace-publisher listing-collection list-listings \
+          --all \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }} \
+          --query "data.items[? \"lifecycle-state\"=='ACTIVE' && \"listing-type\"=='OCI_APPLICATION' && contains(name, '${LISTING_NAME}')] | sort_by(@, &\"time-updated\") | [-1].id" \
+          --raw-output)
+        if [ -z "${LISTING_OCID}" ] || [ "${LISTING_OCID}" = "ERROR" ] || [ "${LISTING_OCID}" = "null" ]; then
+          echo "[Error] Failed to get latest ACTIVE, OCI_APPLICATION type Listing matching name pattern '${LISTING_NAME}'"
+          exit 1
+        fi
+
+        echo "LISTING_OCID=${LISTING_OCID}" >> $GITHUB_ENV
+        echo "LISTING_NAME=${LISTING_NAME}" >> $GITHUB_ENV
+        echo "[Debug] Listing OCID: ${LISTING_OCID}"
+        echo "[Debug] Listing Name: ${LISTING_NAME}"
+
+        LISTING_REVISION_DATA=$(oci marketplace-publisher listing-revision-collection list-listing-revisions \
+          --all \
+          --listing-id ${LISTING_OCID} \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }})
+        LISTING_REVISION_ID=$(echo "${LISTING_REVISION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE" and .status == "PUBLISHED")) | sort_by(.["time-created"]) | reverse | .[0].id' 2>/dev/null \
+          || echo "ERROR")
+        LISTING_REVISION_NAME=$(echo "${LISTING_REVISION_DATA}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE" and .status == "PUBLISHED")) | sort_by(.["time-created"]) | reverse | .[0]."display-name"' 2>/dev/null \
+          || echo "ERROR")
+
+        if [ -z "${LISTING_REVISION_ID}" ] || [ "${LISTING_REVISION_ID}" = "ERROR" ] || [ "${LISTING_REVISION_ID}" = "null" ]; then
+          echo "[Error] Failed to get latest ACTIVE, PUBLISHED Revision of the Listing"
+          exit 1
+        fi
+
+        echo "LISTING_REVISION_ID=${LISTING_REVISION_ID}" >> $GITHUB_ENV
+        echo "LISTING_REVISION_NAME=${LISTING_REVISION_NAME}" >> $GITHUB_ENV
+        echo "[Debug] Listing Revision ID: ${LISTING_REVISION_ID}"
+        echo "[Debug] Listing Revision Name: ${LISTING_REVISION_NAME}"
+
+    - name: Clone Listing Revision (create a new Draft)
+      shell: bash
+      run: |
+        # Clone the ACTIVE listing revision to create a new DRAFT revision
+        echo "[Debug] Cloning listing revision: ${{ env.LISTING_REVISION_ID }}"
+        echo "[Debug] Listing: ${{ env.LISTING_NAME }}"
+
+        set +e
+        CLONE_OUTPUT=$(oci marketplace-publisher listing-revision clone \
+          --listing-revision-id ${{ env.LISTING_REVISION_ID }} \
+          2>&1)
+        CLONE_EXIT=$?
+        set -e
+
+        echo "[Debug] Clone exit code: ${CLONE_EXIT}"
+        echo "[Debug] Clone output:"
+        echo "${CLONE_OUTPUT}"
+
+        if [ ${CLONE_EXIT} -ne 0 ]; then
+          echo "[Error] Failed to clone listing revision"
+          exit 1
+        fi
+
+        WORK_REQUEST_ID=$(echo "${CLONE_OUTPUT}" | jq -r '."opc-work-request-id" // empty')
+
+        if [ -z "${WORK_REQUEST_ID}" ]; then
+          echo "[Error] Failed to extract work request ID from clone output"
+          exit 1
+        fi
+
+        echo "[Debug] Work Request ID: ${WORK_REQUEST_ID}"
+
+        echo "[Debug] Waiting for clone work request to complete..."
+        MAX_WAIT_SECONDS=300
+        POLL_INTERVAL=10
+        ELAPSED=0
+
+        while [ $ELAPSED -lt $MAX_WAIT_SECONDS ]; do
+          set +e
+          WR_JSON=$(oci marketplace-publisher work-request get \
+            --work-request-id "${WORK_REQUEST_ID}" \
+            2>&1)
+          WR_EXIT=$?
+          set -e
+
+          if [ ${WR_EXIT} -ne 0 ]; then
+            echo "[Warning] Failed to get work request status (elapsed: ${ELAPSED}s): ${WR_JSON}"
+            sleep $POLL_INTERVAL
+            ELAPSED=$((ELAPSED + POLL_INTERVAL))
+            continue
+          fi
+
+          WR_STATUS=$(echo "${WR_JSON}" | jq -r '.data.status' 2>/dev/null || echo "UNKNOWN")
+          WR_PERCENT=$(echo "${WR_JSON}" | jq -r '.data."percent-complete" // "?"' 2>/dev/null)
+          echo "[Debug] Work Request status: ${WR_STATUS} (${WR_PERCENT}%) (elapsed: ${ELAPSED}s)"
+
+          if [ "${WR_STATUS}" = "SUCCEEDED" ]; then
+            echo "[Debug] ✅ Clone work request succeeded"
+            break
+          elif [ "${WR_STATUS}" = "FAILED" ] || [ "${WR_STATUS}" = "CANCELED" ]; then
+            echo "[Error] ❌ Clone work request ${WR_STATUS}"
+            echo "${WR_JSON}" | jq '.data' 2>/dev/null || true
+            exit 1
+          fi
+
+          sleep $POLL_INTERVAL
+          ELAPSED=$((ELAPSED + POLL_INTERVAL))
+        done
+
+        if [ $ELAPSED -ge $MAX_WAIT_SECONDS ]; then
+          echo "[Error] ⏱️ Timeout waiting for clone work request after ${MAX_WAIT_SECONDS}s"
+          exit 1
+        fi
+
+        echo "[Debug] Looking for the new draft revision..."
+        REVISIONS_JSON=$(oci marketplace-publisher listing-revision-collection list-listing-revisions \
+          --all \
+          --listing-id ${{ env.LISTING_OCID }} \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }})
+
+        DRAFT_REVISION_ID=$(echo "${REVISIONS_JSON}" \
+          | jq -r '.data.items | map(select(.["lifecycle-state"] == "ACTIVE" and .status == "NEW")) | sort_by(.["time-created"]) | reverse | .[0].id' 2>/dev/null \
+          || echo "ERROR")
+
+        if [ -z "${DRAFT_REVISION_ID}" ] || [ "${DRAFT_REVISION_ID}" = "null" ] || [ "${DRAFT_REVISION_ID}" = "ERROR" ]; then
+          echo "[Error] Failed to find the new draft revision"
+          echo "[Debug] Available revisions:"
+          echo "${REVISIONS_JSON}" | jq '.data.items[] | {id, status, "lifecycle-state", "time-created"}' 2>/dev/null || true
+          exit 1
+        fi
+
+        echo "DRAFT_REVISION_ID=${DRAFT_REVISION_ID}" >> $GITHUB_ENV
+        echo "[Debug] Draft Revision ID: ${DRAFT_REVISION_ID}"
+
+    - name: Update Draft Revision Details
+      shell: bash
+      run: |
+        # Update the cloned revision's version details, headline, and tagline
+        PACKAGE_VERSION="${{ env.ALMA_VERSION }}.${{ env.ALMA_DATE }}"
+
+        # Extract release date from ALMA_DATE (first 8 digits: YYYYMMDD → "EEE MMM dd yyyy")
+        DATE_DIGITS=$(echo "${{ env.ALMA_DATE }}" | grep -oP '^\d{8}')
+        RELEASE_DATE=$(date -d "${DATE_DIGITS:0:4}-${DATE_DIGITS:4:2}-${DATE_DIGITS:6:2}" '+%a %b %d %Y')
+
+        RELEASE_NOTES_URL="https://wiki.almalinux.org/release-notes/${{ env.ALMA_VERSION }}.html"
+
+        echo "[Debug] Updating draft revision details:"
+        echo "  Package Version: ${PACKAGE_VERSION}"
+        echo "  Release Date: ${RELEASE_DATE}"
+        echo "  Headline: AlmaLinux OS ${{ env.ALMA_VERSION }}"
+        echo "  Tagline: AlmaLinux OS ${{ env.ALMA_VERSION }}"
+        echo "  Code Name: ${{ env.ALMA_CODE_NAME }}"
+        echo "  Release Notes: ${RELEASE_NOTES_URL}"
+
+        # Build version-details JSON
+        VERSION_DETAILS=$(jq -n \
+          --arg desc "<ul><li><strong>${PACKAGE_VERSION}</strong> - <a href=\"${RELEASE_NOTES_URL}\" rel=\"nofollow\">AlmaLinux OS ${{ env.ALMA_VERSION }} (${{ env.ALMA_CODE_NAME }})</a></li></ul>" \
+          --arg number "${PACKAGE_VERSION}" \
+          --arg date "${RELEASE_DATE}" \
+          '{description: $desc, number: $number, releaseDate: $date}')
+
+        echo "[Debug] Version details JSON:"
+        echo "${VERSION_DETAILS}"
+
+        set +e
+        UPDATE_OUTPUT=$(oci marketplace-publisher listing-revision \
+          update-listing-revision-update-oci-listing-revision-details \
+          --listing-revision-id ${{ env.DRAFT_REVISION_ID }} \
+          --version-details "${VERSION_DETAILS}" \
+          --headline "AlmaLinux OS ${{ env.ALMA_VERSION }}" \
+          --tagline "AlmaLinux OS ${{ env.ALMA_VERSION }}" \
+          --force \
+          2>&1)
+        UPDATE_EXIT=$?
+        set -e
+
+        echo "[Debug] Update exit code: ${UPDATE_EXIT}"
+        echo "[Debug] Update output:"
+        echo "${UPDATE_OUTPUT}"
+
+        if [ ${UPDATE_EXIT} -ne 0 ]; then
+          echo "[Error] Failed to update draft revision details"
+          exit 1
+        fi
+
+        echo "[Debug] ✅ Draft revision details updated successfully"
+        echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
+
+    - name: Unset Current Default Package(s)
+      shell: bash
+      run: |
+        # Find the current default package(s) in the draft revision and unset it,
+        # so the new package we create can become the default
+        echo "[Debug] Looking for current default package in draft revision: ${{ env.DRAFT_REVISION_ID }}"
+
+        set +e
+        PACKAGES_JSON=$(oci marketplace-publisher listing-revision-package-collection \
+          list-listing-revision-packages \
+          --listing-revision-id ${{ env.DRAFT_REVISION_ID }} \
+          --compartment-id ${{ inputs.OCI_COMPARTMENT_ID }} \
+          --all \
+          2>&1)
+        LIST_EXIT=$?
+        set -e
+
+        echo "[Debug] List packages exit code: ${LIST_EXIT}"
+
+        if [ ${LIST_EXIT} -ne 0 ]; then
+          echo "[Error] Failed to list packages in draft revision"
+          echo "${PACKAGES_JSON}"
+          exit 1
+        fi
+
+        ALL_PKG_IDS=$(echo "${PACKAGES_JSON}" | jq -r '.data.items[].id // empty')
+
+        if [ -z "${ALL_PKG_IDS}" ]; then
+          echo "[Debug] No packages found in draft revision, skipping"
+        else
+          PKG_COUNT=$(echo "${ALL_PKG_IDS}" | wc -l | tr -d ' ')
+          echo "[Debug] Found ${PKG_COUNT} package(s), checking each for is-default..."
+
+          while IFS= read -r PKG_ID; do
+            echo "[Debug] Getting details for package: ${PKG_ID}"
+
+            set +e
+            PKG_DETAIL=$(oci marketplace-publisher listing-revision-package get \
+              --listing-revision-package-id "${PKG_ID}" \
+              2>&1)
+            GET_EXIT=$?
+            set -e
+
+            if [ ${GET_EXIT} -ne 0 ]; then
+              echo "[Warning] Failed to get package details for ${PKG_ID}: ${PKG_DETAIL}"
+              continue
+            fi
+
+            IS_DEFAULT=$(echo "${PKG_DETAIL}" | jq -r '.data."is-default" // false')
+            PKG_NAME=$(echo "${PKG_DETAIL}" | jq -r '.data."display-name" // "unknown"')
+            echo "[Debug] Package '${PKG_NAME}' (${PKG_ID}) is-default: ${IS_DEFAULT}"
+
+            if [ "${IS_DEFAULT}" = "true" ]; then
+              echo "[Debug] Unsetting default on package: ${PKG_NAME} (${PKG_ID})"
+
+              set +e
+              UNSET_OUTPUT=$(oci marketplace-publisher listing-revision-package update \
+                --listing-revision-package-id "${PKG_ID}" \
+                --is-default false \
+                --are-security-upgrades-provided false \
+                --force \
+                2>&1)
+              UNSET_EXIT=$?
+              set -e
+
+              echo "[Debug] Unset default exit code: ${UNSET_EXIT}"
+              echo "[Debug] Unset default output:"
+              echo "${UNSET_OUTPUT}"
+
+              if [ ${UNSET_EXIT} -ne 0 ]; then
+                echo "[Error] Failed to unset default on package '${PKG_NAME}'"
+                exit 1
+              fi
+
+              echo "[Debug] ✅ Unset default on package '${PKG_NAME}'"
+            fi
+          done <<< "${ALL_PKG_IDS}"
+        fi
+
+    - name: Create Package in Draft Revision
+      shell: bash
+      run: |
+        # Create a new Package under the draft listing revision
+        # A Package ties together: Artifact (image) + Terms + Version info
+        echo "[Debug] Creating package in draft revision: ${{ env.DRAFT_REVISION_ID }}"
+        echo "[Debug] Artifact ID: ${{ env.ARTIFACT_ID }}"
+        echo "[Debug] Terms Collection ID: ${{ env.TERMS_COLLECTION_ID }}"
+
+        PACKAGE_VERSION="${{ env.PACKAGE_VERSION }}"
+        echo "[Debug] Package version: ${PACKAGE_VERSION}"
+
+        set +e
+        PACKAGE_OUTPUT=$(oci marketplace-publisher listing-revision-package create \
+          --listing-revision-id ${{ env.DRAFT_REVISION_ID }} \
+          --artifact-id ${{ env.ARTIFACT_ID }} \
+          --term-id ${{ env.TERMS_COLLECTION_ID }} \
+          --package-version "${PACKAGE_VERSION}" \
+          --description "AlmaLinux OS ${{ env.ALMA_VERSION }} (${{ env.ALMA_CODE_NAME }})" \
+          --display-name "${PACKAGE_VERSION}" \
+          --are-security-upgrades-provided true \
+          --is-default true \
+          2>&1)
+        PACKAGE_EXIT=$?
+        set -e
+
+        echo "[Debug] Package creation exit code: ${PACKAGE_EXIT}"
+        echo "[Debug] Package output:"
+        echo "${PACKAGE_OUTPUT}"
+
+        if [ ${PACKAGE_EXIT} -ne 0 ]; then
+          echo "[Error] Failed to create package"
+          exit 1
+        fi
+
+        PACKAGE_ID=$(echo "${PACKAGE_OUTPUT}" | jq -r '.data.id // empty')
+
+        if [ -z "${PACKAGE_ID}" ]; then
+          echo "[Error] Failed to extract package ID from output"
+          exit 1
+        fi
+
+        echo "PACKAGE_ID=${PACKAGE_ID}" >> $GITHUB_ENV
+        echo "[Debug] Package ID: ${PACKAGE_ID}"
+
+    - name: Submit Draft Revision for Review
+      shell: bash
+      run: |
+        # Submit the draft listing revision for Oracle review/approval
+        echo "[Debug] Submitting draft revision for review: ${{ env.DRAFT_REVISION_ID }}"
+
+        set +e
+        SUBMIT_OUTPUT=$(oci marketplace-publisher listing-revision \
+          submit-listing-revision-for-review \
+          --listing-revision-id ${{ env.DRAFT_REVISION_ID }} \
+          2>&1)
+        SUBMIT_EXIT=$?
+        set -e
+
+        echo "[Debug] Submit exit code: ${SUBMIT_EXIT}"
+        echo "[Debug] Submit output:"
+        echo "${SUBMIT_OUTPUT}"
+
+        if [ ${SUBMIT_EXIT} -ne 0 ]; then
+          echo "[Warning] Failed to submit draft revision for review (exit code: ${SUBMIT_EXIT})"
+          echo "[Warning] You may need to submit it manually from the Oracle Cloud Console"
+          echo "[Warning] Draft Revision: ${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }}"
+        else
+          echo "[Debug] ✅ Draft revision submitted for review successfully"
+        fi
+
+    - name: Print job summary
+      shell: bash
+      run: |
+        {
+          echo "## Oracle Cloud Marketplace Image Publish"
+          echo ""
+          echo "### Image Details"
+          echo '- **Name**: ${{ env.IMAGE_DISPLAY_NAME }}'
+          echo "- **Release Version**: \`${{ env.ALMA_VERSION }}.${{ env.ALMA_RELEASE }}\`"
+          echo ""
+          echo "### OCI Resources"
+          if [[ -n "${{ env.OBJECT_NAME }}" ]]; then
+            echo "- **Object Storage Path**: \`${{ env.OBJECT_NAME }}\`"
+          fi
+          echo "- **Compute Custom Image**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_COMPUTE_BASE_URL }}/images/${{ env.IMAGE_OCID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Compute Image OCID**: \`${{ env.IMAGE_OCID }}\`"
+          echo "- **Marketplace Terms**: [${{ env.TERMS_COLLECTION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/terms/${{ env.TERMS_COLLECTION_ID }}?region=${{ inputs.OCI_CLI_REGION }}) / [${{ env.TERM_VERSION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/terms/${{ env.TERMS_COLLECTION_ID }}/${{ env.TERM_VERSION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Marketplace Listing**: [${{ env.LISTING_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/listingRevisions?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Source Listing Revision**: [${{ env.LISTING_REVISION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.LISTING_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Marketplace Artifact**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/artifact/${{ env.ARTIFACT_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Draft Listing Revision**: [${{ env.LISTING_REVISION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "- **Revision Package**: \`${{ env.PACKAGE_VERSION }}\` (\`${{ env.PACKAGE_ID }}\`)"
+          echo ""
+          echo "### Status"
+          echo "✅ Draft revision created, package added, and submitted for review."
+          echo ""
+          echo "Check it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
+          echo "Publish it from there manually once it is approved"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost == 'true' && inputs.MATTERMOST_WEBHOOK_URL != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.IMAGE_DISPLAY_NAME }}**, publish to Oracle Cloud Marketplace, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Object Storage Path**: `${{ env.OBJECT_NAME }}`
+          **Compute Custom Image**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_COMPUTE_BASE_URL }}/images/${{ env.IMAGE_OCID }}?region=${{ inputs.OCI_CLI_REGION }})
+          **Compute Image OCID**: `${{ env.IMAGE_OCID }}`
+          **Marketplace Listing**: [${{ env.LISTING_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/listingRevisions?region=${{ inputs.OCI_CLI_REGION }})
+          **Marketplace Artifact**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/artifact/${{ env.ARTIFACT_ID }}?region=${{ inputs.OCI_CLI_REGION }})
+          **Draft Revision**: [${{ env.LISTING_REVISION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})
+          **Revision Package**: `${{ env.PACKAGE_VERSION }}` (`${{ env.PACKAGE_ID }}`)
+
+          ✅ Draft revision created, package added, and submitted for review.
+          Check it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})
+          Publish it from there manually once it is approved

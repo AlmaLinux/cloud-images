@@ -1,0 +1,548 @@
+name: "OCI: create Compute Custom Image"
+description: >
+  Upload the locally-built qcow2 to OCI Object Storage, import it as a
+  Compute Custom Image, configure its capability schema and shape
+  compatibility, then emit an oci-manifest-<arch>.json artifact for the
+  downstream test / publish stages. Runs in-job on the build runner's
+  local image (no S3 round-trip). Mirrors the "Upload to OCI Object
+  Storage" / "Import as OCI Compute Image" / "Configure Image Capabilities
+  Schema" / "Configure Image Shape Compatibility" steps of
+  .github/workflows/oci-marketplace-publish.yml.
+
+inputs:
+  variant:
+    description: "Build variant key (used only for artifact naming)"
+    required: false
+    default: ''
+  arch:
+    description: "Image architecture (x86_64 / aarch64)"
+    required: true
+  notify_mattermost:
+    description: "Send notification to Mattermost (true/false)"
+    required: true
+    default: 'true'
+  OCI_CLI_USER:
+    description: "OCI CLI user OCID"
+    required: true
+  OCI_CLI_TENANCY:
+    description: "OCI CLI tenancy OCID"
+    required: true
+  OCI_CLI_FINGERPRINT:
+    description: "OCI CLI API key fingerprint"
+    required: true
+  OCI_CLI_KEY_CONTENT:
+    description: "OCI CLI API private key (PEM)"
+    required: true
+  OCI_CLI_REGION:
+    description: "OCI region"
+    required: true
+  OCI_COMPARTMENT_ID:
+    description: "OCI compartment OCID"
+    required: true
+  OCI_OBJECT_STORAGE_BUCKET:
+    description: "OCI Object Storage bucket name"
+    required: true
+  OCI_OBJECT_STORAGE_NAMESPACE:
+    description: "OCI Object Storage namespace"
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: "Mattermost webhook URL"
+    required: false
+    default: ''
+  MATTERMOST_CHANNEL:
+    description: "Mattermost channel"
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set OCI CLI environment
+      shell: bash
+      run: |
+        # oci reads these from the environment; composites can't use the
+        # secrets/vars contexts, so export the inputs to $GITHUB_ENV once.
+        {
+          echo "OCI_CLI_USER=${{ inputs.OCI_CLI_USER }}"
+          echo "OCI_CLI_TENANCY=${{ inputs.OCI_CLI_TENANCY }}"
+          echo "OCI_CLI_FINGERPRINT=${{ inputs.OCI_CLI_FINGERPRINT }}"
+          echo "OCI_CLI_REGION=${{ inputs.OCI_CLI_REGION }}"
+          echo "OCI_COMPUTE_BASE_URL=https://cloud.oracle.com/compute"
+          echo "PYTHONWARNINGS=ignore"
+        } >> "$GITHUB_ENV"
+        {
+          echo "OCI_CLI_KEY_CONTENT<<__OCI_KEY_EOF__"
+          echo "${{ inputs.OCI_CLI_KEY_CONTENT }}"
+          echo "__OCI_KEY_EOF__"
+        } >> "$GITHUB_ENV"
+
+    - name: Take ownership of the build output
+      shell: bash
+      run: |
+        # Packer runs under sudo, so the qcow2 and its directory are
+        # root-owned. Chown them back to the runner user before we read.
+        if [ -n "${IMAGE_FILE:-}" ] && [ -e "${IMAGE_FILE}" ]; then
+          sudo chown -R "$(id -u):$(id -g)" "$(dirname "${IMAGE_FILE}")"
+        fi
+        ls -la "${IMAGE_FILE}"
+
+    - name: Install OCI CLI and dependencies
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y jq file || \
+          (command -v dnf >/dev/null && sudo dnf install -y jq file) || true
+
+        curl -L -O https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh
+        chmod +x install.sh
+        ./install.sh --accept-all-defaults
+        echo "$HOME/bin" >> "$GITHUB_PATH"
+
+    - name: Configure OCI CLI
+      shell: bash
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ inputs.OCI_CLI_KEY_CONTENT }}" > ~/.oci/key.pem
+        chmod 600 ~/.oci/key.pem
+        "$HOME/bin/oci" --version
+
+    - name: Parse image filename
+      shell: bash
+      run: |
+        IMAGE_FILENAME="${IMAGE_NAME}"
+
+        # Parse filename: AlmaLinux-8-OCI-8.10-20260202.x86_64.qcow2
+        #             or: AlmaLinux-10-OCI-10.1-20260216.0.aarch64.qcow2
+        # Pattern: AlmaLinux-{major}-OCI-{version}-{date}[.{index}].{arch}.qcow2
+        if [[ ! "${IMAGE_FILENAME}" =~ AlmaLinux-([0-9]+)-OCI-([0-9.]+)-([0-9]+)((\.[0-9]+)?)\.(x86_64|aarch64)\.qcow2 ]]; then
+          echo "[Error] Invalid image filename format: '${IMAGE_FILENAME}'"
+          echo "Expected format: AlmaLinux-{major}-OCI-{version}-{date}[.{index}].{arch}.qcow2"
+          exit 1
+        fi
+
+        ALMA_MAJOR="${BASH_REMATCH[1]}"
+        ALMA_VERSION="${BASH_REMATCH[2]}"
+        ALMA_DATE="${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+        ALMA_ARCH="${BASH_REMATCH[6]}"
+
+        # ALMA_RELEASE is the /oci/<release> segment of the S3 path that
+        # shared-steps already resolved (images/{major}/{version}/oci/{release}).
+        ALMA_RELEASE="${AWS_S3_PATH##*/}"
+
+        # AlmaLinux code name
+        case "${ALMA_VERSION}" in
+          8.10) ALMA_CODE_NAME="Cerulean Leopard" ;;
+          9.8) ALMA_CODE_NAME="Olive Jaguar" ;;
+          10.2) ALMA_CODE_NAME="Lavender Lion" ;;
+          *) echo "[Error] Unsupported AlmaLinux version: '${ALMA_VERSION}'"; exit 1 ;;
+        esac
+
+        # Convert aarch64 to AArch64 for display
+        DISPLAY_ARCH="${ALMA_ARCH}"
+        [[ "${ALMA_ARCH}" == "aarch64" ]] && DISPLAY_ARCH="AArch64"
+
+        echo "[Debug] Parsed metadata:"
+        echo "  IMAGE_FILENAME: ${IMAGE_FILENAME}"
+        echo "  Major Version: ${ALMA_MAJOR}"
+        echo "  Version: ${ALMA_VERSION}"
+        echo "  Code Name: ${ALMA_CODE_NAME}"
+        echo "  Release: ${ALMA_RELEASE}"
+        echo "  Date: ${ALMA_DATE}"
+        echo "  Architecture: ${ALMA_ARCH}"
+
+        {
+          echo "IMAGE_FILENAME=${IMAGE_FILENAME}"
+          echo "ALMA_MAJOR=${ALMA_MAJOR}"
+          echo "ALMA_VERSION=${ALMA_VERSION}"
+          echo "ALMA_CODE_NAME=${ALMA_CODE_NAME}"
+          echo "ALMA_RELEASE=${ALMA_RELEASE}"
+          echo "ALMA_DATE=${ALMA_DATE}"
+          echo "ALMA_ARCH=${ALMA_ARCH}"
+          echo "DISPLAY_ARCH=${DISPLAY_ARCH}"
+          echo "CUSTOM_IMAGE_NAME=${IMAGE_FILENAME%.*}"
+          echo "IMAGE_DISPLAY_NAME=AlmaLinux OS ${ALMA_VERSION} ${ALMA_ARCH} \`${ALMA_RELEASE}\`"
+        } >> "$GITHUB_ENV"
+
+    - name: Upload to OCI Object Storage
+      shell: bash
+      run: |
+        # Upload the locally-built qcow2 to OCI Object Storage
+        BUCKET_NAME="${{ inputs.OCI_OBJECT_STORAGE_BUCKET }}"
+        NAMESPACE="${{ inputs.OCI_OBJECT_STORAGE_NAMESPACE }}"
+        OBJECT_NAME="${AWS_S3_PATH}/${IMAGE_FILENAME}"
+
+        echo "[Debug] Uploading to Object Storage:"
+        echo "  Namespace: ${NAMESPACE}"
+        echo "  Bucket: ${BUCKET_NAME}"
+        echo "  Object: ${OBJECT_NAME}"
+        echo "  File: ${IMAGE_FILE}"
+
+        oci os object put \
+          --bucket-name "${BUCKET_NAME}" \
+          --namespace "${NAMESPACE}" \
+          --file "${IMAGE_FILE}" \
+          --name "${OBJECT_NAME}" \
+          --force
+
+        echo "OBJECT_NAME=${OBJECT_NAME}" >> "$GITHUB_ENV"
+        echo "[Debug] Upload completed successfully"
+
+    - name: Import as OCI Compute Image
+      shell: bash
+      run: |
+        # Import qcow2 from Object Storage as OCI Compute custom image
+        COMPARTMENT_ID="${{ inputs.OCI_COMPARTMENT_ID }}"
+        BUCKET_NAME="${{ inputs.OCI_OBJECT_STORAGE_BUCKET }}"
+        NAMESPACE="${{ inputs.OCI_OBJECT_STORAGE_NAMESPACE }}"
+
+        echo "[Debug] Importing compute image:"
+        echo "  Custom Image Name: ${CUSTOM_IMAGE_NAME}"
+        echo "  Compartment: ${COMPARTMENT_ID:0:20}..."
+        echo "  Bucket: ${BUCKET_NAME}"
+        echo "  Namespace: ${NAMESPACE}"
+
+        # Verify object exists in Object Storage before import
+        echo "[Debug] Verifying object in Object Storage..."
+        oci os object head \
+          --bucket-name "${BUCKET_NAME}" \
+          --namespace "${NAMESPACE}" \
+          --name "${OBJECT_NAME}" || {
+          echo "[Error] Object not found in Object Storage"
+          exit 1
+        }
+
+        # Start image import (launch options will be set after import)
+        echo "[Debug] Starting image import..."
+        set +e
+        IMPORT_OUTPUT=$(oci compute image import from-object \
+          --compartment-id "${COMPARTMENT_ID}" \
+          --display-name "${CUSTOM_IMAGE_NAME}" \
+          --namespace "${NAMESPACE}" \
+          --bucket-name "${BUCKET_NAME}" \
+          --name "${OBJECT_NAME}" \
+          --source-image-type QCOW2 \
+          --launch-mode PARAVIRTUALIZED \
+          --operating-system "AlmaLinux" \
+          --operating-system-version "${ALMA_VERSION}" \
+          2>&1)
+        IMPORT_EXIT_CODE=$?
+        set -e
+
+        echo "[Debug] Import command exit code: ${IMPORT_EXIT_CODE}"
+        echo "[Debug] Import response:"
+        echo "${IMPORT_OUTPUT}"
+
+        if [ ${IMPORT_EXIT_CODE} -ne 0 ]; then
+          echo "[Error] ❌ Image import failed with exit code ${IMPORT_EXIT_CODE}"
+          exit 1
+        fi
+
+        IMAGE_OCID=$(echo "${IMPORT_OUTPUT}" | jq -r '.data.id // empty')
+
+        if [[ -z "${IMAGE_OCID}" ]]; then
+          echo "[Error] Failed to extract image OCID from import output"
+          echo "${IMPORT_OUTPUT}"
+          exit 1
+        fi
+
+        echo "IMAGE_OCID=${IMAGE_OCID}" >> "$GITHUB_ENV"
+        echo "[Debug] Image OCID: ${IMAGE_OCID}"
+
+        # Wait for image to become AVAILABLE (manual polling)
+        echo "[Debug] Waiting for image to become AVAILABLE..."
+        MAX_WAIT_SECONDS=1800
+        POLL_INTERVAL=30
+        ELAPSED=0
+
+        while [ $ELAPSED -lt $MAX_WAIT_SECONDS ]; do
+          IMAGE_STATE=$(oci compute image get \
+            --image-id "${IMAGE_OCID}" \
+            --query 'data."lifecycle-state"' \
+            --raw-output 2>/dev/null || echo "ERROR")
+
+          echo "[Debug] Current state: ${IMAGE_STATE} (elapsed: ${ELAPSED}s)"
+
+          if [ "${IMAGE_STATE}" = "AVAILABLE" ]; then
+            echo "[Debug] ✅ Image is now AVAILABLE"
+            break
+          elif [ "${IMAGE_STATE}" = "DELETED" ]; then
+            echo "[Error] ❌ Image import failed with state: ${IMAGE_STATE}"
+            exit 1
+          fi
+
+          sleep $POLL_INTERVAL
+          ELAPSED=$((ELAPSED + POLL_INTERVAL))
+        done
+
+        if [ $ELAPSED -ge $MAX_WAIT_SECONDS ]; then
+          echo "[Error] ⏱️ Timeout waiting for image to become AVAILABLE after ${MAX_WAIT_SECONDS}s"
+          exit 1
+        fi
+
+    - name: Configure Image Capabilities Schema
+      shell: bash
+      run: |
+        # Create/update image capability schema for the custom image
+        # Reference: https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/configuringimagecapabilities.htm
+        echo "[Debug] Configuring image capability schema..."
+
+        cat > /tmp/image_capabilities.json <<'EOF'
+        {
+          "Compute.Firmware": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["BIOS", "UEFI_64"],
+            "defaultValue": "UEFI_64"
+          },
+          "Compute.SecureBoot": {
+            "descriptorType": "boolean",
+            "source": "IMAGE",
+            "defaultValue": true
+          },
+          "Compute.LaunchMode": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["NATIVE", "EMULATED", "PARAVIRTUALIZED", "CUSTOM"],
+            "defaultValue": "PARAVIRTUALIZED"
+          },
+          "Network.AttachmentType": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["E1000", "VFIO", "PARAVIRTUALIZED"],
+            "defaultValue": "PARAVIRTUALIZED"
+          },
+          "Storage.BootVolumeType": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["ISCSI", "SCSI", "IDE", "PARAVIRTUALIZED"],
+            "defaultValue": "PARAVIRTUALIZED"
+          },
+          "Storage.LocalDataVolumeType": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["ISCSI", "SCSI", "IDE", "PARAVIRTUALIZED"],
+            "defaultValue": "PARAVIRTUALIZED"
+          },
+          "Storage.RemoteDataVolumeType": {
+            "descriptorType": "enumstring",
+            "source": "IMAGE",
+            "values": ["ISCSI", "SCSI", "IDE", "PARAVIRTUALIZED"],
+            "defaultValue": "PARAVIRTUALIZED"
+          },
+          "Storage.ConsistentVolumeNaming": {
+            "descriptorType": "boolean",
+            "source": "IMAGE",
+            "defaultValue": true
+          },
+          "Storage.ParaVirtualization.EncryptionInTransit": {
+            "descriptorType": "boolean",
+            "source": "IMAGE",
+            "defaultValue": true
+          },
+          "Storage.ParaVirtualization.AttachmentVersion": {
+            "descriptorType": "enuminteger",
+            "source": "IMAGE",
+            "values": [1, 2],
+            "defaultValue": 2
+          },
+          "Storage.Iscsi.MultipathDeviceSupported": {
+            "descriptorType": "boolean",
+            "source": "IMAGE",
+            "defaultValue": true
+          },
+          "Network.IPv6Only": {
+            "defaultValue": true,
+            "descriptorType": "boolean",
+            "source": "IMAGE"
+          }
+        }
+        EOF
+
+        echo "[Debug] Image capabilities to configure:"
+        jq '.' /tmp/image_capabilities.json
+
+        SCHEMA_NAME="almalinux-${ALMA_MAJOR}-${ALMA_ARCH}-schema"
+        COMPARTMENT_ID="${{ inputs.OCI_COMPARTMENT_ID }}"
+        echo "[Debug] Schema name: ${SCHEMA_NAME}"
+
+        echo "[Debug] Discovering global image capability schema versions..."
+        GLOBAL_CAP_ID=$(
+            oci compute global-image-capability-schema list --all | jq -r '.data[0].id')
+        GLOBAL_CAP_VERSION_NAME=$(
+            oci compute global-image-capability-schema-version list --all \
+            --global-image-capability-schema-id "$GLOBAL_CAP_ID" \
+            | jq -r '.data | sort_by(."time-created") | reverse | .[0].name')
+
+        set +e
+        CREATE_OUTPUT=$(oci compute image-capability-schema create \
+          --compartment-id "${COMPARTMENT_ID}" \
+          --global-image-capability-schema-version-name "$GLOBAL_CAP_VERSION_NAME" \
+          --image-id "${IMAGE_OCID}" \
+          --schema-data file:///tmp/image_capabilities.json \
+          --display-name "${SCHEMA_NAME}" \
+          2>&1)
+        CREATE_EXIT=$?
+        set -e
+
+        if [ ${CREATE_EXIT} -eq 0 ]; then
+          echo "[Debug] ✅ Image capability schema created successfully"
+        else
+          echo "[Debug] Schema creation failed (may already exist), attempting to update..."
+          SCHEMA_ID=$(oci compute image-capability-schema list \
+            --compartment-id "${COMPARTMENT_ID}" \
+            --image-id "${IMAGE_OCID}" \
+            --query 'data[0].id' \
+            --raw-output 2>/dev/null || echo "")
+
+          if [ -n "${SCHEMA_ID}" ]; then
+            echo "[Debug] Found existing schema: ${SCHEMA_ID}"
+            oci compute image-capability-schema update \
+              --image-capability-schema-id "${SCHEMA_ID}" \
+              --schema-data file:///tmp/image_capabilities.json \
+              --force
+            echo "[Debug] ✅ Image capability schema updated successfully"
+          else
+            echo "[Warning] Could not create or update image capability schema"
+            echo "[Warning] Error: ${CREATE_OUTPUT}"
+          fi
+        fi
+
+    - name: Configure Image Shape Compatibility
+      shell: bash
+      run: |
+        # Configure shape compatibility entries on the Compute Image using
+        # the Marketplace-supported shapes list.
+        #   x86_64:  all supported non-ARM shapes.
+        #   aarch64: only Ampere ARM shapes (A1, A2, A4).
+        ARCH="${ALMA_ARCH}"
+        COMPARTMENT_ID="${{ inputs.OCI_COMPARTMENT_ID }}"
+        echo "[Debug] Configuring shape compatibility for ${ARCH} image ${IMAGE_OCID}"
+
+        oci compute image-shape-compatibility-entry list \
+          --image-id "${IMAGE_OCID}" \
+          --all \
+          --query 'data[*].shape' \
+          --raw-output | jq -r '.[]' > /tmp/current_shapes.txt
+
+        echo "[Debug] Current shapes on image:"
+        cat /tmp/current_shapes.txt
+
+        echo "[Debug] Removing all current shapes from image..."
+        while read -r shape; do
+          echo "  Removing: ${shape}"
+          oci compute image-shape-compatibility-entry remove \
+            --image-id "${IMAGE_OCID}" \
+            --shape-name "${shape}" \
+            --force 2>/dev/null || true
+        done < /tmp/current_shapes.txt
+
+        echo "[Debug] Fetching Marketplace-supported shapes..."
+        ALL_SHAPES=$(oci marketplace-publisher supported-shape-collection list-supported-shapes \
+          --compartment-id "${COMPARTMENT_ID}" \
+          --all 2>/dev/null)
+
+        if [ "$ARCH" = "aarch64" ]; then
+          SHAPES_JSON=$(echo "${ALL_SHAPES}" | jq '[.data.items[] | select(.shape | test("\\.(A1|A2|A4)\\.")) | select(.shape | endswith(".Generic") | not)] | unique_by(.shape)')
+        else
+          SHAPES_JSON=$(echo "${ALL_SHAPES}" | jq '[.data.items[] | select(.shape | test("\\.(A1|A2|A4)\\.") | not) | select(.shape | endswith(".Generic") | not)] | unique_by(.shape)')
+        fi
+
+        SHAPE_COUNT=$(echo "${SHAPES_JSON}" | jq 'length')
+        echo "[Debug] Adding ${SHAPE_COUNT} ${ARCH} shapes..."
+
+        echo "${SHAPES_JSON}" | jq -c '.[]' | while read -r entry; do
+          shape=$(echo "${entry}" | jq -r '.shape')
+          is_flexible=$(echo "${entry}" | jq -r '."is-flexible"')
+
+          if [ "${is_flexible}" = "true" ]; then
+            OCPU_MIN=$(echo "${entry}" | jq -r '."ocpu-options".min // empty')
+            OCPU_MAX=$(echo "${entry}" | jq -r '."ocpu-options".max // empty')
+            MEM_MIN=$(echo "${entry}" | jq -r '."memory-options"."min-in-gbs" // empty')
+            MEM_MAX=$(echo "${entry}" | jq -r '."memory-options"."max-in-gbs" // empty')
+            if [ -z "${OCPU_MAX}" ] || [ -z "${MEM_MAX}" ]; then
+              echo "  Skipping (no constraint data): ${shape}"
+              continue
+            fi
+            echo "  Adding: ${shape} — OCPU: ${OCPU_MIN}-${OCPU_MAX}, Memory: ${MEM_MIN}-${MEM_MAX} GB"
+            oci compute image-shape-compatibility-entry add \
+              --image-id "${IMAGE_OCID}" \
+              --shape-name "${shape}" \
+              --memory-constraints "{\"minInGBs\": ${MEM_MIN}, \"maxInGBs\": ${MEM_MAX}}" \
+              --ocpu-constraints "{\"min\": ${OCPU_MIN}, \"max\": ${OCPU_MAX}}" \
+              --force 2>/dev/null || true
+          else
+            echo "  Adding: ${shape}"
+            oci compute image-shape-compatibility-entry add \
+              --image-id "${IMAGE_OCID}" \
+              --shape-name "${shape}" 2>/dev/null || true
+          fi
+        done
+
+        echo ""
+        echo "[Debug] Final shapes on image:"
+        oci compute image-shape-compatibility-entry list \
+          --image-id "${IMAGE_OCID}" \
+          --all \
+          --query 'data[*].shape' \
+          --raw-output | jq -r '.[]'
+
+    - name: Write compute-image manifest
+      shell: bash
+      run: |
+        IMAGE_KEY="${{ inputs.arch }}"
+        MANIFEST="oci-manifest-${IMAGE_KEY}.json"
+
+        jq -n \
+          --arg image_key "${IMAGE_KEY}" \
+          --arg arch "${ALMA_ARCH}" \
+          --arg compute_image_ocid "${IMAGE_OCID}" \
+          --arg custom_image_name "${CUSTOM_IMAGE_NAME}" \
+          --arg object_name "${OBJECT_NAME}" \
+          --arg alma_major "${ALMA_MAJOR}" \
+          --arg alma_version "${ALMA_VERSION}" \
+          --arg alma_date "${ALMA_DATE}" \
+          --arg alma_release "${ALMA_RELEASE}" \
+          --arg alma_code_name "${ALMA_CODE_NAME}" \
+          --arg display_arch "${DISPLAY_ARCH}" \
+          --arg image_display_name "${IMAGE_DISPLAY_NAME}" \
+          --arg image_filename "${IMAGE_FILENAME}" \
+          '{image_key: $image_key, arch: $arch, compute_image_ocid: $compute_image_ocid,
+            custom_image_name: $custom_image_name, object_name: $object_name,
+            alma_major: $alma_major, alma_version: $alma_version, alma_date: $alma_date,
+            alma_release: $alma_release, alma_code_name: $alma_code_name,
+            display_arch: $display_arch, image_display_name: $image_display_name,
+            image_filename: $image_filename}' > "${MANIFEST}"
+
+        echo "[Debug] Manifest ${MANIFEST}:"
+        cat "${MANIFEST}"
+        echo "MANIFEST=${MANIFEST}" >> "$GITHUB_ENV"
+
+    - name: Upload compute-image manifest
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.MANIFEST }}
+        path: ./${{ env.MANIFEST }}
+
+    - name: Job summary
+      shell: bash
+      run: |
+        {
+          echo "## OCI Compute Custom Image"
+          echo ""
+          echo "- **Custom Image**: [${CUSTOM_IMAGE_NAME}](${OCI_COMPUTE_BASE_URL}/images/${IMAGE_OCID}?region=${OCI_CLI_REGION})"
+          echo "- **Compute Image OCID**: \`${IMAGE_OCID}\`"
+          echo "- **Object Storage Path**: \`${OBJECT_NAME}\`"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost == 'true' && inputs.MATTERMOST_WEBHOOK_URL != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.IMAGE_DISPLAY_NAME }}**, OCI Compute image created, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **Compute Custom Image**: [${{ env.CUSTOM_IMAGE_NAME }}](${{ env.OCI_COMPUTE_BASE_URL }}/images/${{ env.IMAGE_OCID }}?region=${{ inputs.OCI_CLI_REGION }})
+          **Compute Image OCID**: `${{ env.IMAGE_OCID }}`
+          **Object Storage Path**: `${{ env.OBJECT_NAME }}`
