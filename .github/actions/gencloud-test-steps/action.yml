@@ -3,8 +3,13 @@ description: "Boots a GenericCloud .qcow2 under QEMU/KVM with a cloud-init seed 
 
 inputs:
   image_url:
-    description: "Public S3 URL to the GenericCloud .qcow2 image"
-    required: true
+    description: "Public URL to the GenericCloud .qcow2 image (provide this OR image_file)"
+    required: false
+    default: ''
+  image_file:
+    description: "Path to a locally-built GenericCloud .qcow2 (provide this OR image_url; takes precedence)"
+    required: false
+    default: ''
   image_filename:
     description: "Image filename (last path segment of image_url)"
     required: true
@@ -79,13 +84,24 @@ runs:
         chmod 700 ~/.ssh
         ssh-keygen -t ed25519 -N '' -C "gencloud-test-${GITHUB_RUN_ID}" -f ~/.ssh/gencloud_test
 
-    - name: Download base image
+    - name: Obtain base image
       shell: bash
       env:
         IMAGE_URL: ${{ inputs.image_url }}
+        IMAGE_FILE: ${{ inputs.image_file }}
       run: |
-        # Download base image
-        curl -fL --retry 5 --retry-delay 5 -o base.qcow2 "${IMAGE_URL}"
+        # Obtain base image: prefer a locally-built file, else download the URL
+        if [ -n "${IMAGE_FILE}" ]; then
+          # Packer runs under sudo, so the build output is root-owned; copy it
+          # out and take ownership before QEMU opens it.
+          sudo cp "${IMAGE_FILE}" base.qcow2
+          sudo chown "$(id -u):$(id -g)" base.qcow2
+        elif [ -n "${IMAGE_URL}" ]; then
+          curl -fL --retry 5 --retry-delay 5 -o base.qcow2 "${IMAGE_URL}"
+        else
+          echo "[Error] one of image_file or image_url must be provided"
+          exit 1
+        fi
         qemu-img info base.qcow2
 
     - name: Create writable qcow2 overlay (100 GiB)
@@ -305,7 +321,11 @@ runs:
         {
           echo "## GenericCloud Image Test"
           echo ""
-          echo "- **Image**: [${IMAGE_FILENAME}](${IMAGE_URL})"
+          if [ -n "${IMAGE_URL:-}" ]; then
+            echo "- **Image**: [${IMAGE_FILENAME}](${IMAGE_URL})"
+          else
+            echo "- **Image**: \`${IMAGE_FILENAME}\`"
+          fi
           if [ "${SUBTYPE}" = "gencloud_ext4" ]; then
             echo "- **Subtype**: \`gencloud_ext4\` (ext4 root)"
           fi
@@ -349,7 +369,7 @@ runs:
         TEXT: |
           :almalinux: **${{ inputs.image_filename }}**, GenericCloud image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
-          **Image**: [${{ inputs.image_filename }}](${{ inputs.image_url }})
+          ${{ inputs.image_url && format('**Image**: [{0}]({1})', inputs.image_filename, inputs.image_url) || format('**Image**: `{0}`', inputs.image_filename) }}
           ${{ inputs.subtype == 'gencloud_ext4' && '**Subtype**: `gencloud_ext4` (ext4 root)' || '' }}
           ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
           ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
