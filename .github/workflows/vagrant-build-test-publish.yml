@@ -1,0 +1,370 @@
+name: "Vagrant: Build, Test and Publish"
+
+# Unified Vagrant pipeline: build the boxes with Packer, run the `vagrant up`
+# smoke test, and publish each box to the HCP Vagrant Registry - all on the
+# same runner (the publish stage runs in-job on the locally-built .box, no S3
+# round-trip).
+#
+# Build + test come from shared-steps (run_test gates the test). Publishing is
+# gated by release_to_hcp.
+#
+# Each box is published in-job, right after it is built and tested; publishes
+# run in parallel across the provider/variant matrix.
+#
+# Hyper-V (vagrant_type ALL or vagrant_hyperv) builds as a leg of
+# build-gh-hosted (x86_64 GitHub/RunsOn runner). It has NO live `vagrant up`
+# test - a Hyper-V guest can't boot on the Linux runner - so build-gh-hosted
+# forces run_test=false for the hyperv leg (only shared-steps' offline
+# validation runs); the box is then published like the other providers.
+#
+# Stage implementations live in composite actions:
+#   .github/actions/shared-steps           - Packer build + vagrant up smoke test
+#   .github/actions/vagrant-publish-steps  - HCP Vagrant Registry publish of the local box
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        date_time_stamp:
+          description: 'Custom date+time stamp, YYYYMMDDhhmmss'
+          required: false
+          default: ''
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+
+        vagrant_type:
+          description: 'Vagrant image type'
+          required: true
+          default: 'ALL'
+          type: choice
+          options:
+            - ALL
+            - vagrant_libvirt
+            - vagrant_virtualbox
+            - vagrant_vmware
+            - vagrant_hyperv
+
+        self-hosted:
+          description: "Build on self-hosted runner"
+          required: true
+          type: boolean
+          default: true
+
+        self_hosted_runner:
+          description: 'self-hosted runner'
+          required: true
+          default: 'aws-ec2'
+          type: choice
+          options:
+            - self-hosted
+            - aws-ec2
+
+        run_test:
+          description: "Do image simple testing and generate installed packages list"
+          required: true
+          type: boolean
+          default: true
+
+        store_as_artifact:
+          description: "Store images to the workflow Artifacts"
+          required: true
+          type: boolean
+          default: false
+
+        upload_to_s3:
+          description: "Upload to S3 Bucket"
+          required: true
+          type: boolean
+          default: true
+
+        release_to_hcp:
+          description: "Publish boxes to the HCP Vagrant Registry"
+          required: true
+          type: boolean
+          default: true
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+jobs:
+  init-data:
+    name: Initialize common data
+    runs-on: ubuntu-24.04
+    outputs:
+      time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
+      date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+      matrix_gh: ${{ steps.set-matrix.outputs.matrix_gh }}
+      matrix_sh: ${{ steps.set-matrix.outputs.matrix_sh }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          # Build matrix is json array of string elements like:
+          matrix_gh=  #  ["vagrant_libvirt-x86_64", "vagrant_virtualbox-x86_64"]
+          matrix_sh=  #  ["vagrant_vmware-x86_64"]
+
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_libvirt" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+            if [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
+              VARIANTS_SH+=("vagrant_libvirt-x86_64")
+            else
+              VARIANTS_GH+=("vagrant_libvirt-x86_64")
+            fi
+          fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_virtualbox" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+            if [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
+              VARIANTS_SH+=("vagrant_virtualbox-x86_64")
+            else
+              VARIANTS_GH+=("vagrant_virtualbox-x86_64") # tests aren't work on GitHub runners, use self-hosted to run tests
+            fi
+          fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_vmware" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+              VARIANTS_SH+=("vagrant_vmware-x86_64") # VMware has networking issues on GitHub runners, so we use self-hosted runner
+          fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_hyperv" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
+              # Hyper-V always builds on the GitHub/RunsOn x86_64 runner; it has
+              # no live test (a Hyper-V guest can't boot on the Linux runner), so
+              # the build-gh-hosted leg forces run_test=false for it.
+              VARIANTS_GH+=("hyperv-x86_64")
+          fi
+
+          [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
+          matrix_gh=${matrix_gh%,}  # Remove the trailing comma
+          echo matrix_gh=$(jq -c <<< [${matrix_gh}]) >> $GITHUB_OUTPUT
+          echo "[Debug] on GitHub Hosted [${matrix_gh}]"
+
+          [ ${#VARIANTS_SH[@]} -ne 0 ] && matrix_sh=$(printf '"%s",' "${VARIANTS_SH[@]}")
+          matrix_sh=${matrix_sh%,}  # Remove the trailing comma
+          echo matrix_sh=$(jq -c <<< [${matrix_sh}]) >> $GITHUB_OUTPUT
+          echo "[Debug] on Self Hosted [${matrix_sh}]"
+
+      - name: Date+time stamp
+        id: date-time-stamp
+        run: |
+          # date+time stamp, YYYYMMDDhhmmss
+          if [ "${{ inputs.date_time_stamp }}" != "" ]; then
+            date_time_stamp="${{ inputs.date_time_stamp }}"
+          else
+            date_time_stamp=$(date -u '+%Y%m%d%H%M%S')
+          fi
+          echo "time_stamp=${date_time_stamp}" >> $GITHUB_OUTPUT
+
+          # date stamp, YYYYMMDD
+          date_stamp=${date_time_stamp:0:-6}
+          echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+
+  build-gh-hosted:
+    name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} build+test+publish
+    permissions:
+      id-token: write
+      contents: read
+    needs: [init-data]
+    if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
+    # use runs-on runners if within the almalinux org, otherwise GH runners"
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=r8i.2xlarge/image=ubuntu24-full-x64/volume=60g/spot=false/nested-virt', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
+    # Serialize publishes per box: every provider of the same box (matrix.variant
+    # -> same HCP box+version) runs one at a time; different boxes (10 vs 10-v2)
+    # run in parallel. cancel-in-progress:false queues instead of cancelling.
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10-kitten' || inputs.version_major == '10' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
+        matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_gh) }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Prepare some environment variables
+        run: |
+          # Read image type
+          IFS=- read -r type arch <<< "${{ matrix.matrix_gh }}"
+          echo "type=$type" >> $GITHUB_ENV
+          echo "ARCH=$arch" >> $GITHUB_ENV
+          # Hyper-V has no live `vagrant up` test (a Hyper-V guest can't boot on
+          # the Linux runner), so force run_test off for it; honor the input for
+          # the libvirt / virtualbox legs.
+          if [ "$type" = "hyperv" ]; then
+            echo "RUN_TEST=false" >> $GITHUB_ENV
+          else
+            echo "RUN_TEST=${{ inputs.run_test }}" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
+        with:
+          type: ${{ env.type }}
+          variant: ${{ matrix.variant }}
+          arch: ${{ env.ARCH }}
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: ${{ env.RUN_TEST }}
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/vagrant-publish-steps
+        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_gh }} box to HCP
+        if: ${{ inputs.release_to_hcp }}
+        with:
+          image_file: ${{ env.IMAGE_FILE }}
+          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
+          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
+          HCP_ORG: ${{ vars.HCP_ORG }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+  # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
+  # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
+  start-self-hosted-runner:
+    name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} runner
+    if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
+    runs-on: ubuntu-24.04
+    needs: [init-data]
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
+        matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
+
+    steps:
+    - name: Setup and start runner
+      if: inputs.self_hosted_runner == 'aws-ec2' && github.repository_owner != 'AlmaLinux'
+      uses: unblocked/ec2-action-builder@v1.12
+      with:
+        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ vars.AWS_REGION }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_X86_64 }}
+
+        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
+        ec2_instance_type: c5n.metal
+
+        ec2_root_disk_size_gb: "16"         # override default size which is too small for actions and tests stuff
+        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
+        ec2_instance_ttl: 30                # Optional (default is 60 minutes)
+        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
+        ec2_instance_tags: >                # Required for IAM role resource permission scoping
+          [
+            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
+          ]
+
+  build-self-hosted:
+    name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} build+test+publish
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.self-hosted && needs.init-data.outputs.matrix_sh != '[]' }}
+    needs: [init-data, start-self-hosted-runner]
+    # If almalinux org, use RunsOn with:
+    # - AlmaLinux 9.x x86_64 specific AWS AMI ID (need to build Vagrant for VMware)
+    #
+    # Otherwise use AWS EC2 Self-Hosted x86_64 runner set up with the 'start-self-hosted-runner' job above
+    #
+    # Or use manually set up runner.
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=r8i.2xlarge/ami={1}/volume=60g/spot=false/nested-virt', github.run_id, vars.EC2_AMI_ID_AL9_X86_64)
+        ||
+        inputs.self_hosted_runner == 'aws-ec2' && github.run_id
+        ||
+        matrix.matrix_sh
+      }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10' || inputs.version_major == '10-kitten' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
+        matrix_sh: ${{ fromJSON(needs.init-data.outputs.matrix_sh) }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Prepare some environment variables
+        run: |
+          # Read image type
+          IFS=- read -r type arch <<< "${{ matrix.matrix_sh }}"
+          echo "type=$type" >> $GITHUB_ENV
+          echo "ARCH=$arch" >> $GITHUB_ENV
+
+      - name: Clean up runner
+        if: inputs.self_hosted_runner != 'aws-ec2'
+        run: sudo rm -rf ansible .vagrant output-*
+
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/shared-steps
+        name: ${{ matrix.variant }} ${{ matrix.matrix_sh }} image
+        with:
+          type: ${{ env.type }}
+          variant: ${{ matrix.variant }}
+          arch: ${{ env.ARCH }}
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          run_test: ${{ inputs.run_test }}
+          runner: >-
+            ${{
+              github.repository_owner == 'AlmaLinux' && 'aws-ec2'
+              || inputs.self_hosted_runner == 'aws-ec2' && 'aws-ec2'
+              || 'self_hosted'
+            }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+      - uses: ./.github/actions/vagrant-publish-steps
+        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_sh }} box to HCP
+        if: ${{ inputs.release_to_hcp }}
+        with:
+          image_file: ${{ env.IMAGE_FILE }}
+          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
+          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
+          HCP_ORG: ${{ vars.HCP_ORG }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}

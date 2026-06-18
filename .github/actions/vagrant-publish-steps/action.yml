@@ -1,0 +1,265 @@
+name: "Vagrant box publish steps"
+description: >
+  Publish a locally-built AlmaLinux Vagrant .box to the HCP Vagrant
+  Registry from the build runner: parse the box filename, install the hcp
+  CLI (apt on Ubuntu, dnf/HashiCorp RPM repo on EL9 - vagrant itself is
+  already present on every build runner), and run `vagrant cloud publish`.
+  Adapted from the publish steps of .github/workflows/vagrant-publish.yml,
+  minus dry-run, and sourcing the box from a local file instead of a URL.
+
+inputs:
+  image_file:
+    description: "Path to the locally-built .box file"
+    required: true
+  image_url:
+    description: "Public URL of the box (cosmetic, for the summary / notification link)"
+    required: false
+    default: ''
+  notify_mattermost:
+    description: "Send notification to Mattermost (true/false)"
+    required: true
+    default: 'true'
+  HCP_CLIENT_ID:
+    description: "HCP service-principal client ID"
+    required: true
+  HCP_CLIENT_SECRET:
+    description: "HCP service-principal client secret"
+    required: true
+  HCP_ORG:
+    description: "HCP Vagrant Registry organization"
+    required: true
+  MATTERMOST_WEBHOOK_URL:
+    description: "Mattermost webhook URL"
+    required: false
+    default: ''
+  MATTERMOST_CHANNEL:
+    description: "Mattermost channel"
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare environment
+      shell: bash
+      env:
+        IMAGE_FILE: ${{ inputs.image_file }}
+      run: |
+        # Parse the box filename to derive the HCP box name, provider,
+        # version, and architecture (same logic as vagrant-publish.yml).
+        image_file=$(basename "${IMAGE_FILE}")
+
+        # Regex for the modern and "Kitten" filename formats.
+        REGEX_MODERN="^AlmaLinux-(Kitten|[0-9]+)-Vagrant-([a-z]+)-([0-9\.]+)-([0-9\.]+)\.(aarch64|x86_64)(_v2)?\.box$"
+
+        # Regex for the legacy (AlmaLinux 8) filename format.
+        REGEX_LEGACY="^AlmaLinux-([0-9]+)-Vagrant-([0-9\.]+)-([0-9]+)\.(aarch64|x86_64)(_v2)?\.(.+)\.box$"
+
+        if [[ "$image_file" =~ $REGEX_MODERN ]]; then
+          major_or_kitten="${BASH_REMATCH[1]}"
+          provider="${BASH_REMATCH[2]}"
+          release_version="${BASH_REMATCH[3]}"
+          date_stamp="${BASH_REMATCH[4]}"
+          architecture="${BASH_REMATCH[5]}"
+
+          if [[ "$major_or_kitten" == "Kitten" ]]; then
+            major_version="10" # Kitten is based on version 10
+            kitten_suffix="-kitten"
+          else
+            major_version="$major_or_kitten"
+            # For non-Kitten files, remove the trailing .<digit> from the date stamp.
+            date_stamp="${date_stamp%.*}"
+          fi
+
+          if [[ -n "${BASH_REMATCH[6]}" ]]; then
+            is_v2_suffix="-x86_64_v2"
+          fi
+
+        elif [[ "$image_file" =~ $REGEX_LEGACY ]]; then
+          major_version="${BASH_REMATCH[1]}"
+          release_version="${BASH_REMATCH[2]}"
+          date_stamp="${BASH_REMATCH[3]}"
+          architecture="${BASH_REMATCH[4]}"
+          provider="${BASH_REMATCH[6]}"
+
+          if [[ -n "${BASH_REMATCH[5]}" ]]; then
+            is_v2_suffix="-x86_64_v2"
+          fi
+
+        else
+          echo "[Error]: No pattern matched for '$image_file'" && exit 1
+        fi
+
+        # Remap "vmware" to the correct Vagrant provider name "vmware_desktop"
+        if [[ "$provider" == "vmware" ]]; then
+          provider="vmware_desktop"
+        fi
+
+        # Construct the final box-name version string
+        version_major="${major_version}${kitten_suffix}${is_v2_suffix}"
+
+        # AlmaLinux distro release string
+        [[ $version_major == *kitten* ]] && release_string="AlmaLinux OS Kitten $major_version $architecture" \
+          || release_string="AlmaLinux OS $major_version $architecture"
+
+        {
+          echo "version_major=${version_major}"
+          echo "vagrant_provider=${provider}"
+          echo "architecture=${architecture}"
+          echo "release_version=${release_version}"
+          echo "release_string=${release_string}"
+          echo "date_stamp=${date_stamp}"
+          echo "image_file=${image_file}"
+        } >> "$GITHUB_ENV"
+
+    - name: Install hcp (and vagrant if missing)
+      shell: bash
+      run: |
+        # vagrant is already present on the build runner; install the hcp
+        # CLI OS-aware (apt on Ubuntu legs, dnf on the EL9 vmware leg).
+        if command -v apt-get >/dev/null 2>&1; then
+          ubuntu_codename="$(lsb_release -cs)"
+          sudo rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${ubuntu_codename} main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get -y update
+          sudo apt-get -y install hcp
+          command -v vagrant >/dev/null 2>&1 || sudo apt-get -y install vagrant
+        elif command -v dnf >/dev/null 2>&1; then
+          sudo dnf install -y dnf-plugins-core
+          sudo dnf config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+          if ! sudo dnf install -y hcp; then
+            # hcp may not be in the RPM repo on all EL9 mirrors; fall back to
+            # the released binary.
+            echo "[Info] hcp not available via dnf, downloading the released binary"
+            sudo dnf install -y jq unzip
+            ver=$(curl -fsSL https://api.releases.hashicorp.com/v1/releases/hcp/latest | jq -r .version)
+            curl -fsSL -o /tmp/hcp.zip "https://releases.hashicorp.com/hcp/${ver}/hcp_${ver}_linux_amd64.zip"
+            sudo unzip -o /tmp/hcp.zip hcp -d /usr/local/bin/
+          fi
+          command -v vagrant >/dev/null 2>&1 || sudo dnf install -y vagrant
+        else
+          echo "[Error] no supported package manager (apt-get / dnf) on this runner"
+          exit 1
+        fi
+
+        hcp version || true
+        vagrant --version
+
+    - name: Publish the box
+      shell: bash
+      env:
+        IMAGE_FILE: ${{ inputs.image_file }}
+        HCP_CLIENT_ID: ${{ inputs.HCP_CLIENT_ID }}
+        HCP_CLIENT_SECRET: ${{ inputs.HCP_CLIENT_SECRET }}
+        HCP_ORG: ${{ inputs.HCP_ORG }}
+      run: |
+        # Publish the locally-built box to the HCP Vagrant Registry.
+        # The lowercase fields below are populated by the "Prepare environment"
+        # step via $GITHUB_ENV and read here as ${{ env.* }} (same style as
+        # vagrant-publish.yml); checksum/arch are local to this script.
+        BOX_DIR=$(dirname "${IMAGE_FILE}")
+        cd "${BOX_DIR}"
+
+        [ "${{ env.architecture }}" = "x86_64" ] && arch=amd64
+        [ "${{ env.architecture }}" = "aarch64" ] && arch=arm64
+
+        checksum="$(sha256sum "${{ env.image_file }}" | awk '{ print $1 }')"
+        echo "[Debug] provider=${{ env.vagrant_provider }} box_name=${{ env.version_major }} checksum=${checksum} image_file=${{ env.image_file }}"
+
+        # Fail fast on missing credentials: with empty client-id/secret,
+        # `hcp auth login` silently falls back to an interactive browser login
+        # that hangs and times out in CI.
+        if [ -z "${HCP_CLIENT_ID}" ] || [ -z "${HCP_CLIENT_SECRET}" ]; then
+          echo "[Error] HCP_CLIENT_ID / HCP_CLIENT_SECRET are empty."
+          echo "        Configure the HCP service-principal secrets on the repo (or org):"
+          echo "          gh secret set HCP_CLIENT_ID --repo <owner>/<repo>"
+          echo "          gh secret set HCP_CLIENT_SECRET --repo <owner>/<repo>"
+          exit 1
+        fi
+
+        hcp auth login --client-id="${HCP_CLIENT_ID}" --client-secret="${HCP_CLIENT_SECRET}"
+        VAGRANT_CLOUD_TOKEN="$(hcp auth print-access-token)"
+        export VAGRANT_CLOUD_TOKEN
+
+        publish_args=(
+          -C sha256
+          -c "${checksum}"
+          --release
+          -a "${arch}"
+          --direct-upload
+          --debug
+          -f
+          "${HCP_ORG}/${{ env.version_major }}"
+          "${{ env.release_version }}.${{ env.date_stamp }}"
+          "${{ env.vagrant_provider }}"
+          "${{ env.image_file }}"
+        )
+
+        # Sibling providers (libvirt / virtualbox / vmware) publish to the SAME
+        # box version in parallel, so they can collide while the shared version
+        # is being created or modified. There is no CLI to detect an in-flight
+        # publish, so retry with backoff: the only real contention is the
+        # version-create race, which clears once a sibling finishes. `vagrant
+        # cloud publish -f` is idempotent, so re-running after a partial publish
+        # is safe.
+        MAX_ATTEMPTS=6
+        attempt=1
+        while :; do
+          echo "[Info] vagrant cloud publish attempt ${attempt}/${MAX_ATTEMPTS}"
+          set +e
+          publish_out=$(vagrant cloud publish "${publish_args[@]}" 2>&1)
+          publish_rc=$?
+          set -e
+          echo "${publish_out}"
+
+          if [ "${publish_rc}" -eq 0 ]; then
+            echo "[Info] Publish succeeded on attempt ${attempt}"
+            break
+          fi
+
+          if [ "${attempt}" -ge "${MAX_ATTEMPTS}" ]; then
+            echo "[Error] Publish failed after ${MAX_ATTEMPTS} attempts"
+            exit "${publish_rc}"
+          fi
+
+          if echo "${publish_out}" | grep -qiE 'already (exists|been taken)|being (created|modified|updated)|conflict|\b(409|422)\b|please (retry|try again)|simultaneous|locked'; then
+            echo "[Warn] Concurrent-publish collision on the shared box version; backing off and retrying"
+          else
+            echo "[Warn] Publish failed (exit ${publish_rc}); backing off and retrying"
+          fi
+
+          sleep $(( attempt * 15 ))
+          attempt=$(( attempt + 1 ))
+        done
+
+    - name: The job summary
+      uses: actions/github-script@v8
+      env:
+        HCP_ORG: ${{ inputs.HCP_ORG }}
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addRaw('**${{ env.release_string }}** Vagrant box cloud publishing\n')
+              .addRaw('Vagrant box for **${{ env.vagrant_provider }}** version: `${{ env.release_version }}.${{ env.date_stamp }}`\n')
+              .addRaw('The box name: ')
+              .addLink('${{ env.HCP_ORG }}/${{ env.version_major }}', 'https://portal.cloud.hashicorp.com/vagrant/discover/${{ env.HCP_ORG }}/${{ env.version_major }}/versions/${{ env.release_version }}.${{ env.date_stamp }}')
+              .addRaw('Published to the Cloud: ✅')
+              .write()
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost == 'true' && inputs.MATTERMOST_WEBHOOK_URL != ''
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ inputs.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ inputs.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.release_string }}** Vagrant box cloud publishing, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          Vagrant box for **${{ env.vagrant_provider }}** version: `${{ env.release_version }}.${{ env.date_stamp }}`
+
+          The box name: [${{ inputs.HCP_ORG }}/${{ env.version_major }}](https://portal.cloud.hashicorp.com/vagrant/discover/${{ inputs.HCP_ORG }}/${{ env.version_major }}/versions/${{ env.release_version }}.${{ env.date_stamp }})
+
+          Published to the Cloud: ✅
