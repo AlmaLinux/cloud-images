@@ -1,0 +1,719 @@
+name: "AWS: Build, Test, Copy to regions and Release"
+
+# Unified AWS AMI pipeline in a single workflow_dispatch:
+#   1. Build the AMIs with Packer (x86_64 + aarch64).
+#   2. Test each built AMI (launch an instance from it, assert release/arch/dnf).
+#   3. Copy each AMI to all AWS regions, make public, and open ONE wiki PR.
+#   4. Release each AMI to its AWS Marketplace product.
+#
+# Stage gating (chained on job results): a failing test leg skips copy +
+# release, so a broken AMI is never copied/made public/released.
+#
+# The wiki PR is created by the single prepare-data-for-wiki job (NOT a
+# per-arch matrix): it merges the x86_64 + aarch64 data into one MD/CSV and
+# opens exactly one PR, so the two arches never race to create conflicting PRs.
+#
+# Fixed behaviours (inputs omitted from the standalone workflows):
+#   test_ami=true, make_public=true, draft=false, release_to_marketplace=true,
+#   public_product=true
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - kitten_10
+            - 10
+            - 9
+            - 8
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+env:
+  ALMALINUX_AWS_ACCOUNT_ID: 764336703387
+  ALMALINUX_AWS_INFRA_ACCOUNT_ID: 383541928683
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+  # AlmaLinux Wiki repository almalinux/wiki
+  wiki_repo: almalinux/wiki
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-ami:
+    name: Build ${{ matrix.variant }} ${{ matrix.arch }} AMI
+    runs-on: ubuntu-24.04
+    outputs:
+      ami_x86_64: ${{ steps.get-ami-id.outputs.ami_x86_64 }}
+      ami_aarch64: ${{ steps.get-ami-id.outputs.ami_aarch64 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(format('["{0}"]', inputs.version_major )) }}
+        arch:
+          - x86_64
+          - aarch64
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Prepare staff
+      run: |
+        packer_template=amazon-ebssurrogate.almalinux_${{ matrix.variant }}_ami_${{ matrix.arch }}
+        echo "PACKER_TEMPLATE=${packer_template}" >> $GITHUB_ENV
+
+        variant="${{ matrix.variant }}"
+        variant="${variant^}"
+        variant="${variant//_/ }"
+        SOURCE_AMI_ID=$(aws ec2 describe-images --owners ${{ env.ALMALINUX_AWS_ACCOUNT_ID }} --query "Images | max_by(@, &CreationDate) | ImageId" --filters "Name=name,Values=AlmaLinux OS ${variant}*${{ matrix.arch }}" --region ${{ vars.AWS_REGION }} --output text)
+        if [[ "${SOURCE_AMI_ID}" == "" || "${SOURCE_AMI_ID}" == "None" ]]; then
+          echo "[Error] Failed to get AMI ID for AlmaLinux ${variant} ${{ matrix.arch }}."
+          exit 1
+        else
+          echo "[Debug] Source AMI ID: '${SOURCE_AMI_ID}'"
+        fi
+        echo "SOURCE_AMI_ID=${SOURCE_AMI_ID}" >> $GITHUB_ENV
+
+    - name: Update system
+      run: |
+        sudo apt-get -y update
+
+    - name: Add Hashicorp repository
+      run: |
+        wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt-get -y update
+
+    - name: Install packer
+      run: |
+        sudo apt-get -y install packer
+
+    - name: Install ansible
+      run: sudo apt-get -y install ansible
+
+    - name: Initialize packer
+      run: packer init -upgrade .
+
+    - name: Build ${{ matrix.variant }} ${{ matrix.arch }} AMI
+      run: |
+        packer build \
+          -var='aws_source_ami_${{ matrix.variant }}_${{ matrix.arch }}=${{ env.SOURCE_AMI_ID }}' \
+          -var='aws_ami_region=${{ vars.AWS_REGION }}' \
+          -only=${{ env.PACKER_TEMPLATE }} . |& tee ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+
+        exit_code=${PIPESTATUS[0]}
+        if [[ "${exit_code}" != "0" ]]; then
+          exit 1
+        fi
+
+    - uses: actions/upload-artifact@v7
+      name: Store build log as artifact
+      if: always()
+      with:
+        compression-level: 6
+        name: ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+        path: ${{ matrix.variant }}_${{ matrix.arch }}_build.log
+
+    - name: Get AMI ID
+      id: get-ami-id
+      run: |
+        AMI_ID=$(grep -E '${{ vars.AWS_REGION }}: ami-' ${{ matrix.variant }}_${{ matrix.arch }}_build.log | awk '{print $2}')
+        if [[ "${AMI_ID}" == "" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI ID found in the build log: '${AMI_ID}'"
+        fi
+        echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+        echo "ami_${{ matrix.arch }}=${AMI_ID}" >> $GITHUB_OUTPUT
+
+    - name: Get AMI Name
+      run: |
+        AMI_NAME=$(aws ec2 describe-images --filters "Name=image-id,Values=${{ env.AMI_ID }}" --query 'Images[0].Name' --output text)
+        if [[ "${AMI_NAME}" == "" || "${AMI_NAME}" == "None" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI Name: '${AMI_NAME}'"
+        fi
+        echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+    - name: Launch permission for the AMI to Infra account
+      run: |
+        aws ec2 modify-image-attribute --image-id ${{ env.AMI_ID }} --launch-permission "Add=[{UserId=${{ env.ALMALINUX_AWS_INFRA_ACCOUNT_ID }}}]"
+
+    - name: Print AMI summary
+      uses: actions/github-script@v8
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addHeading('${{ env.AMI_NAME }}', '4')
+              .addHeading('AMI ID: ${{ env.AMI_ID }}', '5')
+              .write()
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ env.AMI_NAME }}** AWS AMI, built by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **AMI ID**: `${{ env.AMI_ID }}`
+
+  test-ami:
+    name: Test ${{ inputs.version_major }} ${{ matrix.arch }} AMI
+    needs: [build-ami]
+    runs-on: ${{ format('runs-on={0}/family={1}/ami={2}/region={3}', github.run_id, contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium', contains(matrix.arch, 'aarch64') && needs.build-ami.outputs.ami_aarch64 || needs.build-ami.outputs.ami_x86_64, vars.AWS_REGION )}}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - aarch64
+          - x86_64
+
+    steps:
+      - name: Get list of installed packages
+        run: rpm -qa --queryformat '%{NAME}\n' | sort > pkgs.list
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install aws CLI and necessary packages
+        run: |
+          sudo dnf install -y -q unzip jq
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+          unzip -qq awscliv2.zip
+          sudo ./aws/install
+
+      - name: Get AMI ID
+        run: |
+          AMI_ID=${{ matrix.arch == 'x86_64' && needs.build-ami.outputs.ami_x86_64 || needs.build-ami.outputs.ami_aarch64 }}
+          echo "AMI_ID=${AMI_ID}" >> $GITHUB_ENV
+
+      - name: Get AMI architecture
+        run: |
+          AMI_ARCH=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Tags' | jq -r '.[] | select(.Key == "Architecture") | .Value')
+          if [[ "${AMI_ARCH}" == "" || "${AMI_ARCH}" == "None" ]]; then
+            exit 1
+          else
+            echo "[Debug] AMI Arch: '${AMI_ARCH}'"
+          fi
+          echo "AMI_ARCH=${AMI_ARCH}" >> $GITHUB_ENV
+
+      - name: Get AlmaLinux versions
+        id: ami-version
+        run: |
+          AMI_VERSION=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Tags' | jq -r '.[] | select(.Key == "Version") | .Value')
+          if [[ "${AMI_VERSION}" == "" || "${AMI_VERSION}" == "None" ]]; then
+            exit 1
+          else
+            echo "[Debug] AMI Version: '${AMI_VERSION}'"
+          fi
+          echo "AMI_VERSION=${AMI_VERSION}" >> $GITHUB_ENV
+          echo "OS_VERSION=$(echo $AMI_VERSION | sed 's/\.[0-9]\{8\}.*$//g')" >> $GITHUB_ENV
+
+      - name: Test AMI
+        run: |
+          case "${{ env.OS_VERSION }}" in
+            10)
+              OS_RELEASE="AlmaLinux Kitten release ${{ env.OS_VERSION }}"
+              PKGS_LIST_FILE="AlmaLinux_OS_Kitten_${{ env.AMI_VERSION }}_${{ env.AMI_ARCH }}.ami.txt"
+              ;;
+            *)
+              OS_RELEASE="AlmaLinux release ${{ env.OS_VERSION }}"
+              PKGS_LIST_FILE="AlmaLinux_OS_${{ env.AMI_VERSION }}_${{ env.AMI_ARCH }}.ami.txt"
+              ;;
+          esac
+
+          # Prepare packages list file
+          mv pkgs.list ${PKGS_LIST_FILE}
+          echo "PKGS_LIST_FILE=${PKGS_LIST_FILE}" >> $GITHUB_ENV
+
+          echo "[Debug] AlmaLinux release:"
+          grep "${OS_RELEASE}" /etc/almalinux-release || exit 1
+          # Capture the full /etc/almalinux-release line (including code name)
+          # so the job-summary / Mattermost-notification steps below can show
+          # the same string the user sees from `cat /etc/almalinux-release`.
+          ALMA_RELEASE=$(head -n1 /etc/almalinux-release)
+          echo "ALMA_RELEASE=${ALMA_RELEASE}" >> "$GITHUB_ENV"
+
+          echo "[Debug] System architecture:"
+          SYSTEM_ARCH=$(rpm -q --qf='%{ARCH}' $(rpm -qf /etc/almalinux-release))
+          echo "  ${SYSTEM_ARCH}"
+          echo "${SYSTEM_ARCH}" | grep '${{ env.AMI_ARCH }}' || exit 1
+          echo "SYSTEM_ARCH=${SYSTEM_ARCH}" >> "$GITHUB_ENV"
+
+          echo "[Debug] Check for updates:"
+          dnf check-update || exit 1
+
+      - uses: actions/upload-artifact@v7
+        name: Store packages list as artifact
+        with:
+          compression-level: 1
+          name: ${{ env.PKGS_LIST_FILE }}
+          path: ${{ env.PKGS_LIST_FILE }}
+
+      - name: Get AMI Name
+        if: always() && env.AMI_ID != ''
+        run: |
+          AMI_NAME=$(aws ec2 describe-images --image-ids ${{ env.AMI_ID }} --query 'Images[0].Name' --output text)
+          if [[ "${AMI_NAME}" == "" || "${AMI_NAME}" == "None" ]]; then
+            AMI_NAME="${{ env.AMI_ID }}"
+          fi
+          echo "[Debug] AMI Name: '${AMI_NAME}'"
+          echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+      - name: Job summary
+        if: always() && env.AMI_ID != ''
+        env:
+          INSTANCE_TYPE: ${{ contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium' }}
+        run: |
+          {
+            echo "## AMI Image Test"
+            echo ""
+            echo "- **AMI Name**: \`${AMI_NAME:-${AMI_ID}}\`"
+            echo "- **AMI ID**: \`${AMI_ID}\`"
+            echo "- **Instance Type**: \`${INSTANCE_TYPE}\`"
+            if [ -n "${ALMA_RELEASE:-}" ]; then
+              echo "- **AlmaLinux release**: \`${ALMA_RELEASE}\`"
+            fi
+            if [ -n "${SYSTEM_ARCH:-}" ]; then
+              echo "- **System architecture**: \`${SYSTEM_ARCH}\`"
+            fi
+            echo "- **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send notification to Mattermost
+        uses: mattermost/action-mattermost-notify@master
+        if: always() && inputs.notify_mattermost && env.AMI_ID != ''
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+          TEXT: |
+            :almalinux: **${{ env.AMI_NAME }}**, AMI image test, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            **AMI Name**: `${{ env.AMI_NAME }}`
+            **AMI ID**: `${{ env.AMI_ID }}`
+            **Instance Type**: `${{ contains(matrix.arch, 'aarch64') && 't4g.medium' || 't3.medium' }}`
+            ${{ env.ALMA_RELEASE && format('**AlmaLinux release**: `{0}`', env.ALMA_RELEASE) || '' }}
+            ${{ env.SYSTEM_ARCH && format('**System architecture**: `{0}`', env.SYSTEM_ARCH) || '' }}
+            **Test**: ${{ job.status == 'success' && 'passed ✅' || 'failed ❌' }}
+
+  copy-ami:
+    name: "Copy ${{ matrix.ami_id }} AMI to all available AWS regions and make public"
+    runs-on: ubuntu-24.04
+    needs: [build-ami, test-ami]
+    # Run after a successful build and passing test. Skipped if any test leg
+    # failed, so a broken AMI is never copied/made public.
+    if: ${{ !cancelled() && needs.build-ami.result == 'success' && needs.test-ami.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ami_id: ${{ fromJSON(format('["{0}", "{1}"]', needs.build-ami.outputs.ami_x86_64, needs.build-ami.outputs.ami_aarch64)) }}
+        exclude:
+          - ami_id: ''
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Get AMI Name
+      run: |
+        AMI_NAME=$(aws ec2 describe-images --filters "Name=image-id,Values=${{ matrix.ami_id }}" --query 'Images[0].Name' --output text)
+        if [[ "${AMI_NAME}" == "" || "${AMI_NAME}" == "None" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI Name: '${AMI_NAME}'"
+        fi
+        echo "AMI_NAME=${AMI_NAME}" >> $GITHUB_ENV
+
+    - name: Copy an AMI to all available AWS regions and make it public
+      run: |
+        # Lowercase AMI Name, replace spaces and dots with underscores
+        # to get file name for wiki data, like "AlmaLinux OS 9.6.20250522 x86_64" and almalinux_os_9_6_20250522_x86_64
+        wiki_data_file=$(echo "${{ env.AMI_NAME }}" | tr '[:upper:]' '[:lower:]' | tr -s ' .' '_')
+        echo "wiki_data_file=${wiki_data_file}" >> $GITHUB_ENV
+
+        pip3 install markdown_table
+
+        tools/aws_ami_mirror.py \
+          --csv-output ${{ github.workspace }}/${wiki_data_file}.csv \
+          --md-output ${{ github.workspace }}/${wiki_data_file}.md \
+          --ami ${{ matrix.ami_id }}
+
+    - name: Print AMI summary
+      uses: actions/github-script@v8
+      with:
+        result-encoding: string
+        script: |
+          core.summary
+              .addHeading('${{ env.AMI_NAME }}', '4')
+              .addHeading('AMI ID: ${{ matrix.ami_id }}', '5')
+              .addHeading('Copied and public: ✅', '5')
+              .write()
+
+    - name: Store Wiki's CSV and Markdown data as artifact
+      uses: actions/upload-artifact@v7
+      with:
+        compression-level: 6
+        path: |
+          almalinux*.csv
+          almalinux*.md
+        name: ${{ env.wiki_data_file }}_wiki_data
+
+  prepare-data-for-wiki:
+    name: Prepare MD and CSV data for Wiki
+    runs-on: ubuntu-24.04
+    needs: [build-ami, copy-ami]
+    # Single (non-matrix) job: merges the x86_64 + aarch64 data into one MD/CSV
+    # and opens exactly ONE wiki PR, so the two arches never create conflicting PRs.
+    if: ${{ !cancelled() && needs.copy-ami.result == 'success' }}
+
+    steps:
+      - name: Checkout ${{ env.wiki_repo }}, branch 'master'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.wiki_repo }}
+          path: wiki
+          token:  ${{ secrets.GIT_HUB_TOKEN }}
+
+      - name: Download Wiki's CSV and Markdown data artifacts
+        uses: actions/download-artifact@v8
+
+      - name: Merge MD and CSV data
+        run: |
+          # Install prettier for Markdown formatting
+          sudo apt install npm
+
+          # Artifacts are downloaded into *x86_64_wiki_data/ and *aarch64_wiki_data/ directories
+          # They are like:
+          #  almalinux_os_kitten_10_20250904_0_x86_64_wiki_data/almalinux_os_kitten_10_20250904_0_x86_64_wiki_data.md
+          #  almalinux_os_10_0_20250904_aarch64_wiki_data/almalinux_os_10_0_20250904_aarch64_wiki_data.csv
+
+          # From x86_64 artifact extract string like:
+          #  almalinux_os_kitten_10_20250904_0_wiki_data
+          #  almalinux_os_kitten_10_0_20250904_wiki_data
+          RESULT=$( find . -name \*x86_64_wiki_data -printf '%P\n' | sed 's/x86_64_//g' )
+          [[ -z "$RESULT" ]] && { echo "[Error] Could not find *x86_64_wiki_data directory"; exit 1; }
+
+          # Extract full release, release major version, and date stamp
+          # Remove the prefix "almalinux_os_" and suffix "_wiki_data"
+          middle="${RESULT#almalinux_os_}"
+          middle="${middle%_wiki_data}"
+          # Find the date stamp (8 digits followed by optional _number)
+          if [[ $middle =~ ([0-9]{8}(_[0-9]+)?)$ ]]; then
+              datestamp="${BASH_REMATCH[1]}"
+              # Remove the datestamp and trailing underscore to get full release
+              release_full="${middle%_${datestamp}}"
+
+              # Prepare full release and release major version
+              if [[ $release_full == "kitten"* ]]; then
+                  release=$release_full
+                  release_full="${release_full//_/ }"
+                  release_full="${release_full^}"
+              else
+                  release=${release_full%_*}
+                  release_full="${release_full//_/.}"
+              fi
+
+              datestamp="${datestamp//_/.}"
+          else
+              echo "[Error] Could not parse: $input"
+              exit 1
+          fi
+
+          # Locate source .md and .csv files
+          file_x86_64_md=$( ls -1 *x86_64_wiki_data/*x86_64.md )
+          file_aarch64_md=$( ls -1 *aarch64_wiki_data/*aarch64.md )
+          file_x86_64_csv=$( ls -1 *x86_64_wiki_data/*x86_64.csv )
+          file_aarch64_csv=$( ls -1 *aarch64_wiki_data/*aarch64.csv )
+
+          # Set target .md document path and name
+          md_documents_path="docs/cloud"
+          [[ $release == *"kitten"* ]] && md_documents_path="docs/development"
+          md_document="${md_documents_path}/AWS_AMIS_${release}.md"
+
+          # Set target .csv document path and name
+          csv_documents_path="docs/.vuepress/public/ci-data"
+          csv_document="${csv_documents_path}/aws_amis_${release}.csv"
+
+          # Print header
+          head -n 2 "$file_x86_64_md" > wiki/${md_document}
+          # Merge .md files: sort primarily by Region (3rd column)
+          # and secondarily by Arch (5th column) reverse
+          (tail -n +3 "$file_x86_64_md"; tail -n +3 "$file_aarch64_md") | sort -t'|' -k3,3 -k5,5r >> wiki/${md_document}
+          # Make the resulted MD file pretty
+          npx prettier --parser markdown --write wiki/${md_document}
+
+          # Merge .csv files: sort by Region (3rd column) and Version (5th column, reverse)
+          (cat "$file_x86_64_csv"; cat "$file_aarch64_csv") | sort -t',' -k3,3 -k5,5r > wiki/${csv_document}
+
+          echo "RESULT=${RESULT}" >> $GITHUB_ENV
+          echo "RELEASE_STR=AlmaLinux OS ${release_full} ${datestamp}" >> $GITHUB_ENV
+          echo "RESULT_MD=wiki/${md_document}" >> $GITHUB_ENV
+          echo "RESULT_CSV=wiki/${csv_document}" >> $GITHUB_ENV
+
+      - name: Store merged CSV and Markdown data as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          compression-level: 6
+          include-hidden-files: true
+          path: |
+            ${{ env.RESULT_MD }}
+            ${{ env.RESULT_CSV }}
+          name: ${{ env.RESULT }}
+
+      - name: Commit and push MD and CSV to ${{ env.wiki_repo }}, branch '${{ env.RESULT }}'
+        uses: EndBug/add-and-commit@v10
+        with:
+          cwd: wiki
+          new_branch: ${{ env.RESULT }}
+          default_author: user_info
+          message: "Update ${{ env.RELEASE_STR }} AWS AMI IDs"
+          push: true
+
+      - name: Create Pull Request for ${{ env.wiki_repo }}, branch 'master'
+        run: |
+          # create pull request with 'gh pr create' (not a draft)
+          title="Update ${{ env.RELEASE_STR }} AWS AMI IDs"
+          body="This is an auto-generated PR. Any concern or issues, please contact Cloud SIG."
+
+          cd wiki
+          gh auth login --with-token < <(echo ${{ secrets.GIT_HUB_TOKEN }})
+
+          gh pr create \
+            --title "${title}" \
+            --body "${body}" \
+            --repo ${{ env.wiki_repo }} \
+            --base master \
+            |& tee gh_pr_create.log
+
+          exit_code=${PIPESTATUS[0]}
+          if [[ "${exit_code}" != "0" ]]; then
+            exit 1
+          fi
+
+          echo "WIKI_PR_URL=$( grep -i '${{ env.wiki_repo }}/pull/' gh_pr_create.log )" >> $GITHUB_ENV
+
+      - name: Print PR summary
+        uses: actions/github-script@v8
+        if: ${{ env.WIKI_PR_URL != '' }}
+        with:
+          result-encoding: string
+          script: |
+            core.summary
+                .addHeading('${{ env.RELEASE_STR }}', '4')
+                .addLink('${{ env.WIKI_PR_URL }}', '${{ env.WIKI_PR_URL }}')
+                .addHeading('The PR is draft: ❌', '5')
+                .write()
+
+      - name: Send notification to Mattermost
+        uses: mattermost/action-mattermost-notify@master
+        if: inputs.notify_mattermost
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+          TEXT: |
+            :almalinux: **${{ env.RELEASE_STR }}** AWS AMIs copied over regions and made public, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            - **AMI ID (x86_64)**: `${{ needs.build-ami.outputs.ami_x86_64 }}`
+            - **AMI ID (aarch64)**: `${{ needs.build-ami.outputs.ami_aarch64 }}`
+
+            Copied and public: ✅
+            ${{ env.WIKI_PR_URL != '' && format('Wiki PR: [{0}]({0})', env.WIKI_PR_URL) || '' }}
+
+  release-ami-to-marketplace:
+    name: "Release ${{ matrix.ami_id }} to Marketplace"
+    runs-on: ubuntu-24.04
+    needs: [build-ami, test-ami, copy-ami]
+    # Release each built AMI to its arch-specific Marketplace product after the
+    # build/test/copy stages succeed. x86_64 and aarch64 target different
+    # products, so the matrix legs run in parallel without conflict.
+    if: ${{ !cancelled() && needs.build-ami.result == 'success' && needs.test-ami.result == 'success' && needs.copy-ami.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ami_id: ${{ fromJSON(format('["{0}", "{1}"]', needs.build-ami.outputs.ami_x86_64, needs.build-ami.outputs.ami_aarch64)) }}
+        exclude:
+          - ami_id: ''
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION }}
+
+    - name: Describe AMI
+      run: |
+        {
+          echo 'AMI_JSON<<EOF'
+          aws ec2 describe-images --image-ids=${{ matrix.ami_id }}
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Get AMI version and arch, OS version
+      run: |
+        AMI_VERSION=$(echo '${{ env.AMI_JSON }}' | jq -r '.Images[0].Tags[] | select(.Key == "Version") | .Value')
+        if [[ "${AMI_VERSION}" == "" || "${AMI_VERSION}" == "None" ]]; then
+          exit 1
+        else
+          echo "[Debug] AMI Version: '${AMI_VERSION}'"
+        fi
+        echo "AMI_VERSION=${AMI_VERSION}" >> $GITHUB_ENV
+        echo "OS_VERSION=$(echo $AMI_VERSION | sed 's/\.[0-9]\{8\}.*$//g')" >> $GITHUB_ENV
+        echo "AMI_ARCH=${{ fromJSON(env.AMI_JSON).Images[0].Architecture }}" >> $GITHUB_ENV
+
+    - name: Get corresponded Product ID
+      run: |
+        # Get the short name and version major from the AMI JSON
+        short_name="${{ fromJSON(env.AMI_JSON).Images[0].Name }}" && short_name="${short_name% * *}"
+        version_major="${{ env.OS_VERSION }}" && version_major="${version_major%%.*}"
+
+        # List of AlmaLinux public products and their IDs.
+        #
+        # NOTE: the disable directive below is intentional -- the linter
+        # can't track the '${short_name% * *}' expansion above and flags
+        # every case arm with SC2195 'pattern will never match'. The
+        # composed word is always 'AlmaLinux OS <major> <arch>' in
+        # practice (verified by the AWS AMI Name field format for
+        # AlmaLinux images, e.g. 'AlmaLinux OS 9.6.20240619 x86_64').
+        # shellcheck disable=SC2195
+        case "${short_name} ${version_major} ${{ env.AMI_ARCH }}" in
+          "AlmaLinux OS 8 x86_64")          PRODUCT_ID="c076b20a-2305-4771-823f-944909847a05" ;;
+          "AlmaLinux OS 8 arm64")           PRODUCT_ID="744775f7-4efd-4c75-ac32-eb2540b4030c" ;;
+          "AlmaLinux OS 9 x86_64")          PRODUCT_ID="3c74c2ba-21a2-4dc1-a65d-fd0ee7d79900" ;;
+          "AlmaLinux OS 9 arm64")           PRODUCT_ID="2d219cc1-aa44-4a1e-b6fe-258d4ebd3cdb" ;;
+          "AlmaLinux OS 10 x86_64")         PRODUCT_ID="prod-cvyxsvsdzfjx4" ;;
+          "AlmaLinux OS 10 arm64")          PRODUCT_ID="prod-qgpr5bqxuzt5i" ;;
+          "AlmaLinux OS Kitten 10 x86_64")  PRODUCT_ID="prod-svbminwb7w5se" ;;
+          "AlmaLinux OS Kitten 10 arm64")   PRODUCT_ID="prod-npz256ulofnae" ;;
+          *) echo "[Error] Unsupported AlmaLinux release: '${short_name} ${version_major} ${{ env.AMI_ARCH }}'"; exit 1 ;;
+        esac
+        echo "PRODUCT_ID=${PRODUCT_ID}" >> $GITHUB_ENV
+
+    - name: Get the Product Name
+      run: |
+        # Get the product name by product id
+        {
+          echo 'PRODUCT_NAME<<EOF'
+          aws marketplace-catalog describe-entity \
+            --catalog "AWSMarketplace" \
+            --entity-id "${{ env.PRODUCT_ID }}" \
+            --query "DetailsDocument.Description.ProductTitle" \
+            --output text
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Get recommended Instance Type
+      run: |
+        INSTANCE_TYPE=$(aws marketplace-catalog describe-entity --catalog "AWSMarketplace" \
+          --entity-id "${{ env.PRODUCT_ID }}" \
+          --query "DetailsDocument.Versions[-1:].DeliveryOptions[0].Recommendations.InstanceType" \
+          --output text)
+        echo "[Debug] Recommended Instance Type: '${INSTANCE_TYPE}'"
+        if [[ "${INSTANCE_TYPE}" == "" || "${INSTANCE_TYPE}" == "None" ]]; then
+          [[ ${{ env.AMI_ARCH }} == 'arm64' ]] && INSTANCE_TYPE="t4g.small" || INSTANCE_TYPE="t3.small"
+        fi
+        echo "INSTANCE_TYPE=${INSTANCE_TYPE}" >> $GITHUB_ENV
+
+    - name: "Render the product change set"
+      uses: chuhlomin/render-template@v1
+      with:
+        template: .github/aws_marketplace_change_set.json.template
+        result_path: .github/aws_marketplace_change_set.json
+        vars: |
+          product_id: "${{ env.PRODUCT_ID }}"
+          version: "${{ env.AMI_VERSION }}"
+          release_notes: "${{ fromJSON(env.AMI_JSON).Images[0].Name }} release."
+          ami_id: "${{ matrix.ami_id }}"
+          # The ARN of the role that has privileges to access products in the AWS Marketplace catalog
+          access_role_arn: "arn:aws:iam::764336703387:role/alma-images-marketplace-role"
+          os_release: "${{ env.OS_VERSION }}"
+          instance_type: "${{ env.INSTANCE_TYPE }}"
+
+    - name: Print the Change Set
+      run: |
+        echo "Change set:"
+        cat .github/aws_marketplace_change_set.json
+
+    - name: Start the Change Set
+      id: start-change-set
+      run: |
+        {
+          echo 'CHANGESET_JSON<<EOF'
+          aws marketplace-catalog start-change-set \
+            --catalog "AWSMarketplace" \
+            --change-set-name "Release ${{ fromJSON(env.AMI_JSON).Images[0].Name }}" \
+            --change-set "file://.github/aws_marketplace_change_set.json"
+          echo EOF
+        } >> "$GITHUB_ENV"
+
+    - name: Get the Change Set ID
+      run: |
+        CHANGESET_ID=$(echo '${{ env.CHANGESET_JSON }}' | jq -r '.ChangeSetId')
+        echo "CHANGESET_ID=${CHANGESET_ID}" >> $GITHUB_ENV
+
+    - name: Print job summary
+      run: |
+        {
+          echo "- AMI Name: \`${{ fromJSON(env.AMI_JSON).Images[0].Name }}\`"
+          echo "- AMI ID: \`${{ matrix.ami_id }}\`"
+          echo "- Product Name: \`${{ env.PRODUCT_NAME }}\`"
+          echo "- Product ID: \`${{ env.PRODUCT_ID }}\`"
+          echo "- Released to Marketplace: ✅"
+          echo "- ChangeSet ID: [${{ env.CHANGESET_ID }}](https://aws.amazon.com/marketplace/management/requests/${{ env.CHANGESET_ID }})"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Send notification to Mattermost
+      uses: mattermost/action-mattermost-notify@master
+      if: inputs.notify_mattermost
+      with:
+        MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+        MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+        MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+        TEXT: |
+          :almalinux: **${{ fromJSON(env.AMI_JSON).Images[0].Name }}** added to the AWS Marketplace, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          **AMI ID**: `${{ matrix.ami_id }}`
+
+          **Product ID**: `${{ env.PRODUCT_ID }}`
+
+          **Product Name**: `${{ env.PRODUCT_NAME }}`
+
+          **Released to Marketplace**: ✅
+          **ChangeSet ID**: [${{ env.CHANGESET_ID }}](https://aws.amazon.com/marketplace/management/requests/${{ env.CHANGESET_ID }})
