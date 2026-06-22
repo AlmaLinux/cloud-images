@@ -264,7 +264,7 @@ runs:
           if [ "${IMAGE_STATE}" = "AVAILABLE" ]; then
             echo "[Debug] ✅ Image is now AVAILABLE"
             break
-          elif [ "${IMAGE_STATE}" = "DELETED" ]; then
+          elif [ "${IMAGE_STATE}" = "ERROR" ] || [ "${IMAGE_STATE}" = "DELETED" ]; then
             echo "[Error] ❌ Image import failed with state: ${IMAGE_STATE}"
             exit 1
           fi
