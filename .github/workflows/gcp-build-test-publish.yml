@@ -1,0 +1,672 @@
+name: "GCP: Build, Test and Publish"
+run-name: >-
+  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build${{ inputs.run_test && ', Test and Publish' || ' and Publish' }}
+
+# Unified GCP pipeline in a single workflow_dispatch:
+#   1. Build the images with Packer (x86_64 + aarch64), upload to the dev GCS
+#      buckets and publish a dev test image (gcp-build-steps).
+#   2. Test every built image with Google cloud-image-tests (smoke tests on
+#      both arches in parallel, then the per-shape matrices). Gated by run_test.
+#   3. Publish each arch to the almalinux-cloud (prod) project, one arch at a
+#      time.
+#
+# Stage gating:
+#   run_test=false       -> tests are skipped; builds publish straight through.
+#   publish_images=false -> images are built (and tested) but not published.
+#   a test job fails     -> publish is skipped (no untested image promoted).
+#
+# arch is fixed to ALL (both x86_64 and aarch64 are built, tested, published).
+# image_datetag for publish is the build's YYYYMMDD date_stamp.
+
+on:
+  workflow_dispatch:
+      inputs:
+
+        date_time_stamp:
+          description: 'Custom date+time stamp, YYYYMMDDhhmmss'
+          required: false
+          default: ''
+
+        version_major:
+          description: 'AlmaLinux major version'
+          required: true
+          default: '10'
+          type: choice
+          options:
+            - 10-kitten
+            - 10
+            - 9
+            - 8
+
+        self-hosted:
+          description: "Build aarch64 image on self-hosted runner"
+          required: true
+          type: boolean
+          default: true
+
+        store_as_artifact:
+          description: "Store images to the workflow Artifacts"
+          required: true
+          type: boolean
+          default: false
+
+        upload_to_s3:
+          description: "Upload to S3 Bucket"
+          required: true
+          type: boolean
+          default: true
+
+        run_test:
+          description: "Test the built images. Disable to build and publish without testing."
+          required: true
+          type: boolean
+          default: true
+
+        # ---- [tests] settings (only used when run_test is true) ----
+        cit_git_repo:
+          description: '[tests] owner/repo of a cloud-image-tests fork to build instead of the prebuilt image. Empty = gcr.io/compute-image-tools/cloud-image-tests:latest. owner/repo only (no full URL).'
+          required: false
+          default: ''
+
+        cit_git_ref:
+          description: '[tests] Branch, tag, or commit SHA inside cit_git_repo. Empty = default branch. Ignored when cit_git_repo is empty.'
+          required: false
+          default: ''
+        # ---- end [tests] settings ----
+
+        publish_images:
+          description: "Publish the built (and tested) images to the almalinux-cloud (prod) project"
+          required: true
+          type: boolean
+          default: true
+
+        notify_mattermost:
+          description: "Send notification to Mattermost"
+          required: true
+          type: boolean
+          default: true
+
+env:
+  PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+  # Default zone fallback list for cit-run-with-retry. Multi-region spread so a
+  # single-region capacity event doesn't fail the whole run.
+  GCP_DEFAULT_ZONES: "us-central1-a us-central1-b us-central1-c us-central1-f us-south1-a us-south1-b us-south1-c us-west1-a us-west1-b us-west1-c northamerica-northeast1-a northamerica-northeast1-b europe-west1-b europe-west1-c europe-west1-d europe-west2-a europe-west2-b europe-west2-c europe-west3-a europe-west3-b europe-west3-c europe-west4-a europe-west4-b europe-west4-c"
+
+jobs:
+  init-data:
+    name: Initialize common data
+    runs-on: ubuntu-24.04
+    outputs:
+      time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
+      date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+      image_path: ${{ steps.determine_image.outputs.image_path }}
+    steps:
+      - name: Date+time stamp
+        id: date-time-stamp
+        run: |
+          # date+time stamp, YYYYMMDDhhmmss
+          if [ "${{ inputs.date_time_stamp }}" != "" ]; then
+            date_time_stamp="${{ inputs.date_time_stamp }}"
+          else
+            date_time_stamp=$(date -u '+%Y%m%d%H%M%S')
+          fi
+          echo "time_stamp=${date_time_stamp}" >> $GITHUB_OUTPUT
+
+          # date stamp, YYYYMMDD (used as the publish image_datetag)
+          date_stamp=${date_time_stamp:0:-6}
+          echo "date_stamp=${date_stamp}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine image to test
+        id: determine_image
+        run: |
+          # arch is fixed to ALL; the dev family path is arch-agnostic (the
+          # cit calls append -arm64 for aarch64).
+          image_path="projects/almalinux-dev-images-469421/global/images/family/almalinux-${{ inputs.version_major }}"
+          echo "Determined image path: ${image_path}"
+          echo "image_path=${image_path}" >> $GITHUB_OUTPUT
+
+  build-gcp-x86_64:
+    name: ${{ inputs.version_major }} gcp-x86_64 image
+    permissions:
+      id-token: write
+      contents: read
+    needs: [init-data]
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64', github.run_id)
+        ||
+        'ubuntu-24.04'
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/gcp-build-steps
+        name: ${{ inputs.version_major }} gcp-x86_64 image
+        with:
+          variant: ${{ inputs.version_major }}
+          arch: x86_64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+  start-self-hosted-runner:
+    name: ${{ inputs.version_major }} gcp-aarch64 runner
+    if: ${{ inputs.self-hosted }}
+    runs-on: ubuntu-24.04
+    needs: [init-data]
+
+    steps:
+    - name: Setup and start runner
+      if: github.repository_owner != 'AlmaLinux'
+      uses: unblocked/ec2-action-builder@v1.12
+      with:
+        github_token: ${{ secrets.GIT_HUB_TOKEN }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: ${{ vars.AWS_REGION }}
+        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_AARCH64 }}
+
+        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID }}
+        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }}
+        ec2_instance_type: a1.metal
+
+        ec2_root_disk_size_gb: "16"
+        ec2_root_disk_ebs_class: "gp3"
+        ec2_instance_ttl: 30
+        ec2_spot_instance_strategy: None
+        ec2_instance_tags: >
+          [
+            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
+          ]
+
+  build-gcp-aarch64:
+    name: ${{ inputs.version_major }} gcp-aarch64 image
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ inputs.self-hosted }}
+    needs: [init-data, start-self-hosted-runner]
+    runs-on: >-
+      ${{
+        github.repository_owner == 'AlmaLinux' &&
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-arm64', github.run_id)
+        ||
+        github.run_id
+      }}
+
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      DATE_STAMP: ${{ needs.init-data.outputs.date_stamp }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/gcp-build-steps
+        name: ${{ inputs.version_major }} gcp-aarch64 image
+        with:
+          variant: ${{ inputs.version_major }}
+          arch: aarch64
+          S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          store_as_artifact: ${{ inputs.store_as_artifact }}
+          upload_to_s3: ${{ inputs.upload_to_s3 }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          runner: aws-ec2
+        env:
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+
+  # Optional: build cloud-image-tests from a user-supplied git repo+ref and
+  # publish a docker tarball as an artifact. Skipped when cit_git_repo is empty
+  # or testing is disabled.
+  build-cit:
+    name: Build cloud-image-tests from source
+    if: ${{ inputs.run_test && inputs.cit_git_repo != '' }}
+    needs: [init-data]
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=m8azn/cpu=48/extras=tmpfs/spot=false/image=ubuntu24-full-x64', github.run_id) || 'ubuntu-24.04' }}"
+    steps:
+    - name: Show runs-on cost/performance summary
+      if: github.repository_owner == 'AlmaLinux'
+      uses: runs-on/action@v2
+
+    - name: Checkout CIT source
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.cit_git_repo }}
+        ref: ${{ inputs.cit_git_ref }}
+        path: cit-src
+
+    - name: Build CIT image
+      shell: bash
+      run: docker build -t cit-custom:run-${{ github.run_id }} cit-src
+
+    - name: Save image to tarball
+      shell: bash
+      run: docker save cit-custom:run-${{ github.run_id }} | zstd -T0 -3 --long=27 -o cit-image.tar.zst
+
+    - name: Upload CIT image artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: cit-custom-image
+        path: cit-image.tar.zst
+        retention-days: 1
+        compression-level: 0
+
+  # Initial smoke tests against a high-concurrency shape, on both arches in
+  # parallel, against the just-built dev images.
+  test-gcp-initialtest:
+    name: AlmaLinux ${{ inputs.version_major }} ${{ matrix.arch }} Initial Tests
+    needs: [init-data, build-gcp-x86_64, build-gcp-aarch64, build-cit]
+    # Run only when testing is enabled and both image builds succeeded; accept
+    # build-cit as success or skipped (skipped whenever cit_git_repo is empty).
+    if: >-
+      !cancelled()
+      && inputs.run_test
+      && needs.build-gcp-x86_64.result == 'success'
+      && needs.build-gcp-aarch64.result == 'success'
+      && (needs.build-cit.result == 'success' || needs.build-cit.result == 'skipped')
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+    steps:
+    # we don't need the checked out files, but this is required for the google auth action to work
+    - uses: 'actions/checkout@v6'
+
+    - id: 'google-auth-image-testing'
+      uses: 'google-github-actions/auth@v3'
+      with:
+        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+
+    - name: 'Set up Google Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v3'
+
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != ''
+      shell: bash
+      run: zstd -d -c cit-image.tar.zst | docker load
+
+    - name: 'Run Google cloud-image-testing tests which are hard-coded to specific shapes'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}${{ matrix.arch == 'aarch64' && '-arm64' || '' }}"
+        filter: '^(lssd|disk|vmspec)$'
+        shape_flag: "${{ matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
+        parallel_count: '20'
+        parallel_stagger: '1s'
+        zones: ${{ env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-initialtest-${{ matrix.arch }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
+
+  test-gcp-pershape-x86_64:
+    name: ${{ inputs.version_major }} x86_64 ${{ matrix.shape }}
+    needs: [init-data, test-gcp-initialtest, build-cit]
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/runner=2cpu-linux-x64/spot=false/volume=100g/image=almalinux-10-x86_64', github.run_id) || 'ubuntu-24.04' }}"
+    # !cancelled() suppresses the implicit success() that a custom if adds (which
+    # would skip on build-cit being skipped); gate explicitly on the smoke test.
+    if: >-
+      !cancelled()
+      && needs.test-gcp-initialtest.result == 'success'
+    timeout-minutes: 720
+    strategy:
+      fail-fast: false
+      matrix:
+        shape:
+        - n4-standard-4
+        - n2-standard-4
+        - n2d-standard-4
+        - n1-standard-4
+        - c4-standard-4
+        - c4d-standard-4
+        - c3-standard-4
+        - c3d-standard-4
+        - e2-standard-4
+        - e2-medium
+        - t2d-standard-4
+        - c2-standard-4
+        - c2d-standard-4
+        include:
+            - shape: n4-standard-4
+              zone: ''
+              zones: ''
+
+    steps:
+    # we don't need the checked out files, but this is required for the google auth action to work
+    - uses: 'actions/checkout@v6'
+
+    - id: 'google-auth-image-testing'
+      uses: 'google-github-actions/auth@v3'
+      with:
+        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+
+    - name: 'Set up Google Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v3'
+
+    - name: Runner OS specific configuration
+      shell: bash
+      run: |
+        # Runner OS specific configuration
+        if [ -e /etc/redhat-release ]; then
+          sudo setenforce 0
+          # we don't need scriptlets, just slows down install on selinux scriptlets that we won't be using
+          sudo dnf -y --setopt=tsflags=noscripts install podman zstd
+          runner_user=$USER
+          sudo loginctl enable-linger $runner_user
+          docker_cmd=podman
+        elif lsb_release -cs > /dev/null 2>&1; then
+          docker_cmd=docker
+        else
+          echo "[Debug] Unknown OS"
+          exit 1
+        fi
+        echo "docker_cmd=${docker_cmd}" >> $GITHUB_ENV
+
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != ''
+      shell: bash
+      # build-cit emits a docker-save tarball; podman 4.x+ reads it natively.
+      run: zstd -d -c cit-image.tar.zst | ${{ env.docker_cmd }} load
+
+    - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        runtime: ${{ env.docker_cmd }}
+        image: ${{ needs.init-data.outputs.image_path }}
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-x86_shape ${{ matrix.shape }}"
+        parallel_count: '2'
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
+
+    - name: Upload quota-failure log
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-pershape-x86_64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
+
+  test-gcp-pershape-aarch64:
+    name: ${{ inputs.version_major }} aarch64 ${{ matrix.shape }}
+    needs: [init-data, test-gcp-initialtest, build-cit]
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-24.04
+    if: >-
+      !cancelled()
+      && needs.test-gcp-initialtest.result == 'success'
+    timeout-minutes: 720
+    strategy:
+      fail-fast: false
+      matrix:
+        shape:
+          - c4a-standard-4
+          - n4a-standard-4
+        include:
+          - shape: c4a-standard-4
+            parallel_count: ''
+            zone: ''
+            zones: ''
+    steps:
+    # this isn't a great way to handle this, but GH actions has limitations...
+    - name: Skip certain jobs
+      id: checker
+      if: (matrix.shape == 'c4a-standard-96-metal' && inputs.version_major == '8')
+      run: |
+        echo "Skipping ${{ matrix.shape }} for version_major ${{ inputs.version_major}} due to incompatibility."
+        echo "skip=true" >> $GITHUB_OUTPUT
+        exit 0
+
+    # we don't need the checked out files, but this is required for the google auth action to work
+    - uses: 'actions/checkout@v6'
+      if: steps.checker.outputs.skip != 'true'
+
+    - id: 'google-auth-image-testing'
+      uses: 'google-github-actions/auth@v3'
+      if: steps.checker.outputs.skip != 'true'
+      with:
+        workload_identity_provider: 'projects/527193872801/locations/global/workloadIdentityPools/github-actions/providers/github'
+        service_account: 'github-actions-image-testing@almalinux-image-testing-469421.iam.gserviceaccount.com'
+
+    - name: 'Set up Google Cloud SDK'
+      if: steps.checker.outputs.skip != 'true'
+      uses: 'google-github-actions/setup-gcloud@v3'
+
+    - name: Download custom CIT image
+      if: inputs.cit_git_repo != '' && steps.checker.outputs.skip != 'true'
+      uses: actions/download-artifact@v7
+      with:
+        name: cit-custom-image
+
+    - name: Load custom CIT image
+      if: inputs.cit_git_repo != '' && steps.checker.outputs.skip != 'true'
+      shell: bash
+      run: zstd -d -c cit-image.tar.zst | docker load
+
+    - name: 'Run Google cloud-image-testing tests on ${{ matrix.shape }}'
+      if: steps.checker.outputs.skip != 'true'
+      uses: ./.github/actions/cit-run-with-retry
+      with:
+        image: "${{ needs.init-data.outputs.image_path }}-arm64"
+        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        shape_flag: "-arm64_shape ${{ matrix.shape }}"
+        parallel_count: ${{ matrix.parallel_count || '2' }}
+        first_attempt_zone: ${{ matrix.zone || '' }}
+        zones: ${{ matrix.zones || env.GCP_DEFAULT_ZONES }}
+        creds_path: ${{ env.GOOGLE_GHA_CREDS_PATH }}
+        quota_log_file: ${{ runner.temp }}/quota-failures.jsonl
+        image_ref: ${{ inputs.cit_git_repo != '' && format('cit-custom:run-{0}', github.run_id) || 'gcr.io/compute-image-tools/cloud-image-tests:latest' }}
+
+    - name: Upload quota-failure log
+      if: always() && steps.checker.outputs.skip != 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: quota-failures-pershape-aarch64-${{ matrix.shape }}
+        path: ${{ runner.temp }}/quota-failures.jsonl
+        if-no-files-found: ignore
+        retention-days: 7
+
+  # Aggregates the per-job JSONL quota-failure logs into a single markdown table.
+  summarize-quota-failures:
+    name: Summarize quota failures
+    needs:
+      - test-gcp-initialtest
+      - test-gcp-pershape-x86_64
+      - test-gcp-pershape-aarch64
+    if: ${{ always() && inputs.run_test }}
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Download all quota-failure artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: quota-failures-*
+        path: quota-failures
+        merge-multiple: true
+
+    - name: Write summary
+      shell: bash
+      run: |
+        set -uo pipefail
+        shopt -s nullglob
+        files=(quota-failures/*.jsonl quota-failures/**/*.jsonl)
+        if (( ${#files[@]} == 0 )); then
+          {
+            echo "## Quota failure summary"
+            echo
+            echo "No quota failures recorded in this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        cat "${files[@]}" > all-quota-failures.jsonl
+        total=$(wc -l < all-quota-failures.jsonl)
+
+        {
+          echo "## Quota failure summary"
+          echo
+          echo "**Total quota failure events:** ${total}"
+          echo
+          echo "Group key: (location, quota, shape). Counts include retries."
+          echo "Use this to scope quota-increase requests."
+          echo
+          echo "| Location | Quota | Shape | Count |"
+          echo "|----------|-------|-------|-------|"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        jq -s -r '
+          group_by([.location, .quota, .shape])
+          | map({
+              location: .[0].location,
+              quota: .[0].quota,
+              shape: .[0].shape,
+              count: length
+            })
+          | sort_by(-.count, .location, .quota, .shape)
+          | .[]
+          | "| \(.location // "?") | \(.quota) | \(.shape // "?") | \(.count) |"
+        ' all-quota-failures.jsonl >> "$GITHUB_STEP_SUMMARY"
+
+  publish-gcp:
+    name: Publish ${{ inputs.version_major }} ${{ matrix.arch }} to almalinux-cloud (prod)
+    needs:
+      - init-data
+      - build-gcp-x86_64
+      - build-gcp-aarch64
+      - test-gcp-initialtest
+      - test-gcp-pershape-x86_64
+      - test-gcp-pershape-aarch64
+    # Publish after both builds succeed and, when testing is enabled, after all
+    # test jobs pass. run_test=false publishes straight after the builds;
+    # publish_images=false skips publishing entirely.
+    if: >-
+      !cancelled()
+      && inputs.publish_images
+      && needs.build-gcp-x86_64.result == 'success'
+      && needs.build-gcp-aarch64.result == 'success'
+      && (
+           inputs.run_test == false
+           || (
+                needs.test-gcp-initialtest.result == 'success'
+                && needs.test-gcp-pershape-x86_64.result == 'success'
+                && needs.test-gcp-pershape-aarch64.result == 'success'
+              )
+         )
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Publish one arch at a time.
+      max-parallel: 1
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+    steps:
+      # we don't need the checked out files, but this is required for the google auth action to work
+      - uses: actions/checkout@v6
+
+      - name: Build image name from inputs
+        id: build-image-name
+        run: |
+          IMAGE_NAME="almalinux-${{ inputs.version_major }}${{ matrix.arch == 'aarch64' && '-arm64' || '' }}-v${{ needs.init-data.outputs.date_stamp }}"
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+
+      - id: google-auth-image-release
+        uses: google-github-actions/auth@v3
+        with:
+            workload_identity_provider: projects/1071098808632/locations/global/workloadIdentityPools/github-actions/providers/github
+            service_account: gh-actions-prod-release@almalinux-image-release.iam.gserviceaccount.com
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Copy image to almalinux-cloud project
+        run: |
+          gcloud storage cp gs://almalinux-images-dev/${{ steps.build-image-name.outputs.image_name }}/root.tar.gz gs://almalinux-images-prod/${{ steps.build-image-name.outputs.image_name }}/root.tar.gz
+
+      - name: Get gce_image_publish tool
+        run: |
+          wget https://storage.googleapis.com/compute-image-tools/release/linux/gce_image_publish
+          chmod +x gce_image_publish
+
+      - name: Create production image on GCP
+        shell: bash
+        run: |
+            ./gce_image_publish \
+            -var:environment=prod \
+            -skip_confirmation \
+            -rollout_rate=60 \
+            -work_project="almalinux-image-release" \
+            -source_gcs_path="gs://almalinux-images-prod/" \
+            -source_version="v${{ needs.init-data.outputs.date_stamp }}" \
+            vm-scripts/gcp/almalinux_${{ inputs.version_major }}${{ matrix.arch == 'aarch64' && '_arm64' || '' }}.publish.json
+
+      - name: Get ID of image just created
+        shell: bash
+        run: |
+            IMAGE_ID=$(gcloud compute images describe ${{ steps.build-image-name.outputs.image_name }} --project=almalinux-cloud --format='value(id)')
+            echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
+
+      - name: Copy SBOM data to GCP Bucket
+        run: |
+          gcloud storage cp gs://almalinux-images-dev-sbom/${{ steps.build-image-name.outputs.image_name }}.sbom.spdx.json gs://gce-image-almalinux-cloud-sbom/$IMAGE_ID.json
