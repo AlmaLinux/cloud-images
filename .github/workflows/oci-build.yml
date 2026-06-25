@@ -1,4 +1,6 @@
 name: "OCI: Build Image"
+run-name: >-
+  OCI: AlmaLinux ${{ inputs.version_major }} Build Image
 
 on:
   workflow_dispatch:

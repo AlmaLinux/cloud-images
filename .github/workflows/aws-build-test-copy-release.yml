@@ -1,4 +1,6 @@
 name: "AWS: Build, Test, Copy to regions and Release"
+run-name: >-
+  AWS: AlmaLinux ${{ inputs.version_major == 'kitten_10' && 'Kitten 10' || inputs.version_major }} Build, Test, Copy to regions and Release
 
 # Unified AWS AMI pipeline in a single workflow_dispatch:
 #   1. Build the AMIs with Packer (x86_64 + aarch64).

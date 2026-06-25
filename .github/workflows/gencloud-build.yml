@@ -1,4 +1,6 @@
 name: "GenericCloud: Build Image"
+run-name: >-
+  GenericCloud: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build Image
 
 on:
   workflow_dispatch:

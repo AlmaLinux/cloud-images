@@ -1,4 +1,6 @@
 name: "GCP: Test Image"
+run-name: >-
+  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} ${{ inputs.arch }} Test Image
 
 on:
   workflow_dispatch:

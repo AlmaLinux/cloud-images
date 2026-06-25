@@ -1,4 +1,6 @@
 name: "OCI: Build, Release to Compute, Test, Publish to Listings"
+run-name: >-
+  OCI: AlmaLinux ${{ inputs.version_major }} Build, Release to Compute, Test, Publish to Listings
 
 # Unified OCI pipeline: build the qcow2 images with Packer, create a
 # Compute Custom Image from each one directly on the build runner (upload to

@@ -1,4 +1,6 @@
 name: "Vagrant: Build Hyper-V Box"
+run-name: >-
+  Vagrant: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build Hyper-V Box
 
 on:
   workflow_dispatch:

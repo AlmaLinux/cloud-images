@@ -1,4 +1,6 @@
 name: "GenericCloud: Build and Test"
+run-name: >-
+  GenericCloud: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build and Test
 
 # Unified GenericCloud pipeline: build the .qcow2 images with Packer and
 # boot-test each one in-job, directly on the build runner, under QEMU/KVM

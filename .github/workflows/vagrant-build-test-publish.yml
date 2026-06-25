@@ -1,4 +1,6 @@
 name: "Vagrant: Build, Test and Publish"
+run-name: >-
+  Vagrant: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Test and Publish (${{ inputs.vagrant_type }})
 
 # Unified Vagrant pipeline: build the boxes with Packer, run the `vagrant up`
 # smoke test, and publish each box to the HCP Vagrant Registry - all on the

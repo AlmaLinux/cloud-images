@@ -1,4 +1,6 @@
 name: "AWS: Build AMI"
+run-name: >-
+  AWS: AlmaLinux ${{ inputs.version_major == 'kitten_10' && 'Kitten 10' || inputs.version_major }} Build AMI
 
 on:
   workflow_dispatch:

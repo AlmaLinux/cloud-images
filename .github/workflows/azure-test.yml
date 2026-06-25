@@ -1,4 +1,6 @@
 name: "Azure: Test Image"
+run-name: >-
+  Azure: Test Image ${{ inputs.compute_gallery_path }}
 
 # Required repository configuration:
 #   secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,

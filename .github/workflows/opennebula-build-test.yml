@@ -1,4 +1,6 @@
 name: "OpenNebula: Build and Test"
+run-name: >-
+  OpenNebula: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build and Test
 
 # Unified OpenNebula pipeline: build the .qcow2 images with Packer and
 # boot-test each one in-job, directly on the build runner, under QEMU/KVM

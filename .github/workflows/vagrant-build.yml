@@ -1,4 +1,6 @@
 name: "Vagrant: Build Boxes"
+run-name: >-
+  Vagrant: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build Boxes (${{ inputs.vagrant_type }})
 
 on:
   workflow_dispatch:

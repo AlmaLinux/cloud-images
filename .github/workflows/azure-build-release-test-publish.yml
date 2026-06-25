@@ -1,4 +1,6 @@
 name: "Azure: Build, Release, Test, Publish"
+run-name: >-
+  Azure: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Release, Test, Publish
 
 # Unified Azure pipeline: build the .raw images with Packer, release each
 # built image to the Compute Gallery directly from the build runner (no S3
