@@ -1,19 +1,20 @@
 name: "GCP: Build, Test and Publish"
 run-name: >-
-  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build${{ inputs.run_test && ', Test and Publish' || ' and Publish' }}
+  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Test and Publish
 
 # Unified GCP pipeline in a single workflow_dispatch:
 #   1. Build the images with Packer (x86_64 + aarch64), upload to the dev GCS
 #      buckets and publish a dev test image (gcp-build-steps).
 #   2. Test every built image with Google cloud-image-tests (smoke tests on
-#      both arches in parallel, then the per-shape matrices). Gated by run_test.
+#      both arches in parallel, then the per-shape matrices). Tests always run.
 #   3. Publish each arch to the almalinux-cloud (prod) project, one arch at a
 #      time.
 #
 # Stage gating:
-#   run_test=false       -> tests are skipped; builds publish straight through.
-#   publish_images=false -> images are built (and tested) but not published.
-#   a test job fails     -> publish is skipped (no untested image promoted).
+#   tests always run.
+#   override_test_failure=true -> publish even if test(s) fail.
+#   publish_images=false       -> images are built and tested but not published.
+#   a test job fails (override_test_failure=false) -> publish is skipped.
 #
 # arch is fixed to ALL (both x86_64 and aarch64 are built, tested, published).
 # image_datetag for publish is the build's YYYYMMDD date_stamp.
@@ -56,13 +57,13 @@ on:
           type: boolean
           default: true
 
-        run_test:
-          description: "Test the built images. Disable to build and publish without testing."
+        override_test_failure:
+          description: "Publish the images even if test(s) fail. Tests always run regardless of this setting."
           required: true
           type: boolean
-          default: true
+          default: false
 
-        # ---- [tests] settings (only used when run_test is true) ----
+        # ---- [tests] settings (optional custom cloud-image-tests build) ----
         cit_git_repo:
           description: '[tests] owner/repo of a cloud-image-tests fork to build instead of the prebuilt image. Empty = gcr.io/compute-image-tools/cloud-image-tests:latest. owner/repo only (no full URL).'
           required: false
@@ -237,11 +238,10 @@ jobs:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
   # Optional: build cloud-image-tests from a user-supplied git repo+ref and
-  # publish a docker tarball as an artifact. Skipped when cit_git_repo is empty
-  # or testing is disabled.
+  # publish a docker tarball as an artifact. Skipped when cit_git_repo is empty.
   build-cit:
     name: Build cloud-image-tests from source
-    if: ${{ inputs.run_test && inputs.cit_git_repo != '' }}
+    if: ${{ inputs.cit_git_repo != '' }}
     needs: [init-data]
     runs-on: "${{ github.repository_owner == 'AlmaLinux' && format('runs-on={0}/family=m8azn/cpu=48/extras=tmpfs/spot=false/image=ubuntu24-full-x64', github.run_id) || 'ubuntu-24.04' }}"
     steps:
@@ -277,11 +277,10 @@ jobs:
   test-gcp-initialtest:
     name: AlmaLinux ${{ inputs.version_major }} ${{ matrix.arch }} Initial Tests
     needs: [init-data, build-gcp-x86_64, build-gcp-aarch64, build-cit]
-    # Run only when testing is enabled and both image builds succeeded; accept
-    # build-cit as success or skipped (skipped whenever cit_git_repo is empty).
+    # Run after both image builds succeeded; accept build-cit as success or
+    # skipped (skipped whenever cit_git_repo is empty). Tests always run.
     if: >-
       !cancelled()
-      && inputs.run_test
       && needs.build-gcp-x86_64.result == 'success'
       && needs.build-gcp-aarch64.result == 'success'
       && (needs.build-cit.result == 'success' || needs.build-cit.result == 'skipped')
@@ -531,7 +530,7 @@ jobs:
       - test-gcp-initialtest
       - test-gcp-pershape-x86_64
       - test-gcp-pershape-aarch64
-    if: ${{ always() && inputs.run_test }}
+    if: ${{ always() }}
     runs-on: ubuntu-24.04
     steps:
     - name: Download all quota-failure artifacts
@@ -593,16 +592,16 @@ jobs:
       - test-gcp-initialtest
       - test-gcp-pershape-x86_64
       - test-gcp-pershape-aarch64
-    # Publish after both builds succeed and, when testing is enabled, after all
-    # test jobs pass. run_test=false publishes straight after the builds;
-    # publish_images=false skips publishing entirely.
+    # Publish after both builds succeed. Tests always run; by default all test
+    # jobs must pass, but override_test_failure=true publishes even if they
+    # fail. publish_images=false skips publishing entirely.
     if: >-
       !cancelled()
       && inputs.publish_images
       && needs.build-gcp-x86_64.result == 'success'
       && needs.build-gcp-aarch64.result == 'success'
       && (
-           inputs.run_test == false
+           inputs.override_test_failure
            || (
                 needs.test-gcp-initialtest.result == 'success'
                 && needs.test-gcp-pershape-x86_64.result == 'success'
