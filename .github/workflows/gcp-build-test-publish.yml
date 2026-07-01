@@ -12,9 +12,11 @@ run-name: >-
 #
 # Stage gating:
 #   tests always run.
-#   override_test_failure=true -> publish even if test(s) fail.
-#   publish_images=false       -> images are built and tested but not published.
-#   a test job fails (override_test_failure=false) -> publish is skipped.
+#   all tests pass  -> publish runs automatically.
+#   a test fails    -> the approve-publish gate (gcp-prod-publish environment,
+#                      required reviewers) pauses for a human to approve or
+#                      reject publishing after checking the failure.
+#   publish_images=false -> images are built and tested but not published.
 #
 # arch is fixed to ALL (both x86_64 and aarch64 are built, tested, published).
 # image_datetag for publish is the build's YYYYMMDD date_stamp.
@@ -56,12 +58,6 @@ on:
           required: true
           type: boolean
           default: true
-
-        override_test_failure:
-          description: "Publish the images even if test(s) fail. Tests always run regardless of this setting."
-          required: true
-          type: boolean
-          default: false
 
         # ---- [tests] settings (optional custom cloud-image-tests build) ----
         cit_git_repo:
@@ -583,6 +579,34 @@ jobs:
           | "| \(.location // "?") | \(.quota) | \(.shape // "?") | \(.count) |"
         ' all-quota-failures.jsonl >> "$GITHUB_STEP_SUMMARY"
 
+  # Manual decision gate: runs only when a test job did NOT pass. Behind the
+  # gcp-prod-publish environment (required reviewers) so a human can inspect the
+  # failure and approve or reject publishing. When all tests pass it is skipped
+  # and publish runs automatically.
+  approve-publish:
+    name: Approve publish despite test failure
+    needs:
+      - build-gcp-x86_64
+      - build-gcp-aarch64
+      - test-gcp-initialtest
+      - test-gcp-pershape-x86_64
+      - test-gcp-pershape-aarch64
+    if: >-
+      !cancelled()
+      && inputs.publish_images
+      && needs.build-gcp-x86_64.result == 'success'
+      && needs.build-gcp-aarch64.result == 'success'
+      && !(
+           needs.test-gcp-initialtest.result == 'success'
+           && needs.test-gcp-pershape-x86_64.result == 'success'
+           && needs.test-gcp-pershape-aarch64.result == 'success'
+         )
+    environment: gcp-prod-publish
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Approved
+        run: echo "Publishing approved despite test failure(s)."
+
   publish-gcp:
     name: Publish ${{ inputs.version_major }} ${{ matrix.arch }} to almalinux-cloud (prod)
     needs:
@@ -592,21 +616,22 @@ jobs:
       - test-gcp-initialtest
       - test-gcp-pershape-x86_64
       - test-gcp-pershape-aarch64
-    # Publish after both builds succeed. Tests always run; by default all test
-    # jobs must pass, but override_test_failure=true publishes even if they
-    # fail. publish_images=false skips publishing entirely.
+      - approve-publish
+    # Publish after both builds succeed and either all tests passed (automatic)
+    # or the approve-publish gate was approved (manual, after a test failure).
+    # publish_images=false skips publishing entirely.
     if: >-
       !cancelled()
       && inputs.publish_images
       && needs.build-gcp-x86_64.result == 'success'
       && needs.build-gcp-aarch64.result == 'success'
       && (
-           inputs.override_test_failure
-           || (
-                needs.test-gcp-initialtest.result == 'success'
-                && needs.test-gcp-pershape-x86_64.result == 'success'
-                && needs.test-gcp-pershape-aarch64.result == 'success'
-              )
+           (
+             needs.test-gcp-initialtest.result == 'success'
+             && needs.test-gcp-pershape-x86_64.result == 'success'
+             && needs.test-gcp-pershape-aarch64.result == 'success'
+           )
+           || needs.approve-publish.result == 'success'
          )
     permissions:
       id-token: write
