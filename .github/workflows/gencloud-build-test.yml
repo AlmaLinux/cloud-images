@@ -1,6 +1,10 @@
 name: "GenericCloud: Build and Test"
+# run-name resolves version_major for both triggers: workflow_dispatch reads
+# inputs; scheduled runs have no inputs, so the cron string itself
+# (github.event.schedule) is mapped back to the version it stands for - keep
+# this mapping in sync with the on.schedule cron list below.
 run-name: >-
-  GenericCloud: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build and Test
+  GenericCloud: AlmaLinux ${{ github.event_name == 'schedule' && (github.event.schedule == '17 4 1 * *' && '8' || github.event.schedule == '17 4 8 * *' && '9' || github.event.schedule == '17 4 15 * *' && '10' || 'Kitten 10') || (inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major) }} Build and Test${{ github.event_name == 'schedule' && ' (scheduled)' || '' }}
 
 # Unified GenericCloud pipeline: build the .qcow2 images with Packer and
 # boot-test each one in-job, directly on the build runner, under QEMU/KVM
@@ -14,11 +18,30 @@ run-name: >-
 #
 # Every built image is tested; for a build-only run use gencloud-build.yml.
 #
+# Scheduled runs: once per month per version_major, spread across the month
+# (8 -> 1st, 9 -> 8th, 10 -> 15th, 10-kitten -> 22nd, all at 04:17 UTC - a
+# 2-hour shift from the OpenNebula schedule so the image types don't request
+# metal runners at the same time), and only in the AlmaLinux org's
+# almalinux/cloud-images repository. A scheduled run has no inputs, so
+# init-data emulates the workflow_dispatch defaults (and derives
+# version_major from the firing cron) and exposes them as job outputs that
+# every later job uses instead of the inputs context.
+#
 # Stage implementations live in composite actions:
 #   .github/actions/shared-steps         - Packer build (all clouds)
 #   .github/actions/gencloud-test-steps  - QEMU/KVM boot test of the local qcow2
 
 on:
+  schedule:
+    # One version_major per firing; keep in sync with the run-name mapping
+    # above and the case block in init-data's "Emulate workflow_dispatch
+    # inputs" step. Minute 17 (not :00) - top-of-the-hour schedules are the
+    # most delayed / dropped on GitHub's cron infrastructure.
+    - cron: '17 4 1 * *'   # AlmaLinux 8         - 1st of the month
+    - cron: '17 4 8 * *'   # AlmaLinux 9         - 8th of the month
+    - cron: '17 4 15 * *'  # AlmaLinux 10        - 15th of the month
+    - cron: '17 4 22 * *'  # AlmaLinux Kitten 10 - 22nd of the month
+
   workflow_dispatch:
       inputs:
 
@@ -67,15 +90,63 @@ env:
 jobs:
   init-data:
     name: Initialize common data
+    # Scheduled runs are meant for the AlmaLinux org's almalinux/cloud-images
+    # repository only - skip them on forks/mirrors. Every other job needs this
+    # one, so skipping it here skips the whole run. workflow_dispatch runs are
+    # unaffected.
+    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/cloud-images' }}
     runs-on: ubuntu-24.04
     outputs:
       time_stamp: ${{ steps.date-time-stamp.outputs.time_stamp }}
       date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
+      version_major: ${{ steps.emulated-inputs.outputs.version_major }}
+      self_hosted: ${{ steps.emulated-inputs.outputs.self_hosted }}
+      store_as_artifact: ${{ steps.emulated-inputs.outputs.store_as_artifact }}
+      upload_to_s3: ${{ steps.emulated-inputs.outputs.upload_to_s3 }}
+      notify_mattermost: ${{ steps.emulated-inputs.outputs.notify_mattermost }}
     steps:
+      - name: Emulate workflow_dispatch inputs
+        id: emulated-inputs
+        run: |
+          # A scheduled run has no inputs context: derive version_major from
+          # the cron that fired (keep in sync with the on.schedule list and
+          # the run-name mapping) and use the workflow_dispatch defaults for
+          # everything else. A dispatched run passes its real inputs through.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            case "${{ github.event.schedule }}" in
+              '17 4 1 * *')  version_major='8' ;;
+              '17 4 8 * *')  version_major='9' ;;
+              '17 4 15 * *') version_major='10' ;;
+              '17 4 22 * *') version_major='10-kitten' ;;
+              *) echo "[Error] Unmapped schedule '${{ github.event.schedule }}'"; exit 1 ;;
+            esac
+            self_hosted='true'
+            store_as_artifact='false'
+            upload_to_s3='true'
+            notify_mattermost='true'
+          else
+            version_major='${{ inputs.version_major }}'
+            self_hosted='${{ inputs.self-hosted }}'
+            store_as_artifact='${{ inputs.store_as_artifact }}'
+            upload_to_s3='${{ inputs.upload_to_s3 }}'
+            notify_mattermost='${{ inputs.notify_mattermost }}'
+          fi
+
+          {
+            echo "version_major=${version_major}"
+            echo "self_hosted=${self_hosted}"
+            echo "store_as_artifact=${store_as_artifact}"
+            echo "upload_to_s3=${upload_to_s3}"
+            echo "notify_mattermost=${notify_mattermost}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "[Debug] version_major=${version_major} self_hosted=${self_hosted} store_as_artifact=${store_as_artifact} upload_to_s3=${upload_to_s3} notify_mattermost=${notify_mattermost}"
+
       - name: Date+time stamp
         id: date-time-stamp
         run: |
           # date+time stamp, YYYYMMDDhhmmss
+          # (inputs.date_time_stamp renders empty on scheduled runs -> auto)
           if [ "${{ inputs.date_time_stamp }}" != "" ]; then
             date_time_stamp="${{ inputs.date_time_stamp }}"
           else
@@ -107,11 +178,13 @@ jobs:
       fail-fast: false
       matrix:
         subtype: [gencloud, gencloud_ext4]
+        # Reads init-data's emulated inputs (not the inputs context) so the
+        # matrix works for scheduled runs too.
         variant: >-
           ${{ fromJSON(
-            ( inputs.version_major == '10-kitten' || inputs.version_major == '10' )
-              && format('["{0}", "{0}-v2"]', inputs.version_major)
-              || format('["{0}"]', inputs.version_major)
+            ( needs.init-data.outputs.version_major == '10-kitten' || needs.init-data.outputs.version_major == '10' )
+              && format('["{0}", "{0}-v2"]', needs.init-data.outputs.version_major)
+              || format('["{0}"]', needs.init-data.outputs.version_major)
           ) }}
 
     env:
@@ -134,9 +207,9 @@ jobs:
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-          store_as_artifact: ${{ inputs.store_as_artifact }}
-          upload_to_s3: ${{ inputs.upload_to_s3 }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
+          store_as_artifact: ${{ needs.init-data.outputs.store_as_artifact }}
+          upload_to_s3: ${{ needs.init-data.outputs.upload_to_s3 }}
+          notify_mattermost: ${{ needs.init-data.outputs.notify_mattermost }}
           run_test: 'false'
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
@@ -146,21 +219,23 @@ jobs:
         name: Test ${{ matrix.variant }} ${{ matrix.subtype }}-x86_64 image
         with:
           image_file: ${{ env.IMAGE_FILE }}
-          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
+          image_url: ${{ needs.init-data.outputs.upload_to_s3 == 'true' && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
           image_filename: ${{ env.IMAGE_NAME }}
           subtype: ${{ matrix.subtype }}
           alma_arch: x86_64
           alma_arch_full: ${{ contains(matrix.variant, 'v2') && 'x86_64_v2' || 'x86_64' }}
           release_string: ${{ env.RELEASE_STRING }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
+          notify_mattermost: ${{ needs.init-data.outputs.notify_mattermost }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
 
   # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
   # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
   start-self-hosted-runner:
-    name: ${{ inputs.version_major }} gencloud-aarch64 runner
-    if: ${{ inputs.self-hosted }}
+    name: ${{ needs.init-data.outputs.version_major }} gencloud-aarch64 runner
+    # The custom if drops the implicit success() only for status functions, so
+    # this still skips when init-data was skipped (fork scheduled run).
+    if: ${{ needs.init-data.outputs.self_hosted == 'true' }}
     runs-on: ubuntu-24.04
     needs: [init-data]
 
@@ -189,11 +264,11 @@ jobs:
           ]
 
   build-self-hosted:
-    name: ${{ inputs.version_major }} ${{ matrix.subtype }}-aarch64 build+test
+    name: ${{ needs.init-data.outputs.version_major }} ${{ matrix.subtype }}-aarch64 build+test
     permissions:
       id-token: write
       contents: read
-    if: ${{ inputs.self-hosted }}
+    if: ${{ needs.init-data.outputs.self_hosted == 'true' }}
     needs: [init-data, start-self-hosted-runner]
     # AlmaLinux org: RunsOn a1.metal with the Ubuntu arm64 image (NOT
     # almalinux-9-aarch64) so the in-job QEMU test can run - shared-steps
@@ -224,10 +299,10 @@ jobs:
         uses: actions/checkout@v6
 
       - uses: ./.github/actions/shared-steps
-        name: ${{ inputs.version_major }} ${{ matrix.subtype }}-aarch64 image
+        name: ${{ needs.init-data.outputs.version_major }} ${{ matrix.subtype }}-aarch64 image
         with:
           type: ${{ matrix.subtype }}
-          variant: ${{ inputs.version_major }}
+          variant: ${{ needs.init-data.outputs.version_major }}
           arch: aarch64
           S3_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -235,24 +310,24 @@ jobs:
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-          store_as_artifact: ${{ inputs.store_as_artifact }}
-          upload_to_s3: ${{ inputs.upload_to_s3 }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
+          store_as_artifact: ${{ needs.init-data.outputs.store_as_artifact }}
+          upload_to_s3: ${{ needs.init-data.outputs.upload_to_s3 }}
+          notify_mattermost: ${{ needs.init-data.outputs.notify_mattermost }}
           run_test: 'false'
           runner: aws-ec2
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
       - uses: ./.github/actions/gencloud-test-steps
-        name: Test ${{ inputs.version_major }} ${{ matrix.subtype }}-aarch64 image
+        name: Test ${{ needs.init-data.outputs.version_major }} ${{ matrix.subtype }}-aarch64 image
         with:
           image_file: ${{ env.IMAGE_FILE }}
-          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
+          image_url: ${{ needs.init-data.outputs.upload_to_s3 == 'true' && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
           image_filename: ${{ env.IMAGE_NAME }}
           subtype: ${{ matrix.subtype }}
           alma_arch: aarch64
           alma_arch_full: aarch64
           release_string: ${{ env.RELEASE_STRING }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
+          notify_mattermost: ${{ needs.init-data.outputs.notify_mattermost }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
