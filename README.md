@@ -51,6 +51,7 @@ This repository includes GitHub Actions workflows that automate building, testin
 | [GCP_BUILD_TEST_PUBLISH.md](GCP_BUILD_TEST_PUBLISH.md) | `gcp-build-test-publish.yml`, `gcp-build-steps/action.yml` | Unified single-dispatch GCP pipeline: build → Cloud Image Tests → publish to `almalinux-cloud`, with an automatic publish on all-green and a manual approval gate (`gcp-prod-publish` environment) when a test fails |
 | [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) | `vagrant-publish.yml` | Publish Vagrant boxes to HashiCorp Cloud Platform (Vagrant Cloud) for VirtualBox, libvirt, and VMware Desktop providers |
 | [VMWARE_OVA.md](VMWARE_OVA.md) | _(manual process)_ | Convert Vagrant VMware Desktop `.box` files to vSphere/ESXi-compatible `.ova` templates |
+| [SCHEDULED_BUILDS.md](SCHEDULED_BUILDS.md) | `scheduled-builds.yml` | Central scheduler: the only workflow with a cron trigger; weekly (Mondays, 2-hour type stagger) it dispatches one unified pipeline per image type as a real `workflow_dispatch`, picking the AlmaLinux version by a stateless weeks-since-epoch rotation - a scheduled firing is a full release cycle (GCP excluded) |
 
 
 ## Usage
