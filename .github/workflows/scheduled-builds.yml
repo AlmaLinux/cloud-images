@@ -1,0 +1,182 @@
+name: "Scheduled: dispatch image builds"
+run-name: >-
+  Scheduled: dispatch image builds${{ github.event_name == 'workflow_dispatch' && format(' ({0}, version {1})', inputs.target_workflow, inputs.version_major) || '' }}
+
+# Central scheduler for the unified image workflows. This is the ONLY
+# workflow with an on.schedule trigger: when a cron fires, it converts the
+# firing into a real workflow_dispatch of the target workflow via
+# `gh workflow run`, passing version_major as a genuine input (all other
+# inputs take their workflow_dispatch defaults automatically). The target
+# workflows therefore need no schedule handling, no input emulation, and
+# their version-aware run-name works natively.
+#
+# NOTE: dispatching with defaults means the FULL pipeline runs, including
+# publishing - a scheduled firing is a real release cycle: AWS releases
+# AMIs to all regions + Marketplace + wiki PR, Vagrant publishes boxes to
+# HCP, Azure releases to the gallery and creates Marketplace drafts, OCI
+# creates a Compute Image and submits a Marketplace draft for review
+# (Azure/OCI Live publishing stays manual). Tests gate publishing inside
+# each workflow. gcp-build-test-publish.yml is deliberately NOT scheduled.
+#
+# Version quirks handled in the dispatch step:
+#   - aws-build-test-copy-release.yml spells Kitten 'kitten_10' (translated)
+#   - oci-build-release-test-publish.yml has no Kitten option (skipped on
+#     Kitten weeks)
+#
+# WHICH VERSION: a stateless rotation - weeks since the Unix epoch modulo
+# the VERSIONS list length - so every version builds every N weeks
+# (~monthly for 4 versions) with no day-of-month coupling and no stored
+# state. Adding a version is one list entry; the cycle stretches
+# automatically.
+#
+# WHICH IMAGE TYPE: the firing cron's HOUR field encodes the type
+# arithmetically: type index = (hour - 2) / 2 into the TYPES list
+# (02:17 -> TYPES[0], 04:17 -> TYPES[1], ...). The 2-hour stagger keeps the
+# image types from requesting metal runners at the same time; minute 17
+# avoids GitHub's congested top-of-the-hour cron slot.
+#
+# To schedule another image type: add a cron at the next even hour AND
+# append the workflow file to TYPES in the dispatch step - the positions
+# must correspond.
+#
+# GITHUB_TOKEN note: workflow_dispatch is exempt from the "events triggered
+# by GITHUB_TOKEN do not create workflow runs" rule, so the default token
+# with actions:write is enough - no PAT.
+
+on:
+  schedule:
+    # Weekly, Mondays. The week-rotation index increments on Thursdays
+    # 00:00 UTC (the epoch started on a Thursday), so Monday firings are
+    # never near the rotation boundary.
+    - cron: '17 2 * * 1'   # TYPES[0] - opennebula-build-test.yml
+    - cron: '17 4 * * 1'   # TYPES[1] - gencloud-build-test.yml
+    - cron: '17 6 * * 1'   # TYPES[2] - aws-build-test-copy-release.yml
+    - cron: '17 8 * * 1'   # TYPES[3] - azure-build-release-test-publish.yml
+    - cron: '17 10 * * 1'  # TYPES[4] - oci-build-release-test-publish.yml
+    - cron: '17 12 * * 1'  # TYPES[5] - vagrant-build-test-publish.yml
+
+  # Manual runs for testing the dispatcher itself (allowed on any repo;
+  # only scheduled firings are restricted to the repository named in the
+  # dispatch job's if guard below).
+  workflow_dispatch:
+    inputs:
+      target_workflow:
+        description: 'Workflow to dispatch'
+        required: true
+        default: 'ALL'
+        type: choice
+        options:
+          - ALL
+          - opennebula-build-test.yml
+          - gencloud-build-test.yml
+          - aws-build-test-copy-release.yml
+          - azure-build-release-test-publish.yml
+          - oci-build-release-test-publish.yml
+          - vagrant-build-test-publish.yml
+      version_major:
+        description: "AlmaLinux major version ('rotation' picks what this week's scheduled run would build)"
+        required: true
+        default: 'rotation'
+        type: choice
+        options:
+          - rotation
+          - 10-kitten
+          - 10
+          - 9
+          - 8
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch build-and-test workflows
+    # Scheduled firings run in ONE designated repository only - skip them
+    # everywhere else. Manual (workflow_dispatch) runs work anywhere, for
+    # testing.
+    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/cloud-images' }}
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Dispatch
+        run: |
+          # Keep both lists here in one place:
+          #   VERSIONS - the rotation ring (append new majors at the end)
+          #   TYPES    - scheduled image types; position i pairs with the
+          #              cron at hour 2+2i in on.schedule
+          VERSIONS=(8 9 10 10-kitten)
+          TYPES=(
+            opennebula-build-test.yml
+            gencloud-build-test.yml
+            aws-build-test-copy-release.yml
+            azure-build-release-test-publish.yml
+            oci-build-release-test-publish.yml
+            vagrant-build-test-publish.yml
+          )
+
+          # Version: stateless weekly rotation (weeks since epoch mod N).
+          idx=$(( ($(date -u +%s) / 604800) % ${#VERSIONS[@]} ))
+          version="${VERSIONS[idx]}"
+          echo "[Debug] rotation week index ${idx} -> version ${version}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] \
+             && [ "${{ inputs.version_major }}" != "rotation" ]; then
+            version='${{ inputs.version_major }}'
+            echo "[Debug] manual version override -> ${version}"
+          fi
+
+          # Target workflow(s): scheduled firings derive the type from the
+          # cron's hour field; manual runs take the input.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            read -r _ hour _ _ _ <<< "${{ github.event.schedule }}"
+            if [ $(( hour % 2 )) -ne 0 ] || [ "${hour}" -lt 2 ]; then
+              echo "[Error] Cron hour '${hour}' does not fit the 'even hour, starting at 2' type-encoding scheme"
+              exit 1
+            fi
+            t_idx=$(( (hour - 2) / 2 ))
+            if [ "${t_idx}" -ge "${#TYPES[@]}" ]; then
+              echo "[Error] Cron hour '${hour}' maps to TYPES[${t_idx}] but only ${#TYPES[@]} type(s) are defined"
+              exit 1
+            fi
+            workflows=("${TYPES[t_idx]}")
+          elif [ "${{ inputs.target_workflow }}" = "ALL" ]; then
+            workflows=("${TYPES[@]}")
+          else
+            workflows=('${{ inputs.target_workflow }}')
+          fi
+
+          # Dispatch on the ref this dispatcher ran from: the default branch
+          # for scheduled firings; the tested branch for manual runs.
+          {
+            echo "## Scheduled image builds"
+            echo ""
+            echo "- **Version (rotation week ${idx})**: \`${version}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for wf in "${workflows[@]}"; do
+            # Per-workflow version quirks: AWS spells the Kitten choice
+            # 'kitten_10'; OCI has no Kitten option at all - dispatching an
+            # unknown choice value is rejected by the API, so skip it.
+            v="${version}"
+            case "${wf}" in
+              aws-*)
+                [ "${v}" = "10-kitten" ] && v="kitten_10"
+                ;;
+              oci-*)
+                if [ "${v}" = "10-kitten" ]; then
+                  echo "[Info] Skipping ${wf}: no Kitten support"
+                  echo "- Skipped: \`${wf}\` (no Kitten support)" >> "$GITHUB_STEP_SUMMARY"
+                  continue
+                fi
+                ;;
+            esac
+
+            echo "[Debug] gh workflow run ${wf} -f version_major=${v} --ref ${GITHUB_REF_NAME}"
+            gh workflow run "${wf}" \
+              -f version_major="${v}" \
+              --ref "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}"
+            echo "- Dispatched: \`${wf}\` (version \`${v}\`)" >> "$GITHUB_STEP_SUMMARY"
+          done
