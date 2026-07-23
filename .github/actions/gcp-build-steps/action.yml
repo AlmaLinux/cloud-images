@@ -35,6 +35,10 @@ inputs:
   notify_mattermost:
     description: 'Whether to send notifications to Mattermost (true/false)'
     required: true
+  pungi_repos:
+    description: 'Build from the PUNGI pre-release repositories instead of repo.almalinux.org (true/false). AlmaLinux 8 (no PUNGI hosts) and Kitten (rolling stream, no releases) keep building from their public repos.'
+    required: false
+    default: 'false'
   runner:
     description: 'Type of runner to use for the build process'
     required: true
@@ -229,6 +233,14 @@ runs:
         python -m venv .venv-sbom
         .venv-sbom/bin/pip install -r sbom-tools/requirements.txt
 
+    - name: Enable PUNGI repositories
+      if: inputs.pungi_repos == 'true'
+      shell: bash
+      run: |
+        # Rewrite variables.pkr.hcl / http/*.ks to the PUNGI pre-release
+        # repositories (AlmaLinux 8 stays on public repos).
+        bash tools/pungi-repos.sh
+
     - name: Initialize packer
       shell: bash
       # sudo would strip PACKER_GITHUB_API_TOKEN from the environment,
@@ -395,11 +407,16 @@ runs:
       uses: actions/github-script@v8
       env:
         upload_to_s3: ${{ inputs.upload_to_s3 || 'false' }}
+        pungi_repos: ${{ inputs.pungi_repos || 'false' }}
       with:
         result-encoding: string
         script: |
           const summary = core.summary
             .addRaw('**${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
+          if (process.env.pungi_repos === 'true') {
+            summary
+              .addRaw(':warning: Built from **PUNGI pre-release repositories**\n');
+          }
           if (process.env.upload_to_s3 === 'true') {
             summary
               .addRaw('S3 Bucket download URLs:\n')
@@ -416,6 +433,9 @@ runs:
           echo 'MATTERMOST_NOTIFICATION_MESSAGE<<EOF'
 
           echo ":almalinux: **${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [ "${{ inputs.pungi_repos }}" = "true" ]; then
+            echo ":warning: Built from **PUNGI pre-release repositories**"
+          fi
           if [ "${{ inputs.store_as_artifact }}" = "true" -a "${{ inputs.upload_to_s3 }}" = "false" ]; then
             echo "- CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})"
             echo "- Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})"

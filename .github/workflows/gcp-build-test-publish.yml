@@ -1,6 +1,6 @@
 name: "GCP: Build, Test and Publish"
 run-name: >-
-  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Test and Publish
+  GCP: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Test and Publish${{ inputs.pungi_repos && ' (PUNGI)' || '' }}
 
 # Unified GCP pipeline in a single workflow_dispatch:
 #   1. Build the images with Packer (x86_64 + aarch64), upload to the dev GCS
@@ -76,6 +76,12 @@ on:
           required: true
           type: boolean
           default: true
+
+        pungi_repos:
+          description: "Build from PUNGI pre-release repositories instead of repo.almalinux.org (AlmaLinux 8 and Kitten keep their public repos)"
+          required: true
+          type: boolean
+          default: false
 
         notify_mattermost:
           description: "Send notification to Mattermost"
@@ -158,6 +164,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -229,6 +236,7 @@ jobs:
           store_as_artifact: ${{ inputs.store_as_artifact }}
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: aws-ec2
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
