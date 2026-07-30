@@ -5,27 +5,9 @@
     regexp: "^(DEFAULTKERNEL=).*$"
     replace: "\\1kernel"
 
-- name: Install additional packages
-  ansible.builtin.dnf:
-    install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
-    name:
-      - qemu-guest-agent
-      - nfs-utils
-      - rsync
-      - jq
-      - tcpdump
-      - tuned
-      - nvme-cli
-    state: present
-
-- name: Install iSCSI tools
-  ansible.builtin.dnf:
-    install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
-    name:
-      - iscsi-initiator-utils
-      - iscsi-initiator-utils-iscsiuio
-      - device-mapper-multipath
-    state: present
+# The additional packages (qemu-guest-agent, nfs-utils, rsync, jq, tcpdump,
+# tuned, nvme-cli) and the iSCSI tools (iscsi-initiator-utils(-iscsiuio),
+# device-mapper-multipath) are preinstalled by the kickstarts.
 
 # https://docs.oracle.com/en-us/iaas/Content/Block/Concepts/iscsiinformation.htm#iscsid
 - name: ISCSI optimizations

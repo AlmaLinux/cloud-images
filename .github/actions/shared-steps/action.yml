@@ -654,8 +654,9 @@ runs:
           echo "[Debug] Check for updates:"
           sudo vagrant ssh default -c "sudo dnf check-update"
           echo "[Debug] Vagrant-specific RPM packages:"
-          # Packages installed by the 'vagrant_guest' Ansible role (common to
-          # every Vagrant box), plus the provider-specific guest role.
+          # Packages preinstalled by the vagrant kickstarts plus cloud-init
+          # (installed by the 'vagrant_guest' role) - common to every Vagrant
+          # box - plus the provider-specific guest role's agent.
           vagrant_pkgs="cloud-init cloud-utils-growpart cifs-utils jq nfs-utils rsync tcpdump tuned"
           case ${{ inputs.type }} in
             vagrant_libvirt*) vagrant_pkgs="${vagrant_pkgs} qemu-guest-agent" ;;

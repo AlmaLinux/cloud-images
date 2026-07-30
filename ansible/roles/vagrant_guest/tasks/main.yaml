@@ -8,18 +8,16 @@
     state: present
     create: false
 
-- name: Install additional packages
+# The other additional packages (cloud-utils-growpart, cifs-utils, jq,
+# nfs-utils, rsync, tcpdump, tuned) are preinstalled by the kickstarts.
+# cloud-init is deliberately NOT: preinstalled it comes up preset-enabled on
+# the very first boot, before this role configures its Vagrant datasource,
+# and on VMware ds-identify then activates it unconfigured, breaking the
+# first-boot networking (Packer times out waiting for SSH).
+- name: Install cloud-init
   ansible.builtin.dnf:
     install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
-    name:
-      - cloud-init
-      - cloud-utils-growpart
-      - cifs-utils
-      - jq
-      - nfs-utils
-      - rsync
-      - tcpdump
-      - tuned
+    name: cloud-init
     state: present
 
 - name: Install Vagrant public SSH key

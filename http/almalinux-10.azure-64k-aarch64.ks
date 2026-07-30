@@ -24,6 +24,25 @@ reboot --eject
 kernel-64k
 dracut-config-generic
 tar
+# Packages the image's Ansible provisioning previously installed with dnf:
+# preinstalled here so they always come from the same repositories the
+# OS is installed from (and, for 9/10 PUNGI pre-release builds, so
+# released-version packages are not mixed into a pre-release system).
+NetworkManager-cloud-setup
+WALinuxAgent
+cifs-utils
+cloud-init
+cloud-utils-growpart
+hyperv-daemons
+jq
+mdadm
+nfs-utils
+nvme-cli
+rsync
+sos
+tcpdump
+tuned
+yum-utils
 -kmod-kvdo
 -vdo
 -kernel
@@ -42,4 +61,13 @@ tar
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
 
+%end
+
+%post
+# Import the AlmaLinux GPG keys into the RPM database. dnf used to do this
+# on the first package install during the Ansible provisioning; with the
+# packages preinstalled from this kickstart no dnf transaction runs anymore,
+# and images would otherwise ship without the keys imported (the first
+# dnf install on a running instance would then prompt to import them).
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux*
 %end
