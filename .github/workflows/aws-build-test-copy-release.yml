@@ -1,6 +1,6 @@
 name: "AWS: Build, Test, Copy to regions and Release"
 run-name: >-
-  AWS: AlmaLinux ${{ inputs.version_major == 'kitten_10' && 'Kitten 10' || inputs.version_major }} Build, Test${{ inputs.copy_to_regions && ', Copy to regions' || '' }}${{ inputs.copy_to_regions && inputs.release_to_marketplace && ' and Release' || '' }}
+  AWS: AlmaLinux ${{ inputs.version_major == 'kitten_10' && 'Kitten 10' || inputs.version_major }} Build, Test${{ inputs.copy_to_regions && ', Copy to regions' || '' }}${{ inputs.copy_to_regions && inputs.release_to_marketplace && ' and Release' || '' }}${{ inputs.pungi_repos && ' (PUNGI)' || '' }}
 
 # Unified AWS AMI pipeline in a single workflow_dispatch:
 #   1. Build the AMIs with Packer (x86_64 + aarch64).
@@ -48,6 +48,12 @@ on:
           required: true
           type: boolean
           default: true
+
+        pungi_repos:
+          description: "Build from PUNGI pre-release repositories instead of repo.almalinux.org (AlmaLinux 8 and Kitten keep their public repos)"
+          required: true
+          type: boolean
+          default: false
 
         notify_mattermost:
           description: "Send notification to Mattermost"
@@ -125,6 +131,13 @@ jobs:
     - name: Install ansible
       run: sudo apt-get -y install ansible
 
+    - name: Enable PUNGI repositories
+      if: inputs.pungi_repos
+      run: |
+        # Inject the PUNGI pre-release repositories into the AMI chroot
+        # bootstrap roles (AlmaLinux 8 and Kitten stay on public repos).
+        bash tools/pungi-repos.sh
+
     - name: Initialize packer
       run: packer init -upgrade .
 
@@ -179,10 +192,13 @@ jobs:
       with:
         result-encoding: string
         script: |
-          core.summary
+          const summary = core.summary
               .addHeading('${{ env.AMI_NAME }}', '4')
-              .addHeading('AMI ID: ${{ env.AMI_ID }}', '5')
-              .write()
+              .addHeading('AMI ID: ${{ env.AMI_ID }}', '5');
+          if (${{ inputs.pungi_repos }}) {
+            summary.addRaw(':warning: Built from **PUNGI pre-release repositories**\n');
+          }
+          summary.write()
 
     - name: Send notification to Mattermost
       uses: mattermost/action-mattermost-notify@master
@@ -193,7 +209,7 @@ jobs:
         MATTERMOST_USERNAME: ${{ github.triggering_actor }}
         TEXT: |
           :almalinux: **${{ env.AMI_NAME }}** AWS AMI, built by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
+          ${{ inputs.pungi_repos && ':warning: Built from **PUNGI pre-release repositories**' || '' }}
           **AMI ID**: `${{ env.AMI_ID }}`
 
   test-ami:

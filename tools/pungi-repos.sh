@@ -37,6 +37,18 @@
 # last role of every playbook), so shipped images keep only the standard
 # repositories.
 #
+# The AWS AMIs (ansible/roles/ami_<major>_<arch>) are built differently:
+# a surrogate EBS volume is chroot-bootstrapped from a running source
+# instance, and the almalinux-repos package seeds the chroot with the
+# released-version repositories. The script injects a task into the
+# roles' os.yaml that writes the same pungi.repo into both the source
+# instance (host) and the /rootfs chroot right after that - the chroot
+# dnf steps then install from the compose. The host copy matters for the
+# 9 roles, whose 'Update the system' task uses the ansible dnf module
+# and reads the host repository configuration. A removal task injected
+# into cleanup.yaml drops the override from both places before the
+# volume is snapshotted.
+#
 # Intentionally NOT rewritten:
 #   - AlmaLinux 8: no PUNGI hosts exist - 8 keeps building from
 #     repo.almalinux.org.
@@ -187,5 +199,91 @@ if ! grep -q 'pungi\.repo' "${CLEANUP_TASKS}"; then
     } > "${CLEANUP_TASKS}.pungi.tmp" && mv "${CLEANUP_TASKS}.pungi.tmp" "${CLEANUP_TASKS}"
     echo "[Info]   override removal injected: ${CLEANUP_TASKS}"
 fi
+
+# ---------------------------------------------------------------------------
+# AWS AMI roles: repository override for the chroot bootstrap (see the
+# header). 9/10 only - no PUNGI hosts for 8, Kitten is a rolling stream.
+
+inject_ami_repo_override() {
+    # inject_ami_repo_override <major> <arch> - inject the pungi.repo write
+    # into the AMI role's os.yaml (before the first dnf step) and its removal
+    # into cleanup.yaml. Idempotent: skipped when already present.
+    local major="$1" arch="$2" base tmp
+    local os_yaml="ansible/roles/ami_${major}_${arch}/tasks/os.yaml"
+    local cleanup_yaml="ansible/roles/ami_${major}_${arch}/tasks/cleanup.yaml"
+    [ -e "${os_yaml}" ] || return 0
+    if ! grep -q 'pungi\.repo' "${os_yaml}"; then
+        if ! grep -q '^- name: Update the system' "${os_yaml}"; then
+            echo "[Error] ${os_yaml} has no 'Update the system' task, cannot inject the repo override"
+            exit 1
+        fi
+        base="https://$(arch_dash "${arch}")-pungi-${major}.almalinux.dev/almalinux/${major}/${arch}/latest_result_almalinux/compose"
+        tmp=$(mktemp)
+        cat > "${tmp}" <<EOF
+# PUNGI: the almalinux-repos package just seeded the chroot with the
+# released-version repositories; give the pre-release compose priority for
+# the dnf steps below. Written to the host too: the 9 roles' 'Update the
+# system' task uses the ansible dnf module, which reads the host repository
+# configuration. Removed again by the cleanup.yaml task
+# tools/pungi-repos.sh injects.
+- name: PUNGI - point the host and the chroot at the pre-release repositories
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    mode: "0644"
+    content: |
+      [pungi-baseos]
+      name=AlmaLinux \$releasever - PUNGI BaseOS
+      baseurl=${base}/BaseOS/${arch}/os/
+      gpgcheck=0
+      priority=1
+
+      [pungi-appstream]
+      name=AlmaLinux \$releasever - PUNGI AppStream
+      baseurl=${base}/AppStream/${arch}/os/
+      gpgcheck=0
+      priority=1
+  loop:
+    - /etc/yum.repos.d/pungi.repo
+    - /rootfs/etc/yum.repos.d/pungi.repo
+
+EOF
+        awk -v ins="${tmp}" '
+            /^- name: Update the system/ && !done {
+                while ((getline line < ins) > 0) print line
+                close(ins)
+                done = 1
+            }
+            { print }
+        ' "${os_yaml}" > "${os_yaml}.pungi.tmp" && mv "${os_yaml}.pungi.tmp" "${os_yaml}"
+        rm -f "${tmp}"
+        echo "[Info]   AMI repo override injected: ${os_yaml}"
+    fi
+
+    if ! grep -q 'pungi\.repo' "${cleanup_yaml}"; then
+        if [ "$(head -n 1 "${cleanup_yaml}")" != "---" ]; then
+            echo "[Error] ${cleanup_yaml} does not start with '---', cannot inject the override removal"
+            exit 1
+        fi
+        {
+            echo "---"
+            echo "- name: PUNGI - remove the pre-release repositories override"
+            echo "  ansible.builtin.file:"
+            echo "    path: \"{{ item }}\""
+            echo "    state: absent"
+            echo "  loop:"
+            echo "    - /etc/yum.repos.d/pungi.repo"
+            echo "    - /rootfs/etc/yum.repos.d/pungi.repo"
+            echo ""
+            tail -n +2 "${cleanup_yaml}"
+        } > "${cleanup_yaml}.pungi.tmp" && mv "${cleanup_yaml}.pungi.tmp" "${cleanup_yaml}"
+        echo "[Info]   AMI override removal injected: ${cleanup_yaml}"
+    fi
+}
+
+for major in "${MAJORS[@]}"; do
+    for arch in x86_64 aarch64; do
+        inject_ami_repo_override "${major}" "${arch}"
+    done
+done
 
 echo "[Info] PUNGI rewrite complete"
