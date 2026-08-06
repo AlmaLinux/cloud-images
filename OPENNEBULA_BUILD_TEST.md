@@ -53,6 +53,7 @@ The input set is identical to [`opennebula-build.yml`](BUILD_IMAGES.md):
 | `self-hosted` | `true` | If `false`, skip the aarch64 build entirely. |
 | `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel. The test no longer depends on it; when true, the job summary / Mattermost message link the public S3 URL, otherwise they show the filename only. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-image build and test notifications to Mattermost. |
 
 There is no `run_test` input: the test always runs.
@@ -85,6 +86,29 @@ set it tests the locally-built qcow2 (it chowns the root-owned Packer
 output and copies it to `base.qcow2`) instead of downloading `image_url`.
 The change is backward-compatible - `opennebula-test.yml` keeps passing
 `image_url` and is unchanged.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the images
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs and the
+(gencloud-shared) kickstart `url`/`repo` lines to the per-arch compose
+hosts, so the whole anaconda install comes from the compose. The installs
+that stay in Ansible - `one-context` and the addons release package, which
+come from the external addons / extras repositories - are covered for
+their AlmaLinux dependencies by an injected `%post` writing
+`/etc/yum.repos.d/pungi.repo` (compose BaseOS/AppStream at `priority=1`);
+a task injected into the `cleanup_vm` role removes it before the image
+ships.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories. Images keep their
+regular GA-style names.
 
 ## Runner sizing
 

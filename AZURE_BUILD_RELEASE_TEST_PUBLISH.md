@@ -44,13 +44,19 @@ image the build job *just produced* on the same runner — removing two
 | `date_time_stamp` | auto (`date -u +%Y%m%d%H%M%S`) | Shared stamp for every matrix leg. |
 | `version_major` | `10` | `10-kitten`, `10`, `9`, `8`. |
 | `self-hosted` | `true` | If `false`, skip the aarch64 matrix entirely. |
-| `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Still uploads to S3 in parallel; the gallery stage no longer depends on it. |
 | `release_to_gallery` | `true` | **Master gate** for stages 2-4. `false` = build-only run. |
 | `community_gallery` | `true` | Use the Community (public) gallery where eligible. AlmaLinux 10 / Kitten always go to the private `almalinux_ci` gallery (enforced by `tools/azure_uploader.sh`). |
 | `release_to_marketplace` | `true` | Publish tested images to Marketplace as drafts. |
 | `submit_to_preview` | `false` | Also submit the drafts to Preview / certification. Only honored when `release_to_marketplace` is true. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-stage notifications to Mattermost. |
+
+There is no `store_as_artifact` input: it was dropped to stay within the
+10-input `workflow_dispatch` limit when `pungi_repos` was added, and the
+workflow hardcodes it to `false` (no image/checksum artifacts). The ~2 KB
+installed-packages `.txt` list is stored as a workflow artifact
+unconditionally.
 
 ### Stage gating
 
@@ -112,6 +118,28 @@ The x86_64 publish targets its own offer and runs in parallel.
 from `azure-test.yml` / `azure-to-marketplace.yml` (with `job.status`
 replaced by step outcomes so they work inside a composite). `azure-gallery-steps`
 is new — it wraps `tools/azure_uploader.sh` and runs it on the local `.raw`.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the images
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs and the
+kickstart `url`/`repo` lines to the per-arch compose hosts; since the
+Azure kickstarts preinstall every package the Ansible roles need
+(including `WALinuxAgent` and `mdadm`), the whole image content comes from
+the compose at anaconda time. An injected `%post` writing
+`/etc/yum.repos.d/pungi.repo` (compose BaseOS/AppStream at `priority=1`)
+safety-nets any provisioning-time dnf install; a task injected into the
+`cleanup_vm` role removes it before the image ships.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories. Images keep their
+regular GA-style names.
 
 ## Runner sizing
 

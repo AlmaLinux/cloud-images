@@ -50,6 +50,7 @@ qcow2 re-download.
 | `upload_to_s3` | `true` | Still uploads to S3 in parallel; the compute-image stage no longer depends on it. |
 | `create_compute_image` | `true` | **Master gate** for stages 2-4. `false` = build-only run. |
 | `release_to_marketplace` | `true` | Release the image to the Marketplace listing (draft revision, submitted for publishing). |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-stage notifications to Mattermost. |
 
 ### Stage gating
@@ -110,6 +111,26 @@ passed as inputs and `job.status` replaced by step outcomes so they work
 inside a composite). `oci-compute-image-steps` is new - it wraps the
 Object Storage upload + Compute Image import + capability schema + shape
 compatibility steps and runs them on the local `.qcow2`.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the images
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs and the
+kickstart `url`/`repo` lines to the per-arch compose hosts; since the OCI
+kickstarts preinstall every package the Ansible roles need, the whole
+image content comes from the compose at anaconda time. An injected `%post`
+writing `/etc/yum.repos.d/pungi.repo` (compose BaseOS/AppStream at
+`priority=1`) safety-nets any provisioning-time dnf install; a task
+injected into the `cleanup_vm` role removes it before the image ships.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 ignores the input (no PUNGI hosts exist;
+this workflow has no Kitten option at all). Images keep their regular
+GA-style names.
 
 ## Runner sizing
 

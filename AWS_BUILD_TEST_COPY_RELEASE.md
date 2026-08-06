@@ -49,6 +49,9 @@ them for dry runs / testing.
 | Input | Default | Notes |
 | :--- | :--- | :--- |
 | `version_major` | `10` | `kitten_10`, `10`, `9`, `8`. |
+| `copy_to_regions` | `true` | Copy tested AMIs to all AWS regions and make them public. `false` = build+test only (the wiki PR and the Marketplace release consume the region copies, so both are skipped too). |
+| `release_to_marketplace` | `true` | Release the copied AMIs to their AWS Marketplace products. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-stage notifications to Mattermost. |
 
 Everything else from the standalone workflows is omitted and acts as a
@@ -57,9 +60,8 @@ fixed value:
 | Omitted input | Acts as | Effect |
 | :--- | :--- | :--- |
 | `test_ami` | `true` | The test stage always runs. |
-| `make_public` | `true` | AMIs are always copied to all regions and made public. |
+| `make_public` | `true` | Copied AMIs are always made public. |
 | `draft` | `false` | The wiki PR is a normal (non-draft) PR. |
-| `release_to_marketplace` | `true` | The Marketplace change set is always submitted. |
 | `public_product` | `true` | Always releases to the real public product (never the dev `prod-t4oyq2p42jn2u`). |
 
 ## Job layout
@@ -78,12 +80,14 @@ release-ami-to-marketplace (matrix 2 AMIs) -> release each to its product
 
 ### Stage gating
 
-Stages are chained on job results (no extra gating inputs):
+Stages are chained on job results, plus the two gating inputs:
 
 ```
-build-ami fails        -> nothing downstream runs
-a test-ami leg fails   -> copy + wiki + release are skipped
-copy-ami fails         -> release is skipped
+build-ami fails             -> nothing downstream runs
+a test-ami leg fails        -> copy + wiki + release are skipped
+copy-ami fails              -> release is skipped
+copy_to_regions=false       -> stop after build+test (wiki + release skipped too)
+release_to_marketplace=false -> stop after copy + wiki PR
 ```
 
 The gates use `!cancelled() && needs.<job>.result == 'success'`, so a
@@ -96,6 +100,30 @@ so if one architecture's test fails, copy / wiki / release are skipped for
 *both*. This is stricter than the per-arch "passing legs proceed" model of
 the OCI / Azure unified workflows, and is deliberate: the single wiki PR
 cannot be assembled from one architecture alone.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the AMIs
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. AMIs consume no kickstart or ISO: a surrogate EBS
+volume is chroot-bootstrapped from a running source instance, with the
+`almalinux-repos` package seeding the chroot's repositories. The script
+injects a task into the 9/10 `ansible/roles/ami_<major>_<arch>` roles'
+`os.yaml` that writes `/etc/yum.repos.d/pungi.repo` (compose
+BaseOS/AppStream at `priority=1`) into both the source instance and the
+`/rootfs` chroot right after that seeding, so every dnf step of the
+bootstrap resolves against the compose; a task injected into
+`cleanup.yaml` removes the override from both places before the volume is
+snapshotted.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories. AMIs keep their regular
+GA-style names.
 
 ## Required GitHub Configuration
 

@@ -259,10 +259,16 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `self-hosted` | `true` | Build the self-hosted providers on a self-hosted runner. |
 | `self_hosted_runner` | `aws-ec2` | `self-hosted` (manual) or `aws-ec2`. Routes libvirt/virtualbox to the self-hosted leg when set to `self-hosted`. |
 | `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64, parallels-aarch64 and virtualbox-aarch64 legs, which are always build-only). |
-| `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
 | `release_to_catalog` | `true` | Publish the tested boxes in the [Vagrant box catalog](#the-vagrant-box-catalog) on S3. Needs `upload_to_s3`; applies in `almalinux/cloud-images` only. On by default, so the scheduled runs publish. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-box build / publish notifications to Mattermost. |
+
+There is no `store_as_artifact` input: it was dropped to stay within the
+10-input `workflow_dispatch` limit when `pungi_repos` was added, and the
+workflow hardcodes it to `false` (no box/checksum artifacts). The ~2 KB
+installed-packages `.txt` list is stored as a workflow artifact
+unconditionally.
 
 ## Job layout
 
@@ -301,6 +307,33 @@ Provider routing (matching `vagrant-build.yml`):
 | :--- | :--- |
 | Build + test + S3 upload | [`.github/actions/shared-steps`](.github/actions/shared-steps/action.yml) |
 | Catalog publish | [`.github/scripts/vagrant-catalog-add.py`](.github/scripts/vagrant-catalog-add.py) (uses [`tools/vagrant_catalog.py`](tools/vagrant_catalog.py)'s box-name parsing) |
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the boxes
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs and the
+(provider-shared) kickstart `url`/`repo` lines to the per-arch compose
+hosts, so the anaconda install comes from the compose. The installs that
+stay in Ansible - cloud-init (`vagrant_guest` must configure its Vagrant
+datasource before it first runs), the per-provider guest agents
+(`qemu-guest-agent` / `hyperv-daemons` / `open-vm-tools`) and the
+VirtualBox Guest Additions build dependencies - are covered by an
+injected `%post` writing `/etc/yum.repos.d/pungi.repo` (compose
+BaseOS/AppStream at `priority=1`). That override is what lets the Guest
+Additions build succeed on a pre-release system: `kernel-devel` /
+`kernel-headers` must match the running compose kernel, which the
+released repositories cannot provide. A task injected into the
+`cleanup_vm` role removes the override before the boxes ship.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories. Boxes keep their
+regular GA-style names.
 
 ## Runner sizing
 

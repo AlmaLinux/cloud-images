@@ -63,10 +63,11 @@ approval is the decision on failure.
 | `cit_git_repo` | `''` | Optional: `owner/repo` of a cloud-image-tests fork to build instead of the prebuilt image. |
 | `cit_git_ref` | `''` | Branch/tag/SHA in `cit_git_repo`. Ignored when `cit_git_repo` is empty. |
 | `publish_images` | `true` | `false` = build and test only, no publish. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post build notifications to Mattermost. |
 
 There is intentionally no `run_test` input: tests always run. (`workflow_dispatch`
-allows at most 10 inputs; this workflow uses 9.)
+allows at most 10 inputs; this workflow uses all 10.)
 
 ## Job layout
 
@@ -98,6 +99,35 @@ publish_images=false -> build + test only, no publish.
 
 `publish-gcp` runs when `!cancelled() && publish_images && both builds
 succeeded && (all tests passed || approve-publish approved)`.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the image
+is built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. For GCP specifically the script:
+
+- rewrites the boot ISO URLs and the kickstart `url`/`repo` lines to the
+  per-arch compose hosts, so the whole anaconda install comes from the
+  compose,
+- appends a `%post` writing `/etc/yum.repos.d/pungi.repo` (compose
+  BaseOS/AppStream at `priority=1`): the `google-*` packages that Ansible
+  installs come from Google's own repository (untouched by PUNGI), but
+  their AlmaLinux dependencies then resolve against the compose instead of
+  the released repositories. A task injected into the `cleanup_vm` role
+  removes the override before the image ships,
+- appends an AlmaLinux GPG key import `%post` to the 10 kickstarts: with
+  the override repositories at `gpgcheck=0`, dnf never imports the keys
+  during provisioning (the 9 kickstarts already import
+  `/etc/pki/rpm-gpg/*` themselves).
+
+The run name gets a `(PUNGI)` suffix, and the build summary and the
+Mattermost notification carry a
+`:warning: Built from **PUNGI pre-release repositories**` note. AlmaLinux 8
+(no PUNGI hosts) and Kitten (a rolling stream - its public repos already
+ARE the latest compose) ignore the input and keep building from their
+public repositories. Images keep their regular GA-style names.
 
 ## Runners
 

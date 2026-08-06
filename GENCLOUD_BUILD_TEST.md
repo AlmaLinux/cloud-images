@@ -55,6 +55,7 @@ The input set is identical to [`gencloud-build.yml`](BUILD_IMAGES.md):
 | `ppc64le` | `true` | Build ppc64le images (`gencloud` and `gencloud_ext4`) under QEMU TCG emulation on an x86_64 self-hosted runner (30 to 50 minutes per image; offline validation only). See [ppc64le under TCG](#ppc64le-under-tcg-experimental). |
 | `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel. The test no longer depends on it; when true, the job summary / Mattermost message link the public S3 URL, otherwise they show the filename only. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-image build and test notifications to Mattermost. |
 
 There is no `run_test` input: the test always runs.
@@ -96,6 +97,32 @@ set it tests the locally-built qcow2 (it chowns the root-owned Packer
 output and copies it to `base.qcow2`) instead of downloading `image_url`.
 The change is backward-compatible - `gencloud-test.yml` keeps passing
 `image_url` and is unchanged.
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the images
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs (x86_64,
+aarch64, ppc64le), the installer `kernel.img`/`initrd.img` URLs of the
+s390x TCG build and the kickstart `url`/`repo` lines to the per-arch
+compose hosts; every job, the TCG ones included, passes the input on to
+shared-steps. So the whole
+anaconda install (including the packages the kickstarts preinstall for the
+Ansible provisioning) comes from the compose. The one install that stays
+in Ansible - cloud-init, which the OpenNebula-shared kickstarts cannot
+carry - is covered by an injected `%post` writing
+`/etc/yum.repos.d/pungi.repo` (compose BaseOS/AppStream at `priority=1`);
+a task injected into the `cleanup_vm` role removes it before the image
+ships.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories. Images keep their
+regular GA-style names.
 
 ## Runner sizing
 
