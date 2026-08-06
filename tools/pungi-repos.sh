@@ -25,10 +25,13 @@
 # provisioning used to install with dnf (see the note in their %packages
 # sections). For the installs that DO stay in Ansible (cloud-init where a
 # kickstart cannot carry it, provider guest agents, VirtualBox Guest
-# Additions build dependencies, ...) the script appends a %post section
+# Additions build dependencies, GCP's google-* packages from Google's
+# own repository, ...) the script appends a %post section
 # to the same kickstarts that writes /etc/yum.repos.d/pungi.repo,
 # pointing dnf at the PUNGI compose BaseOS/AppStream with priority=1 so
 # they shadow the released-version repositories at provisioning time.
+# On GCP only the AlmaLinux dependencies of the google-* packages are
+# affected - the Google repository itself is untouched.
 # Without it those installs mix released-version packages into the
 # pre-release system - fatal where versions must match the running
 # kernel (the VirtualBox Guest Additions build installs kernel-devel /
@@ -155,6 +158,32 @@ EOF
     echo "[Info]   runtime repo override injected: ${f}"
 }
 
+inject_gpg_import() {
+    # inject_gpg_import <ks-file> - append a %post importing the AlmaLinux
+    # GPG keys into the RPM database. On GA builds dnf imports the keys
+    # lazily while installing the google-* packages' AlmaLinux
+    # dependencies, but on PUNGI builds those come from the gpgcheck=0
+    # override repositories and no import ever happens - the image would
+    # ship without the keys. The 9 gcp kickstarts already import
+    # /etc/pki/rpm-gpg/* (everything) in their %post; the 10 ones import
+    # only Google's key. Idempotent: skipped when an import already
+    # covers the AlmaLinux keys.
+    local f="$1"
+    [ -e "${f}" ] || return 0
+    grep -qE 'rpm --import /etc/pki/rpm-gpg/(RPM-GPG-KEY-AlmaLinux|\*)' "${f}" && return 0
+    cat >> "${f}" <<'EOF'
+
+# PUNGI: with the AlmaLinux packages coming from the gpgcheck=0 override
+# repositories, dnf never imports the AlmaLinux GPG keys during the Ansible
+# provisioning - import them explicitly so the image matches its GA
+# counterpart (where the first dnf install imports them).
+%post
+rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux*
+%end
+EOF
+    echo "[Info]   GPG key import injected: ${f}"
+}
+
 for major in "${MAJORS[@]}"; do
     for arch in x86_64 x86_64_v2 aarch64 ppc64le; do
         inject_repo_override "http/almalinux-${major}.gencloud-${arch}.ks" "${major}" "${arch}"
@@ -164,6 +193,14 @@ for major in "${MAJORS[@]}"; do
 
     for arch in x86_64 aarch64; do
         inject_repo_override "http/almalinux-${major}.oci-${arch}.ks" "${major}" "${arch}"
+    done
+
+    # gcp: the google-* packages stay in Ansible (Google's own repository),
+    # but their AlmaLinux dependencies resolve against BaseOS/AppStream at
+    # provisioning time - the override keeps them on the compose.
+    for arch in x86_64 aarch64; do
+        inject_repo_override "http/almalinux-${major}.gcp-${arch}.ks" "${major}" "${arch}"
+        inject_gpg_import "http/almalinux-${major}.gcp-${arch}.ks"
     done
 
     for arch in x86_64 aarch64 64k-aarch64; do
