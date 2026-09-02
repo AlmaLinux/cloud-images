@@ -36,9 +36,11 @@
       "Licenses": [
         "projects/almalinux-cloud/global/licenses/almalinux-8"
       ],
+      {{if eq .environment "prod" -}}
       "Labels": {
         "public-image": "true"
       },
+      {{- end}}
       "GuestOsFeatures": {{$guest_features}}
     }
   ]
