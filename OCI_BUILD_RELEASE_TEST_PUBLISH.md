@@ -13,7 +13,7 @@ OCI image lifecycle in a single `workflow_dispatch`:
 3. **Test** every Compute Image (launch a fresh instance, assert
    release / arch / RPMs / disk / `dnf`).
 4. **Publish to Listings**: publish every image that passed its test to
-   the OCI Marketplace as a draft listing revision, submitted for review.
+   the OCI Marketplace as a draft listing revision, submitted for publishing.
 
 It reuses the same composite actions the standalone OCI workflows are
 built from, so behaviour matches them stage-for-stage. The standalone
@@ -49,7 +49,7 @@ qcow2 re-download.
 | `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Still uploads to S3 in parallel; the compute-image stage no longer depends on it. |
 | `create_compute_image` | `true` | **Master gate** for stages 2-4. `false` = build-only run. |
-| `release_to_marketplace` | `true` | Release the image to the Marketplace listing (draft revision, submitted for review). |
+| `release_to_marketplace` | `true` | Release the image to the Marketplace listing (draft revision, submitted for publishing). |
 | `notify_mattermost` | `true` | Post per-stage notifications to Mattermost. |
 
 ### Stage gating
@@ -136,11 +136,12 @@ first and falls back to `dnf` so it works on the EL9 aarch64 runner.
   (this is the key difference from the Azure unified workflow, where
   aarch64 and aarch64-64k share one offer and must serialise).
 - The aarch64 + major-10 listing is matched as `AArch64/ARM64`.
-- Publishing to **Live is always manual** in the Oracle Cloud Console,
-  even after a successful review submission. The workflow leaves a draft
-  revision submitted for review; publish it from the Console once Oracle
-  approves. See [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) for the
-  listing / terms / artifact flow in detail.
+- The workflow submits the draft revision for publishing: the new package
+  lands in the **Publish in Progress** stage and Oracle carries it to Live -
+  no manual action in the Console is required. Publishing the new revision
+  automatically unpublishes the previous one. See
+  [OCI_MARKETPLACE.md](OCI_MARKETPLACE.md) for the listing / terms /
+  artifact flow in detail.
 
 ## Required GitHub Configuration
 

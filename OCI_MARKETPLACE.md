@@ -241,7 +241,7 @@ graph TD
     WC --> UD[Update Draft Version Details]
     UD --> UN[Unset Default on Old Packages]
     UN --> NP[Create New Package as Default]
-    NP --> SB[Submit Draft for Review]
+    NP --> SB[Submit Draft for Publishing]
     SB --> S
     S --> MM[Send Mattermost Notification]
 ```
@@ -305,14 +305,13 @@ When the source type is `Artifact OCID`, artifact creation is skipped entirely â
 2. **Update** the draft's version details (version number, release date, release notes link), headline, and tagline
 3. **Unset default** on any existing default packages in the draft
 4. **Create** a new package as default (linking artifact + terms + version)
-5. **Submit** the draft for Oracle review
+5. **Submit** the draft for publishing
 
-After Oracle approves the revision, it must be **published manually** from the OCI Console. Publishing the new revision automatically unpublishes the previous one.
+Submitting moves the new package to the **Publish in Progress** stage; Oracle carries it to Live with no manual action required. Publishing the new revision automatically unpublishes the previous one.
 
-## Manual Steps After Workflow Completes
+## After the Workflow Completes
 
-1. **Wait for Oracle to approve** the submitted revision (check status in OCI Console)
-2. **Publish** the approved revision from the [OCI Publisher Console](https://cloud.oracle.com/publisher) â€” the previous revision is automatically unpublished
+No manual steps are required: the new package is in the **Publish in Progress** stage. Track it in the [OCI Publisher Console](https://cloud.oracle.com/publisher); once it goes Live, the previous revision is automatically unpublished.
 
 ## Testing
 

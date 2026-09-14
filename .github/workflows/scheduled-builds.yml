@@ -14,9 +14,10 @@ run-name: >-
 # publishing - a scheduled firing is a real release cycle: AWS releases
 # AMIs to all regions + Marketplace + wiki PR, Vagrant publishes boxes to
 # HCP, Azure releases to the gallery and creates Marketplace drafts, OCI
-# creates a Compute Image and submits a Marketplace draft for review
-# (Azure/OCI Live publishing stays manual). Tests gate publishing inside
-# each workflow. gcp-build-test-publish.yml is deliberately NOT scheduled.
+# creates a Compute Image and submits a Marketplace revision for
+# publishing (only Azure Live publishing stays manual). Tests gate
+# publishing inside each workflow. gcp-build-test-publish.yml is
+# deliberately NOT scheduled.
 #
 # Version quirks handled in the dispatch step:
 #   - aws-build-test-copy-release.yml spells Kitten 'kitten_10' (translated)

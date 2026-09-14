@@ -623,10 +623,10 @@ runs:
           echo "- **Revision Package**: \`${{ env.PACKAGE_VERSION }}\` (\`${{ env.PACKAGE_ID }}\`)"
           echo ""
           echo "### Status"
-          echo "✅ Draft revision created, package added, and submitted for review."
+          echo "✅ Draft revision created, package added, and submitted for publishing."
           echo ""
-          echo "Check it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
-          echo "Publish it from there manually once it is approved"
+          echo "The new package is in the **Publish in Progress** stage - no manual action required."
+          echo "Track it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})"
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Send notification to Mattermost
@@ -647,6 +647,6 @@ runs:
           **Draft Revision**: [${{ env.LISTING_REVISION_NAME }}](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})
           **Revision Package**: `${{ env.PACKAGE_VERSION }}` (`${{ env.PACKAGE_ID }}`)
 
-          ✅ Draft revision created, package added, and submitted for review.
-          Check it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})
-          Publish it from there manually once it is approved
+          ✅ Draft revision created, package added, and submitted for publishing.
+          The new package is in the **Publish in Progress** stage - no manual action required.
+          Track it on the [Oracle Cloud Console](${{ env.OCI_PUBLISHER_BASE_URL }}/listing/${{ env.LISTING_OCID }}/${{ env.DRAFT_REVISION_ID }}?region=${{ inputs.OCI_CLI_REGION }})
