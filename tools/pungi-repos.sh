@@ -17,9 +17,13 @@
 #
 # Rewritten files:
 #   - variables.pkr.hcl                  (iso_url_* / iso_checksum_* locals
-#                                         for 9/10)
+#                                         for 9/10, the s390x_kernel_url_* /
+#                                         s390x_initrd_url_* locals of the
+#                                         s390x TCG build, and the os_ver_9 /
+#                                         os_ver_10 defaults - see below)
 #   - http/*.ks                          ('url --url' and 'repo --baseurl')
-#   - almalinux*gencloud*.xml.tmpl       (the <url> element, s390x)
+#   - almalinux*gencloud*.xml.tmpl       (the <url> element of the Jenkins
+#                                         s390x oz build)
 #
 # The kickstarts preinstall the packages the post-reboot Ansible
 # provisioning used to install with dnf (see the note in their %packages
@@ -51,6 +55,17 @@
 # and reads the host repository configuration. A removal task injected
 # into cleanup.yaml drops the override from both places before the
 # volume is snapshotted.
+#
+# AlmaLinux version: variables.pkr.hcl pins the released minor in
+# os_ver_9 / os_ver_10 (e.g. 10.2), and every image name is derived from
+# it. A PUNGI compose carries the NEXT minor (its almalinux-release is e.g.
+# 10.3), so the script reads that version from the compose BaseOS repodata
+# and sets it as the os_ver_<major> default. The images then get the
+# pre-release version in their names, matching /etc/almalinux-release
+# inside them and the release string the tests grep for, while the
+# scheduled (non-PUNGI) builds keep producing the released version from
+# the committed defaults - no bump commit is needed to build an upcoming
+# release from PUNGI.
 #
 # Intentionally NOT rewritten:
 #   - AlmaLinux 8: no PUNGI hosts exist - 8 keeps building from
@@ -116,6 +131,55 @@ if [ -n "${LEFTOVER}" ]; then
     echo "${LEFTOVER}"
     exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# AlmaLinux version from the compose -> os_ver_<major> in variables.pkr.hcl
+# ---------------------------------------------------------------------------
+
+# Prints the almalinux-release version (e.g. 10.3) of a major's PUNGI
+# compose, read from the BaseOS repodata. The composes of one major carry
+# the same version on every arch; the arches are tried in order in case a
+# host is down.
+compose_release_version() {
+    local -r major="${1}"
+    local arch ad base primary ver
+    for arch in x86_64 aarch64 ppc64le s390x; do
+        ad=$(arch_dash "${arch}")
+        base="https://${ad}-pungi-${major}.almalinux.dev/almalinux/${major}/${arch}/latest_result_almalinux/compose/BaseOS/${arch}/os"
+        primary=$(curl -sf "${base}/repodata/repomd.xml" | grep -oE 'repodata/[^"]*-primary\.xml\.gz' | head -n 1) || true
+        [ -n "${primary}" ] || continue
+        ver=$(curl -sf "${base}/${primary}" | gunzip -c 2>/dev/null \
+            | python3 -c 'import re,sys; m=re.search(r"<name>almalinux-release</name>.*?ver=\"([^\"]+)\"", sys.stdin.read(), re.S); print(m.group(1) if m else "")') || true
+        if [ -n "${ver}" ]; then
+            echo "${ver}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+for major in "${MAJORS[@]}"; do
+    if ! version=$(compose_release_version "${major}"); then
+        echo "[Error] Could not read the almalinux-release version from the AlmaLinux ${major} PUNGI compose"
+        exit 1
+    fi
+    if ! [[ "${version}" =~ ^${major}\.[0-9]+$ ]]; then
+        echo "[Error] Unexpected almalinux-release version '${version}' in the AlmaLinux ${major} PUNGI compose"
+        exit 1
+    fi
+    current=$(sed -nE "/^variable \"os_ver_${major}\"/,/^}/ s/^  default = \"([^\"]+)\"/\1/p" variables.pkr.hcl)
+    if [ -z "${current}" ]; then
+        echo "[Error] No os_ver_${major} default found in variables.pkr.hcl"
+        exit 1
+    fi
+    if [ "${current}" != "${version}" ]; then
+        sed -E "/^variable \"os_ver_${major}\"/,/^}/ s/^  default = \"[^\"]+\"/  default = \"${version}\"/" variables.pkr.hcl > variables.pkr.hcl.pungi.tmp \
+            && mv variables.pkr.hcl.pungi.tmp variables.pkr.hcl
+        echo "[Info]   os_ver_${major}: ${current} -> ${version} (almalinux-release in the PUNGI compose)"
+    else
+        echo "[Info]   os_ver_${major}: already ${version}"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Repository override for the provisioning-time installs (see the header).

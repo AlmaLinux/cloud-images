@@ -107,8 +107,16 @@ The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
 notification carry a `:warning: Built from **PUNGI pre-release
 repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
 stream - its public repos already ARE the latest compose) ignore the input
-and keep building from their public repositories. Images keep their
-regular GA-style names.
+and keep building from their public repositories.
+
+The AlmaLinux version comes from the compose: the script reads the
+`almalinux-release` version of the PUNGI compose (e.g. `10.3` while
+`repo.almalinux.org` still ships `10.2`) and sets it as the
+`os_ver_<major>` default in `variables.pkr.hcl`, so the images are named
+after the pre-release version and match `/etc/almalinux-release` inside
+them and the release string the tests check. Scheduled (non-PUNGI)
+builds keep the released version from the committed defaults, so no
+version bump is needed to build an upcoming release from PUNGI.
 
 ## Runner sizing
 

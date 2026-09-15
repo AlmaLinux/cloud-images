@@ -106,8 +106,25 @@ runs:
 
         # Release string and version
         if [[ ${{ env.version_major }} != *'kitten'* ]]; then
-          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ env.version_major }}.${{ env.alma_arch }}.rpm
-          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          if [[ "${{ inputs.pungi_repos }}" == "true" && "${{ env.version_major }}" =~ ^(9|10)$ ]]; then
+            # PUNGI builds install a pre-release almalinux-release (e.g.
+            # 10.3 while repo.almalinux.org still ships 10.2), so derive
+            # the version from the PUNGI compose the image is actually
+            # built from - otherwise the S3 path gets the old minor.
+            # Same derivation as in shared-steps.
+            pungi_repo="https://$(echo '${{ env.alma_arch }}' | tr '_' '-')-pungi-${{ env.version_major }}.almalinux.dev/almalinux/${{ env.version_major }}/${{ env.alma_arch }}/latest_result_almalinux/compose/BaseOS/${{ env.alma_arch }}/os"
+            primary_href=$(curl -sf "${pungi_repo}/repodata/repomd.xml" | grep -oE 'repodata/[^"]*-primary\.xml\.gz' | head -n 1)
+            release=$(curl -sf "${pungi_repo}/${primary_href}" | gunzip \
+              | python3 -c 'import re,sys; print(re.search(r"<name>almalinux-release</name>.*?ver=\"([^\"]+)\"", sys.stdin.read(), re.S).group(1))')
+            if [ -z "${release}" ]; then
+              echo "::error::Failed to derive the almalinux-release version from the PUNGI compose (${pungi_repo})"
+              exit 1
+            fi
+            echo "[Debug] almalinux-release version from the PUNGI compose: ${release}"
+          else
+            almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ env.version_major }}.${{ env.alma_arch }}.rpm
+            release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          fi
           release_string="AlmaLinux release ${release}"
           release_package="almalinux-release"
         else
