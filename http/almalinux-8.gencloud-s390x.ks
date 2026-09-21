@@ -184,6 +184,11 @@ EOF
 rm -f /etc/udev/rules.d/70*
 ln -s /dev/null /etc/udev/rules.d/80-net-name-slot.rules
 rm -f /etc/sysconfig/network-scripts/ifcfg-*
+# the installer's connection profile and NetworkManager's runtime state (DHCP
+# lease, NetworkManager.state, timestamps, ...): the ansible-built images drop
+# these in the cleanup_vm role; a pristine image ships none of them
+rm -f /etc/NetworkManager/system-connections/*.nmconnection
+rm -rf /var/lib/NetworkManager/*
 # simple eth0 config, again not hard-coded to the build hardware
 cat > /etc/sysconfig/network-scripts/ifcfg-eth0 << EOF
 DEVICE="eth0"

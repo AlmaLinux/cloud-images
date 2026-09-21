@@ -38,6 +38,25 @@
   loop_control:
     label: "{{ item.path }}"
 
+# The build's NetworkManager leaves its runtime state behind: the DHCP
+# lease of the installer's session (internal-<uuid>-<iface>.lease),
+# NetworkManager.state, timestamps, seen-bssids. A pristine image, like
+# RHEL's KVM guest image, ships an empty /var/lib/NetworkManager; it is all
+# regenerated on first boot.
+- name: Find NetworkManager runtime state files
+  ansible.builtin.find:
+    paths: /var/lib/NetworkManager
+    file_type: any
+  register: networkmanager_state_files
+
+- name: Delete found NetworkManager runtime state files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ networkmanager_state_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+
 - name: Delete DNF cache
   command: dnf clean all
 
