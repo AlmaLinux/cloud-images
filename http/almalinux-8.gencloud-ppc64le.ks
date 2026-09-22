@@ -56,3 +56,16 @@ tar
 # disable kdump service
 %addon com_redhat_kdump --disable
 %end
+
+%post --erroronfail
+
+# The GitHub TCG build types console=hvc0 into the installer's GRUB command
+# line (so anaconda's output goes to the captured serial console), and
+# anaconda copies the installer's console= arguments into the installed
+# boot loader configuration. Take it out again so the image's kernel
+# command line is the same as from a build on a POWER host, where nothing
+# is added and these two lines are no-ops.
+sed -i 's/ console=hvc0//' /etc/default/grub
+grubby --update-kernel=ALL --remove-args="console=hvc0"
+
+%end

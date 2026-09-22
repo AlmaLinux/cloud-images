@@ -61,6 +61,9 @@ week.
   (not `10-kitten`) - the dispatcher translates.
 - `gencloud-build-test.yml`'s s390x leg (QEMU TCG on an x86_64 runner,
   40 to 90 minutes) is on by default, so scheduled runs build it too.
+- `gencloud-build-test.yml`'s ppc64le leg (QEMU TCG on an x86_64 runner,
+  30 to 50 minutes per image) is on by default, so scheduled runs build it
+  too.
 - `oci-build-release-test-publish.yml` has **no Kitten option** - on
   Kitten weeks the OCI dispatch is skipped (noted in the job summary).
 - `vagrant-build-test-publish.yml` is **temporarily paused on Kitten

@@ -52,6 +52,7 @@ The input set is identical to [`gencloud-build.yml`](BUILD_IMAGES.md):
 | `version_major` | `10` | `10-kitten`, `10`, `9`, `8`. |
 | `self-hosted` | `true` | If `false`, skip the aarch64 matrix entirely. |
 | `s390x` | `true` | Build s390x images under QEMU TCG emulation on an x86_64 self-hosted runner (40 to 90 minutes per run; offline validation only). See [s390x under TCG](#s390x-under-tcg-experimental). |
+| `ppc64le` | `true` | Build ppc64le images (`gencloud` and `gencloud_ext4`) under QEMU TCG emulation on an x86_64 self-hosted runner (30 to 50 minutes per image; offline validation only). See [ppc64le under TCG](#ppc64le-under-tcg-experimental). |
 | `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel. The test no longer depends on it; when true, the job summary / Mattermost message link the public S3 URL, otherwise they show the filename only. |
 | `notify_mattermost` | `true` | Post per-image build and test notifications to Mattermost. |
@@ -65,8 +66,10 @@ init-data
  |- build-gh-hosted (x86_64 matrix: subtype x variant)   -. shared-steps build,
  |- start-self-hosted-runner (fork EC2)                    | then gencloud-test-steps
  |- build-self-hosted (aarch64 matrix: subtype)          -' in-job on the local qcow2
- '- build-s390x-tcg (s390x, default on)                  -  shared-steps build under
+ |- build-s390x-tcg (s390x, default on)                  -  shared-steps build under
                                                              TCG, offline validation only
+ '- build-ppc64le-tcg (default on; ppc64le matrix: subtype) shared-steps build under
+                                                            TCG + offline validation only
 ```
 
 There is no collect / publish stage: because the test runs in-job, each
@@ -77,6 +80,7 @@ build matrix leg reports its own build+test result directly. The matrix:
 | `build-gh-hosted` | x86_64 | `subtype` in {`gencloud`, `gencloud_ext4`} x `variant` ({`10`,`10-v2`} for AL10/Kitten, else just the major) |
 | `build-self-hosted` | aarch64 | `subtype` in {`gencloud`, `gencloud_ext4`} |
 | `build-s390x-tcg` | s390x | `gencloud` only (no ext4 kickstart for s390x); runs only with `s390x=true` |
+| `build-ppc64le-tcg` | ppc64le (emulated) | `subtype` in {`gencloud`, `gencloud_ext4`}; on by default, skipped with `ppc64le=false` |
 
 ### Stage composite actions
 
@@ -99,6 +103,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
 | `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
 | `build-s390x-tcg` | same x86_64 metal family as `build-gh-hosted` (KVM unused - TCG) | `ubuntu-24.04` |
+| `build-ppc64le-tcg` | same as `build-gh-hosted` (x86_64 metal; KVM unused, TCG is CPU-bound) | `ubuntu-24.04` |
 
 Both org runners are bare metal, so `/dev/kvm` is present for the in-job
 QEMU test. The composite installs `qemu-system-*` + `cloud-image-utils`
@@ -150,6 +155,56 @@ Known risk to confirm on the first runs: AlmaLinux 10 targets the z14
 instruction set; the source uses `-cpu max` so TCG exposes everything it
 implements, but if the installer hits an unimplemented facility the
 console log will show it.
+
+## ppc64le under TCG (experimental)
+
+There are no POWER runners, so the `build-ppc64le-tcg` job (on by default,
+`ppc64le=false` skips it) builds the ppc64le images on an x86_64 runner with QEMU's Tiny Code Generator
+(TCG): the guest CPU is emulated in software, the virtio disk and network
+stay paravirtual. It uses the **same Packer sources** Jenkins runs on a
+POWER host (boot ISO, GRUB boot command, kickstart, SSH + ansible), switched
+to emulation through variables that shared-steps passes on the command line:
+
+| Variable | Jenkins / POWER default | GitHub (TCG) value |
+| :--- | :--- | :--- |
+| `ppc64le_accelerator` | `none` (KVM-HV comes from the machine type) | `tcg` |
+| `ppc64le_machine_type` | `pseries,accel=kvm,kvm-type=HV` | `pseries` |
+| `ppc64le_cpu_model` | empty (QEMU default = host CPU) | `POWER9` (EL10 baseline; fully implemented by TCG) |
+| `ppc64le_console_log` | empty | `<workspace>/ppc64le-console.log`, streamed into the job log as `[ppc64le console]` lines |
+| `ppc64le_extra_kernel_args` | empty | `console=hvc0`, typed at the end of the GRUB boot command. SLOF makes the VGA display the primary console when a VGA adapter exists (Packer needs one for the VNC keyboard), so without it anaconda draws its text UI on the uncaptured VGA console and hvc0 only shows a shell banner |
+| `ppc64le_grub_hold` | `false` | `true`: the boot command starts with 30 s of once-a-second keypresses GRUB's menu ignores, then moves up from the ISO's default entry ("Test this media & install", whose `rd.live.check` hashes the 1.5 GB ISO for the better part of an hour under emulation) to the plain "Install" entry before the usual edit sequence. The ISO's GRUB menu auto-boots after only 5 s and appears about 8 s after the VM starts, so typing at one fixed delay is a race (the first runs lost it and installed without the kickstart); the presses stop the countdown as soon as the menu is up. SLOF keeps auto-booting, so the reboot after the install comes up on its own |
+| `gencloud_boot_wait_ppc64le` | `8s` | `3s` (start the keypress hold before GRUB can appear) |
+| `ssh_timeout` | `3600s` | `4h` (the whole emulated install runs before SSH is up) |
+
+The emulator is **not** Ubuntu 24.04's QEMU 8.2.2: under TCG it miscompiles
+POWER9 vector loads/stores, and the EL9/EL10 installer's Python crashes at
+"Starting installer" with segfaults or corrupted objects (reproduced on a
+test host; [QEMU issue 1769](https://gitlab.com/qemu-project/qemu/-/issues/1769)).
+shared-steps builds a small Fedora 43 container image with QEMU 10.x and
+installs `/usr/local/bin/qemu-system-ppc64-tcg`, a wrapper that runs
+`qemu-system-ppc64` in that container with host networking (Packer's VNC and
+SSH-forward ports stay on the host loopback) and the workspace and Packer's
+ISO cache mounted at their own paths; Packer gets it as `qemu_binary`. Disk
+images are still created by the host's `qemu-img`.
+
+What the job does and does not do:
+
+- Offline validation runs as for every arch (release string, `almalinux-release`
+  arch, package list from the RPM database; root is partition 3: PReP boot,
+  `/boot`, `/`).
+- **No in-job boot test**: `gencloud-test-steps` needs KVM.
+- Expect one to a few hours per image. Everything the guest does (SLOF,
+  GRUB, anaconda, the ansible provisioning over SSH, the zero-fill of the
+  disk) is CPU-emulated; the job timeout is 12 hours.
+
+Tuning notes: SLOF and GRUB draw on the VGA console, so the captured
+console shows neither; the kernel's `Command line:` line is the first proof
+that the typed arguments (`inst.ks=...`, `console=hvc0`) arrived. If it
+lacks them, GRUB booted its default entry: check in the console when SLOF
+handed over to GRUB (`Trying to load`) against the 30 s keypress window
+that starts after `gencloud_boot_wait_ppc64le`. If the guest dies with an illegal instruction, the CPU
+model is too old for the kernel; POWER9 is the minimum for AlmaLinux 10 and
+Kitten.
 
 ## Required GitHub Configuration
 

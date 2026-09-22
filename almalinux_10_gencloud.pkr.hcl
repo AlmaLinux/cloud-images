@@ -74,9 +74,9 @@ source "qemu" "almalinux_10_gencloud_ppc64le" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = var.gencloud_boot_command_10_ppc64le
+  boot_command       = local.gencloud_boot_command_10_ppc64le
   boot_wait          = var.gencloud_boot_wait_ppc64le
-  accelerator        = "none"
+  accelerator        = var.ppc64le_accelerator
   disk_interface     = "virtio-scsi"
   disk_size          = var.gencloud_disk_size
   disk_cache         = "unsafe"
@@ -85,7 +85,9 @@ source "qemu" "almalinux_10_gencloud_ppc64le" {
   disk_compression   = true
   format             = "qcow2"
   headless           = var.headless
-  machine_type       = "pseries,accel=kvm,kvm-type=HV"
+  machine_type       = var.ppc64le_machine_type
+  cpu_model          = var.ppc64le_cpu_model
+  qemuargs           = var.ppc64le_console_log != "" ? [["-serial", "file:${var.ppc64le_console_log}"]] : []
   memory             = var.memory_ppc64le
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary

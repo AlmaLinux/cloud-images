@@ -9,7 +9,7 @@ inputs:
     description: 'AlmaLinux variant to build (e.g., 9, 10, kitten)'
     required: true
   arch:
-    description: 'Target architecture (x86_64, aarch64, or s390x - the latter built under QEMU TCG on an x86_64 runner)'
+    description: 'Target architecture (x86_64, aarch64, ppc64le or s390x - the last two built under QEMU TCG on an x86_64 runner)'
     required: true
   S3_ACCESS_KEY_ID:
     description: 'AWS S3 access key ID for uploading images'
@@ -107,6 +107,27 @@ runs:
             ;;
         esac
 
+        # ppc64le has no runner of its own: its sources are built under QEMU
+        # TCG full-system emulation on this x86_64 runner, with the emulator
+        # wrapper the Install KVM step creates (a newer QEMU than Ubuntu's,
+        # see there). Switch the sources from KVM-HV to TCG with a POWER9 CPU
+        # (the EL10 baseline), capture the guest console for the job log, and
+        # give the emulated SLOF / GRUB / anaconda / ansible-over-SSH chain
+        # far more time.
+        if [ "${{ inputs.arch }}" = "ppc64le" ]; then
+          packer_opts="${packer_opts/\/usr\/bin\/qemu-system-ppc64le//usr/local/bin/qemu-system-ppc64-tcg}"
+          packer_opts="${packer_opts} -var ppc64le_accelerator=tcg -var ppc64le_machine_type=pseries -var ppc64le_cpu_model=POWER9"
+          packer_opts="${packer_opts} -var gencloud_boot_wait_ppc64le=3s -var ssh_timeout=4h"
+          packer_opts="${packer_opts} -var ppc64le_console_log=${{ github.workspace }}/ppc64le-console.log"
+          # SLOF makes the VGA display the primary console when one exists, so
+          # without this anaconda draws on the (uncaptured) VGA console
+          packer_opts="${packer_opts} -var ppc64le_extra_kernel_args=console=hvc0"
+          # The ISO's GRUB menu auto-boots 5 s after it appears (about 8 s
+          # after the VM starts here), so start typing early and hold the
+          # menu with harmless keypresses (see local.ppc64le_boot_prefix)
+          packer_opts="${packer_opts} -var ppc64le_grub_hold=true"
+        fi
+
         # Image type e.g. Azure, Vagrant Libvirt, ...
         image_type=$(echo ${{ inputs.type }} | sed -E 's/_/ /g;s/\b(.)/\u\1/g')
 
@@ -165,6 +186,37 @@ runs:
             # s390x is emulated (TCG) - needs the s390x system emulator and
             # qemu-img for the blank target disk
             [ "${{ inputs.arch }}" = "s390x" ] && sudo apt-get -y install qemu-system-s390x qemu-utils
+            # ppc64le is emulated (TCG). Ubuntu 24.04's QEMU 8.2.2 miscompiles
+            # POWER9 vector loads/stores under TCG and the EL9/EL10 installer's
+            # Python crashes at startup (segfaults and corrupted objects; QEMU
+            # issue 1769). Fedora's QEMU 10.x does not, so run the emulator from
+            # a Fedora container through a wrapper that Packer uses as
+            # qemu_binary: host networking puts the VNC and SSH-forward ports
+            # where Packer expects them, and the workspace and Packer's ISO
+            # cache are mounted at their own paths so the arguments Packer
+            # passes are valid inside. qemu-img (disk creation) is the host's.
+            if [ "${{ inputs.arch }}" = "ppc64le" ]; then
+              sudo apt-get -y install qemu-utils
+              # (heredoc bodies sit at the step's base indent so their
+              # terminators reach column 0 once YAML strips the indentation)
+              docker build -q -t qemu-ppc64-tcg - <<'DOCKERFILE'
+        FROM registry.fedoraproject.org/fedora:43
+        RUN dnf -y -q install qemu-system-ppc-core && dnf -q clean all
+        DOCKERFILE
+              sudo tee /usr/local/bin/qemu-system-ppc64-tcg >/dev/null <<'WRAPPER'
+        #!/bin/bash
+        # QEMU ppc64 system emulator from the qemu-ppc64-tcg container (see
+        # shared-steps). Packer runs it under sudo from the workspace, so the
+        # current directory (relative output paths) and root's Packer ISO
+        # cache (absolute paths) are what has to be visible inside.
+        exec docker run --rm -i --network host --init \
+          -v "${PWD}:${PWD}" -w "${PWD}" \
+          -v /root/.cache/packer:/root/.cache/packer \
+          qemu-ppc64-tcg qemu-system-ppc64 "$@"
+        WRAPPER
+              sudo chmod 0755 /usr/local/bin/qemu-system-ppc64-tcg
+              docker run --rm qemu-ppc64-tcg qemu-system-ppc64 --version
+            fi
             sudo adduser "$(id -un)" kvm
             ;;
           rhel)
@@ -324,6 +376,16 @@ runs:
           sudo tail -n +1 -F "${boot_dir}/console.log" | sed -u 's/^/[s390x console] /' &
           console_tail=$!
         fi
+        if [ "${{ inputs.arch }}" = "ppc64le" ]; then
+          # A TCG build shows nothing between "Waiting for SSH" and the end of
+          # the install, which can take an hour or more. Stream the guest's
+          # serial console (SLOF, GRUB, anaconda) into the job log so a
+          # stuck install is visible live.
+          console_log=${{ github.workspace }}/ppc64le-console.log
+          sudo touch "${console_log}"
+          sudo tail -n +1 -F "${console_log}" | sed -u 's/^/[ppc64le console] /' &
+          console_tail=$!
+        fi
         sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
         [ -n "${console_tail:-}" ] && { sleep 2; kill "${console_tail}" 2>/dev/null || true; }
         true
@@ -335,6 +397,15 @@ runs:
         # Last part of the SCLP console (anaconda output) of the failed install
         boot_dir=$(echo 'var.s390x_boot_dir' | sudo /usr/bin/packer console . 2>/dev/null || echo s390x-boot)
         sudo tail -n 200 "${boot_dir}/console.log" 2>/dev/null || echo "[Debug] no console log at ${boot_dir}/console.log"
+
+    - name: Show the ppc64le installer console
+      if: failure() && inputs.arch == 'ppc64le'
+      shell: bash
+      run: |
+        # Last part of the guest console (SLOF/GRUB/anaconda output) of the failed build
+        sudo tail -n 200 ${{ github.workspace }}/ppc64le-console.log 2>/dev/null || echo "[Debug] no console log"
+        # Packer kills the wrapper, not the container behind it
+        docker ps -q --filter ancestor=qemu-ppc64-tcg | xargs -r docker kill
 
     - name: Locate image file, generate checksum
       shell: bash
@@ -363,6 +434,7 @@ runs:
           x86_64*) partition=4 ;;
           aarch64*) partition=3 ;;
           s390x) partition=2 ;;
+          ppc64le) partition=3 ;;  # PReP boot, /boot, /
           *) false ;;
         esac
 
@@ -574,7 +646,9 @@ runs:
       run: |
         # Install aws CLI
         if ! aws --version 2>/dev/null; then
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-${{ inputs.arch }}.zip" -o "awscliv2.zip"
+          # The CLI runs on the runner, whose arch can differ from the image
+          # arch (ppc64le images are built on an x86_64 runner)
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
           unzip -qq awscliv2.zip
           sudo ./aws/install
         else
