@@ -165,6 +165,13 @@ dnf -C -y remove linux-firmware
 echo "Removing firewalld."
 dnf -C -y remove firewalld --setopt="clean_requirements_on_remove=1"
 
+# The GitHub TCG build boots the installer with console=ttysclp0 (the SCLP
+# console it captures into the job log), and anaconda copies the installer's
+# console= arguments into the installed boot loader options. Take it out so
+# the image's kernel command line is the same as from an oz build on an
+# s390x host, where it is never set and this line is a no-op.
+grubby --update-kernel=ALL --remove-args="console=ttysclp0"
+
 echo -n "Getty fixes"
 # although we want console output going to the serial console, we don't
 # actually have the opportunity to login there. FIX.

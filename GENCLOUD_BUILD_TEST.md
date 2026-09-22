@@ -51,6 +51,7 @@ The input set is identical to [`gencloud-build.yml`](BUILD_IMAGES.md):
 | `date_time_stamp` | auto (`date -u +%Y%m%d%H%M%S`) | Shared stamp for every matrix leg. |
 | `version_major` | `10` | `10-kitten`, `10`, `9`, `8`. |
 | `self-hosted` | `true` | If `false`, skip the aarch64 matrix entirely. |
+| `s390x` | `true` | Build s390x images under QEMU TCG emulation on an x86_64 self-hosted runner (40 to 90 minutes per run; offline validation only). See [s390x under TCG](#s390x-under-tcg-experimental). |
 | `store_as_artifact` | `false` | Upload images as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel. The test no longer depends on it; when true, the job summary / Mattermost message link the public S3 URL, otherwise they show the filename only. |
 | `notify_mattermost` | `true` | Post per-image build and test notifications to Mattermost. |
@@ -63,7 +64,9 @@ There is no `run_test` input: the test always runs.
 init-data
  |- build-gh-hosted (x86_64 matrix: subtype x variant)   -. shared-steps build,
  |- start-self-hosted-runner (fork EC2)                    | then gencloud-test-steps
- '- build-self-hosted (aarch64 matrix: subtype)          -' in-job on the local qcow2
+ |- build-self-hosted (aarch64 matrix: subtype)          -' in-job on the local qcow2
+ '- build-s390x-tcg (s390x, default on)                  -  shared-steps build under
+                                                             TCG, offline validation only
 ```
 
 There is no collect / publish stage: because the test runs in-job, each
@@ -73,6 +76,7 @@ build matrix leg reports its own build+test result directly. The matrix:
 | :--- | :--- | :--- |
 | `build-gh-hosted` | x86_64 | `subtype` in {`gencloud`, `gencloud_ext4`} x `variant` ({`10`,`10-v2`} for AL10/Kitten, else just the major) |
 | `build-self-hosted` | aarch64 | `subtype` in {`gencloud`, `gencloud_ext4`} |
+| `build-s390x-tcg` | s390x | `gencloud` only (no ext4 kickstart for s390x); runs only with `s390x=true` |
 
 ### Stage composite actions
 
@@ -94,6 +98,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
 | `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
+| `build-s390x-tcg` | same x86_64 metal family as `build-gh-hosted` (KVM unused - TCG) | `ubuntu-24.04` |
 
 Both org runners are bare metal, so `/dev/kvm` is present for the in-job
 QEMU test. The composite installs `qemu-system-*` + `cloud-image-utils`
@@ -105,6 +110,46 @@ composite cannot run there, so the in-job aarch64 test step will fail on a
 fork. The AlmaLinux-org path (`ubuntu24-full-arm64`) is the target; fork
 CI should test aarch64 via the standalone `gencloud-test.yml` on
 `ubuntu-24.04-arm`.
+
+## s390x under TCG (experimental)
+
+There are no s390x runners, and KVM cannot accelerate a foreign
+architecture, so the s390x GenericCloud image is built on an x86_64 runner
+with `qemu-system-s390x` in TCG full-system emulation. Functionally it is
+the same install the Jenkins s390x host performs with oz; the price is
+speed - about 3x slower than native: 40 to 90 minutes per image depending
+on the major (the job allows 12 hours). The leg is on by default, so the
+scheduled builds include it; `s390x=false` skips it for a run.
+
+How it differs from the other arches (see the `*_gencloud_s390x` sources in
+the templates):
+
+- **Direct kernel boot.** s390x has no BIOS boot menu to type a
+  `boot_command` into. shared-steps downloads the installer `kernel.img`
+  and `initrd.img` (URLs are template locals, `local.s390x_kernel_url_*`,
+  resolved with `packer console` so they follow `os_ver_*` and any URL
+  rewrite applied to the templates first) into `s390x-boot/`, and the
+  source passes them with
+  `-kernel`/`-initrd` plus `inst.ks=` on the kernel command line.
+- **No boot ISO.** `s390-ccw-virtio` has no IDE bus for Packer's default
+  CD-ROM, so the install target is a blank qcow2 (`disk_image = true`)
+  that Packer grows to `disk_size`; anaconda fetches stage2 from the
+  kickstart `url`.
+- **Kickstart-only, no SSH.** The s390x kickstarts carry the whole
+  provisioning in `%post` (no Ansible), so the source uses
+  `communicator = "none"` and the Ansible provisioner has an `except` for
+  it. The kickstart ends with `reboot`; `-no-reboot` turns that into a QEMU
+  exit, which is what Packer waits for (`s390x_install_timeout`, 8h).
+- **Diagnostics.** The SCLP console goes to `s390x-boot/console.log`; on a
+  failed build shared-steps prints its tail.
+- **Validation.** shared-steps' offline checks run (release string, RPM
+  arch, package list - root is partition 2: `/boot` + `/`), but there is
+  no in-job boot test: `gencloud-test-steps` needs KVM.
+
+Known risk to confirm on the first runs: AlmaLinux 10 targets the z14
+instruction set; the source uses `-cpu max` so TCG exposes everything it
+implements, but if the installer hits an unimplemented facility the
+console log will show it.
 
 ## Required GitHub Configuration
 
