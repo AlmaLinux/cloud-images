@@ -9,7 +9,7 @@ inputs:
     description: 'AlmaLinux variant to build (e.g., 9, 10, kitten)'
     required: true
   arch:
-    description: 'Target architecture (x86_64 or aarch64)'
+    description: 'Target architecture (x86_64, aarch64, or s390x - the latter built under QEMU TCG on an x86_64 runner)'
     required: true
   S3_ACCESS_KEY_ID:
     description: 'AWS S3 access key ID for uploading images'
@@ -162,6 +162,9 @@ runs:
         case ${{ env.runner_os }} in
           ubuntu)
             sudo apt-get -y install qemu-kvm
+            # s390x is emulated (TCG) - needs the s390x system emulator and
+            # qemu-img for the blank target disk
+            [ "${{ inputs.arch }}" = "s390x" ] && sudo apt-get -y install qemu-system-s390x qemu-utils
             sudo adduser "$(id -un)" kvm
             ;;
           rhel)
@@ -281,12 +284,57 @@ runs:
       # subject to the shared-IP anonymous rate limit - preserve it.
       run: sudo --preserve-env=PACKER_GITHUB_API_TOKEN /usr/bin/packer init -upgrade .
 
+    - name: Prepare the s390x installer boot files
+      if: inputs.arch == 's390x'
+      shell: bash
+      run: |
+        # The s390x sources boot the installer kernel/initrd directly and
+        # install onto a blank qcow2 (see the templates). Resolve the
+        # kernel/initrd URLs from the template locals with packer console so
+        # they follow os_ver_* (and any URL rewrite applied to the templates
+        # before the build); run it under sudo like packer init/build, so it
+        # finds the plugins installed there.
+        boot_dir=$(echo 'var.s390x_boot_dir' | sudo /usr/bin/packer console .)
+        case "${{ env.version_major }}" in
+          *kitten*) key=kitten_10 ;;
+          *)        key=${{ env.version_major }} ;;
+        esac
+        kernel_url=$(echo "local.s390x_kernel_url_${key}" | sudo /usr/bin/packer console .)
+        initrd_url=$(echo "local.s390x_initrd_url_${key}" | sudo /usr/bin/packer console .)
+        echo "[Debug] s390x boot dir: ${boot_dir}"
+        echo "[Debug] kernel: ${kernel_url}"
+        echo "[Debug] initrd: ${initrd_url}"
+        mkdir -p "${boot_dir}"
+        curl -fsSL -o "${boot_dir}/kernel.img" "${kernel_url}"
+        curl -fsSL -o "${boot_dir}/initrd.img" "${initrd_url}"
+        qemu-img create -f qcow2 "${boot_dir}/blank.qcow2" 1G
+        ls -la "${boot_dir}"
+
     - name: Build ${{ inputs.type }} image
       shell: bash
       run: |
         # Build ${{ inputs.type }} image
         # PACKER_LOG=1
+        if [ "${{ inputs.arch }}" = "s390x" ]; then
+          # A communicator-less TCG build prints nothing after "Waiting for
+          # shutdown..." for hours. Stream the guest's SCLP console (anaconda
+          # progress) into the job log so a stuck install is visible live.
+          boot_dir=$(echo 'var.s390x_boot_dir' | sudo /usr/bin/packer console .)
+          sudo touch "${boot_dir}/console.log"
+          sudo tail -n +1 -F "${boot_dir}/console.log" | sed -u 's/^/[s390x console] /' &
+          console_tail=$!
+        fi
         sudo sh -c "/usr/bin/packer build ${{ env.PACKER_OPTS }} -only=${{ env.packer_source }} ."
+        [ -n "${console_tail:-}" ] && { sleep 2; kill "${console_tail}" 2>/dev/null || true; }
+        true
+
+    - name: Show the s390x installer console
+      if: failure() && inputs.arch == 's390x'
+      shell: bash
+      run: |
+        # Last part of the SCLP console (anaconda output) of the failed install
+        boot_dir=$(echo 'var.s390x_boot_dir' | sudo /usr/bin/packer console . 2>/dev/null || echo s390x-boot)
+        sudo tail -n 200 "${boot_dir}/console.log" 2>/dev/null || echo "[Debug] no console log at ${boot_dir}/console.log"
 
     - name: Locate image file, generate checksum
       shell: bash
@@ -314,6 +362,7 @@ runs:
         case ${{ inputs.arch }} in
           x86_64*) partition=4 ;;
           aarch64*) partition=3 ;;
+          s390x) partition=2 ;;
           *) false ;;
         esac
 

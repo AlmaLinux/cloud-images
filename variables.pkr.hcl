@@ -68,6 +68,36 @@ locals {
   iso_checksum_10_x86_64_v2 = "file:https://repo.almalinux.org/almalinux/${var.os_ver_10}/isos/x86_64_v2/CHECKSUM"
 }
 
+# s390x installer kernel and initrd for the direct-kernel boot of the
+# GenericCloud s390x builds (see the s390x sources in the gencloud
+# templates). shared-steps resolves them with 'packer console' and downloads
+# them into var.s390x_boot_dir before packer runs, so they follow os_ver_*
+# and any repository URL rewrite applied to this file beforehand.
+locals {
+  s390x_kernel_url_8         = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/BaseOS/s390x/os/images/kernel.img"
+  s390x_initrd_url_8         = "https://repo.almalinux.org/almalinux/${var.os_ver_8}/BaseOS/s390x/os/images/initrd.img"
+  s390x_kernel_url_9         = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/BaseOS/s390x/os/images/kernel.img"
+  s390x_initrd_url_9         = "https://repo.almalinux.org/almalinux/${var.os_ver_9}/BaseOS/s390x/os/images/initrd.img"
+  s390x_kernel_url_10        = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/BaseOS/s390x/os/images/kernel.img"
+  s390x_initrd_url_10        = "https://repo.almalinux.org/almalinux/${var.os_ver_10}/BaseOS/s390x/os/images/initrd.img"
+  s390x_kernel_url_kitten_10 = "https://kitten.repo.almalinux.org/10-kitten/BaseOS/s390x/os/images/kernel.img"
+  s390x_initrd_url_kitten_10 = "https://kitten.repo.almalinux.org/10-kitten/BaseOS/s390x/os/images/initrd.img"
+}
+
+variable "s390x_boot_dir" {
+  description = "Directory with the s390x installer kernel.img / initrd.img and the blank target disk, prepared by shared-steps"
+
+  type    = string
+  default = "s390x-boot"
+}
+
+variable "s390x_install_timeout" {
+  description = "How long a communicator-less s390x TCG install may take before Packer gives up waiting for QEMU to exit"
+
+  type    = string
+  default = "8h"
+}
+
 variable "iso_url_kitten_10_x86_64" {
   description = "The latest AlmaLinux OS Kitten 10 x86_64 ISO"
 
@@ -163,6 +193,13 @@ variable "memory_aarch64" {
 
 variable "memory_ppc64le" {
   description = "The amount of memory to use when building the ppc64le VM in megabytes"
+
+  type    = number
+  default = 4096
+}
+
+variable "memory_s390x" {
+  description = "Memory of the s390x TCG installer VM (MiB)"
 
   type    = number
   default = 4096
