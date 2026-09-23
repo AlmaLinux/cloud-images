@@ -240,6 +240,56 @@ variable "root_shutdown_command" {
   default = "/sbin/shutdown -hP now"
 }
 
+# ppc64le QEMU knobs. The defaults reproduce the Jenkins build on a POWER
+# host (KVM-HV through the machine type, QEMU's default CPU = the host CPU).
+# The GitHub ppc64le leg has no POWER runner and overrides them to run the
+# whole install under TCG full-system emulation on an x86_64 runner:
+#   -var ppc64le_accelerator=tcg -var ppc64le_machine_type=pseries
+#   -var ppc64le_cpu_model=POWER9 -var ppc64le_console_log=<file>
+# together with a longer gencloud_boot_wait_ppc64le and ssh_timeout, because
+# SLOF, GRUB, anaconda and the ansible run are all several times slower.
+variable "ppc64le_accelerator" {
+  description = "Packer 'accelerator' of the ppc64le sources: 'none' lets the machine type pick KVM-HV (POWER host), 'tcg' emulates on any host"
+
+  type    = string
+  default = "none"
+}
+
+variable "ppc64le_machine_type" {
+  description = "QEMU machine type of the ppc64le sources"
+
+  type    = string
+  default = "pseries,accel=kvm,kvm-type=HV"
+}
+
+variable "ppc64le_cpu_model" {
+  description = "QEMU CPU model of the ppc64le sources; empty = QEMU's default (host CPU under KVM). Under TCG use POWER9 (the EL10 baseline)"
+
+  type    = string
+  default = ""
+}
+
+variable "ppc64le_grub_hold" {
+  description = "Start the ppc64le boot commands with 30 s of once-a-second keypresses GRUB's menu ignores, then move to the plain Install entry. The ISO's GRUB auto-boots after 5 s, so the first press to reach the menu stops the countdown wherever SLOF's speed put it; off on Jenkins"
+
+  type    = bool
+  default = false
+}
+
+variable "ppc64le_extra_kernel_args" {
+  description = "Extra installer kernel arguments typed at the end of the ppc64le boot commands; empty on Jenkins. The TCG leg passes console=hvc0 so anaconda's text UI goes to the captured serial console instead of the VGA one"
+
+  type    = string
+  default = ""
+}
+
+variable "ppc64le_console_log" {
+  description = "If set, capture the ppc64le guest's serial console (hvc0) into this file"
+
+  type    = string
+  default = ""
+}
+
 variable "qemu_binary" {
   description = "Path of QEMU binary"
 
@@ -328,17 +378,18 @@ local "gencloud_boot_command_8_aarch64" {
 }
 
 local "gencloud_boot_command_8_ppc64le" {
-  expression = [
+  expression = concat(local.ppc64le_boot_prefix, [
     "c<wait>",
     "linux /ppc/ppc64/vmlinuz",
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-ppc64le-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0",
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-ppc64le.ks",
+    " ${var.ppc64le_extra_kernel_args}",
     "<enter>",
     "initrd /ppc/ppc64/initrd.img",
     "<enter>",
     "boot<enter><wait>",
-  ]
+  ])
 }
 
 variable "gencloud_boot_command_9_x86_64" {
@@ -382,12 +433,27 @@ variable "gencloud_boot_command_9_aarch64" {
   ]
 }
 
-variable "gencloud_boot_command_9_ppc64le" {
-  description = "Boot command for AlmaLinux OS 9 Generic Cloud ppc64le"
+# Prefix of the ppc64le boot commands when ppc64le_grub_hold is set. Under
+# TCG on the GitHub runner SLOF reaches GRUB about 8 s after the VM starts
+# and the ISO's GRUB menu auto-boots 5 s later, so instead of guessing the
+# moment, press a key GRUB's menu ignores once a second for 30 s starting
+# right after the VM comes up: presses that arrive during SLOF are ignored,
+# the first one that reaches the menu stops its countdown. Then move up from
+# the ISO's default entry ("Test this media & install", rd.live.check: hashing
+# the 1.5 GB ISO takes the better part of an hour under emulation) to the
+# plain "Install" entry; the "e" / "c" of the commands below act on that
+# entry. SLOF keeps auto-booting, so the reboot after the install brings up
+# the installed system on its own.
+local "ppc64le_boot_prefix" {
+  expression = var.ppc64le_grub_hold ? concat(
+    [for i in range(30) : "<spacebar><wait1>"],
+    ["<up><wait1>"],
+  ) : []
+}
 
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS 9 Generic Cloud ppc64le
+local "gencloud_boot_command_9_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -399,8 +465,10 @@ variable "gencloud_boot_command_9_ppc64le" {
     "inst.text",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_boot_command_kitten_10_x86_64" {
@@ -444,12 +512,9 @@ variable "gencloud_boot_command_kitten_10_aarch64" {
   ]
 }
 
-variable "gencloud_boot_command_kitten_10_ppc64le" {
-  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ppc64le"
-
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS Kitten 10 Generic Cloud ppc64le
+local "gencloud_boot_command_kitten_10_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -461,8 +526,10 @@ variable "gencloud_boot_command_kitten_10_ppc64le" {
     "inst.text",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_boot_command_kitten_10_x86_64_v2" {
@@ -526,12 +593,9 @@ variable "gencloud_boot_command_10_aarch64" {
   ]
 }
 
-variable "gencloud_boot_command_10_ppc64le" {
-  description = "Boot command for AlmaLinux OS 10 Generic Cloud ppc64le"
-
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS 10 Generic Cloud ppc64le
+local "gencloud_boot_command_10_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -543,8 +607,10 @@ variable "gencloud_boot_command_10_ppc64le" {
     "inst.text",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_boot_command_10_x86_64_v2" {
@@ -599,17 +665,18 @@ local "gencloud_ext4_boot_command_8_aarch64" {
 }
 
 local "gencloud_ext4_boot_command_8_ppc64le" {
-  expression = [
+  expression = concat(local.ppc64le_boot_prefix, [
     "c<wait>",
     "linux /ppc/ppc64/vmlinuz",
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-ppc64le-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0 fstype=ext4",
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-ppc64le.ks",
+    " ${var.ppc64le_extra_kernel_args}",
     "<enter>",
     "initrd /ppc/ppc64/initrd.img",
     "<enter>",
     "boot<enter><wait>",
-  ]
+  ])
 }
 
 variable "gencloud_ext4_boot_command_9_x86_64" {
@@ -657,12 +724,9 @@ variable "gencloud_ext4_boot_command_9_aarch64" {
   ]
 }
 
-variable "gencloud_ext4_boot_command_9_ppc64le" {
-  description = "Boot command for AlmaLinux OS 9 Generic Cloud ext4 ppc64le"
-
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS 9 Generic Cloud ext4 ppc64le
+local "gencloud_ext4_boot_command_9_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -676,8 +740,10 @@ variable "gencloud_ext4_boot_command_9_ppc64le" {
     "fstype=ext4",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-9.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_ext4_boot_command_kitten_10_x86_64" {
@@ -725,12 +791,9 @@ variable "gencloud_ext4_boot_command_kitten_10_aarch64" {
   ]
 }
 
-variable "gencloud_ext4_boot_command_kitten_10_ppc64le" {
-  description = "Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 ppc64le"
-
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS Kitten 10 Generic Cloud ext4 ppc64le
+local "gencloud_ext4_boot_command_kitten_10_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -744,8 +807,10 @@ variable "gencloud_ext4_boot_command_kitten_10_ppc64le" {
     "fstype=ext4",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-kitten-10.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_ext4_boot_command_kitten_10_x86_64_v2" {
@@ -815,12 +880,9 @@ variable "gencloud_ext4_boot_command_10_aarch64" {
   ]
 }
 
-variable "gencloud_ext4_boot_command_10_ppc64le" {
-  description = "Boot command for AlmaLinux OS 10 Generic Cloud ext4 ppc64le"
-
-  type = list(string)
-
-  default = [
+# Boot command for AlmaLinux OS 10 Generic Cloud ext4 ppc64le
+local "gencloud_ext4_boot_command_10_ppc64le" {
+  expression = concat(local.ppc64le_boot_prefix, [
     "e",
     "<down><down>",
     "<leftCtrlOn>e<leftCtrlOff>",
@@ -834,8 +896,10 @@ variable "gencloud_ext4_boot_command_10_ppc64le" {
     "fstype=ext4",
     "<spacebar>",
     "inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-10.gencloud-ppc64le.ks",
+    "<spacebar>",
+    var.ppc64le_extra_kernel_args,
     "<leftCtrlOn>x<leftCtrlOff>",
-  ]
+  ])
 }
 
 variable "gencloud_ext4_boot_command_10_x86_64_v2" {
