@@ -108,14 +108,15 @@ runs:
         esac
 
         # ppc64le has no runner of its own: its sources are built under QEMU
-        # TCG full-system emulation on this x86_64 runner, with the emulator
-        # wrapper the Install KVM step creates (a newer QEMU than Ubuntu's,
-        # see there). Switch the sources from KVM-HV to TCG with a POWER9 CPU
+        # TCG full-system emulation on this x86_64 runner (Ubuntu 26.04's
+        # qemu-system-ppc, see the Install KVM step). Switch the sources from
+        # KVM-HV to TCG with a POWER9 CPU
         # (the EL10 baseline), capture the guest console for the job log, and
         # give the emulated SLOF / GRUB / anaconda / ansible-over-SSH chain
         # far more time.
         if [ "${{ inputs.arch }}" = "ppc64le" ]; then
-          packer_opts="${packer_opts/\/usr\/bin\/qemu-system-ppc64le//usr/local/bin/qemu-system-ppc64-tcg}"
+          # Ubuntu's binary is qemu-system-ppc64 (there is no -ppc64le)
+          packer_opts="${packer_opts/qemu-system-ppc64le/qemu-system-ppc64}"
           packer_opts="${packer_opts} -var ppc64le_accelerator=tcg -var ppc64le_machine_type=pseries -var ppc64le_cpu_model=POWER9"
           packer_opts="${packer_opts} -var gencloud_boot_wait_ppc64le=3s -var ssh_timeout=4h"
           packer_opts="${packer_opts} -var ppc64le_console_log=${{ github.workspace }}/ppc64le-console.log"
@@ -182,40 +183,29 @@ runs:
         # Install KVM
         case ${{ env.runner_os }} in
           ubuntu)
-            sudo apt-get -y install qemu-kvm
+            # qemu-system-x86, not qemu-kvm: on Ubuntu 26.04 qemu-kvm is a
+            # purely virtual package with two providers (qemu-system-x86 and
+            # qemu-system-x86-hwe) and apt refuses to pick one; on 24.04 it is a
+            # transitional package for qemu-system-x86 anyway
+            sudo apt-get -y install qemu-system-x86
             # s390x is emulated (TCG) - needs the s390x system emulator and
             # qemu-img for the blank target disk
             [ "${{ inputs.arch }}" = "s390x" ] && sudo apt-get -y install qemu-system-s390x qemu-utils
-            # ppc64le is emulated (TCG). Ubuntu 24.04's QEMU 8.2.2 miscompiles
-            # POWER9 vector loads/stores under TCG and the EL9/EL10 installer's
-            # Python crashes at startup (segfaults and corrupted objects; QEMU
-            # issue 1769). Fedora's QEMU 10.x does not, so run the emulator from
-            # a Fedora container through a wrapper that Packer uses as
-            # qemu_binary: host networking puts the VNC and SSH-forward ports
-            # where Packer expects them, and the workspace and Packer's ISO
-            # cache are mounted at their own paths so the arguments Packer
-            # passes are valid inside. qemu-img (disk creation) is the host's.
+            # ppc64le is emulated (TCG) with the distribution's qemu-system-ppc.
+            # This needs Ubuntu 26.04 or newer (QEMU 10.2): Ubuntu 24.04's QEMU
+            # 8.2.2 miscompiles POWER9 vector loads/stores under TCG and the
+            # EL9/EL10 installer's Python crashes at startup (segfaults and
+            # corrupted objects; QEMU issue 1769), so the ppc64le job runs on
+            # the ubuntu26-full-x64 image. Refuse an older emulator outright
+            # rather than let the install die an hour in.
             if [ "${{ inputs.arch }}" = "ppc64le" ]; then
-              sudo apt-get -y install qemu-utils
-              # (heredoc bodies sit at the step's base indent so their
-              # terminators reach column 0 once YAML strips the indentation)
-              docker build -q -t qemu-ppc64-tcg - <<'DOCKERFILE'
-        FROM registry.fedoraproject.org/fedora:43
-        RUN dnf -y -q install qemu-system-ppc-core && dnf -q clean all
-        DOCKERFILE
-              sudo tee /usr/local/bin/qemu-system-ppc64-tcg >/dev/null <<'WRAPPER'
-        #!/bin/bash
-        # QEMU ppc64 system emulator from the qemu-ppc64-tcg container (see
-        # shared-steps). Packer runs it under sudo from the workspace, so the
-        # current directory (relative output paths) and root's Packer ISO
-        # cache (absolute paths) are what has to be visible inside.
-        exec docker run --rm -i --network host --init \
-          -v "${PWD}:${PWD}" -w "${PWD}" \
-          -v /root/.cache/packer:/root/.cache/packer \
-          qemu-ppc64-tcg qemu-system-ppc64 "$@"
-        WRAPPER
-              sudo chmod 0755 /usr/local/bin/qemu-system-ppc64-tcg
-              docker run --rm qemu-ppc64-tcg qemu-system-ppc64 --version
+              sudo apt-get -y install qemu-system-ppc qemu-utils
+              qemu_version=$(/usr/bin/qemu-system-ppc64 --version | sed -nE 's/^QEMU emulator version ([0-9]+\.[0-9]+).*/\1/p')
+              echo "[Debug] qemu-system-ppc64 ${qemu_version}"
+              if [ "${qemu_version%%.*}" -lt 10 ]; then
+                echo "[Error] QEMU ${qemu_version} is too old for the ppc64le TCG build (needs 10.1 or newer, see QEMU issue 1769); run this job on Ubuntu 26.04 or newer"
+                exit 1
+              fi
             fi
             sudo adduser "$(id -un)" kvm
             ;;
@@ -404,8 +394,6 @@ runs:
       run: |
         # Last part of the guest console (SLOF/GRUB/anaconda output) of the failed build
         sudo tail -n 200 ${{ github.workspace }}/ppc64le-console.log 2>/dev/null || echo "[Debug] no console log"
-        # Packer kills the wrapper, not the container behind it
-        docker ps -q --filter ancestor=qemu-ppc64-tcg | xargs -r docker kill
 
     - name: Locate image file, generate checksum
       shell: bash

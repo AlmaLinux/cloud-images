@@ -339,16 +339,18 @@ jobs:
       contents: read
     if: ${{ inputs.ppc64le }}
     needs: [init-data]
-    # Same x86_64 metal runner as build-gh-hosted; KVM is irrelevant here -
-    # the ppc64le guest runs under TCG, which is CPU-bound, so wall time is
-    # hours. No in-job boot test (the test composite needs KVM);
-    # shared-steps' offline validation runs instead.
+    # Same x86_64 metal family as build-gh-hosted, but the Ubuntu 26.04 image:
+    # its qemu-system-ppc is QEMU 10.2, and 24.04's 8.2.2 cannot run the
+    # EL9/EL10 installer under TCG (see shared-steps). KVM is irrelevant here
+    # (the guest runs under TCG, which is CPU-bound) and there is no in-job
+    # boot test (the test composite needs KVM); shared-steps' offline
+    # validation runs instead. Forks fall back to GitHub's Ubuntu 26.04.
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64/spot=false', github.run_id)
+          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu26-full-x64/spot=false', github.run_id)
         ||
-        'ubuntu-24.04'
+        'ubuntu-26.04'
       }}
     timeout-minutes: 720
     strategy:

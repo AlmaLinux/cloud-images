@@ -103,7 +103,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
 | `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
 | `build-s390x-tcg` | same x86_64 metal family as `build-gh-hosted` (KVM unused - TCG) | `ubuntu-24.04` |
-| `build-ppc64le-tcg` | same as `build-gh-hosted` (x86_64 metal; KVM unused, TCG is CPU-bound) | `ubuntu-24.04` |
+| `build-ppc64le-tcg` | same x86_64 metal family as `build-gh-hosted`, `image=ubuntu26-full-x64` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
 
 Both org runners are bare metal, so `/dev/kvm` is present for the in-job
 QEMU test. The composite installs `qemu-system-*` + `cloud-image-utils`
@@ -176,16 +176,16 @@ to emulation through variables that shared-steps passes on the command line:
 | `gencloud_boot_wait_ppc64le` | `8s` | `3s` (start the keypress hold before GRUB can appear) |
 | `ssh_timeout` | `3600s` | `4h` (the whole emulated install runs before SSH is up) |
 
-The emulator is **not** Ubuntu 24.04's QEMU 8.2.2: under TCG it miscompiles
-POWER9 vector loads/stores, and the EL9/EL10 installer's Python crashes at
-"Starting installer" with segfaults or corrupted objects (reproduced on a
-test host; [QEMU issue 1769](https://gitlab.com/qemu-project/qemu/-/issues/1769)).
-shared-steps builds a small Fedora 43 container image with QEMU 10.x and
-installs `/usr/local/bin/qemu-system-ppc64-tcg`, a wrapper that runs
-`qemu-system-ppc64` in that container with host networking (Packer's VNC and
-SSH-forward ports stay on the host loopback) and the workspace and Packer's
-ISO cache mounted at their own paths; Packer gets it as `qemu_binary`. Disk
-images are still created by the host's `qemu-img`.
+The emulator is Ubuntu's own `qemu-system-ppc`, but from **Ubuntu 26.04**
+(QEMU 10.2), which is why the job runs on the `ubuntu26-full-x64` image:
+Ubuntu 24.04's QEMU 8.2.2 miscompiles POWER9 vector loads/stores under TCG
+and the EL9/EL10 installer's Python crashes at "Starting installer" with
+segfaults or corrupted objects (reproduced on a test host; QEMU 10.1 and
+newer work; [QEMU issue 1769](https://gitlab.com/qemu-project/qemu/-/issues/1769)).
+shared-steps refuses to build with a QEMU older than 10 rather than let the
+install die an hour in. Ubuntu's binary is `qemu-system-ppc64` (there is no
+`qemu-system-ppc64le`); shared-steps rewrites the `qemu_binary` variable
+accordingly.
 
 What the job does and does not do:
 
