@@ -64,8 +64,9 @@ There is no `run_test` input: the test always runs.
 ```
 init-data
  |- build-gh-hosted (x86_64 matrix: subtype x variant)   -. shared-steps build,
- |- start-self-hosted-runner (fork EC2)                    | then gencloud-test-steps
- |- build-self-hosted (aarch64 matrix: subtype)          -' in-job on the local qcow2
+ |- build-self-hosted (aarch64 matrix: subtype)          -' then gencloud-test-steps
+                                                             in-job on the local qcow2
+                                                             (forks: TCG, no test)
  |- build-s390x-tcg (s390x, default on)                  -  shared-steps build under
                                                              TCG, offline validation only
  '- build-ppc64le-tcg (default on; ppc64le matrix: subtype) shared-steps build under
@@ -101,7 +102,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
-| `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
+| `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
 | `build-s390x-tcg` | same x86_64 metal family as `build-gh-hosted` (KVM unused - TCG) | `ubuntu-24.04` |
 | `build-ppc64le-tcg` | same x86_64 metal family as `build-gh-hosted`, `image=ubuntu26-full-x64` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
 
@@ -109,12 +110,25 @@ Both org runners are bare metal, so `/dev/kvm` is present for the in-job
 QEMU test. The composite installs `qemu-system-*` + `cloud-image-utils`
 via `apt-get`, which is why the aarch64 leg must be on an Ubuntu image.
 
-**Fork caveat:** the fork aarch64 fallback is the EC2 `a1.metal` runner
-built from `EC2_AMI_ID_AL9_AARCH64` (AlmaLinux 9). The apt-based test
-composite cannot run there, so the in-job aarch64 test step will fail on a
-fork. The AlmaLinux-org path (`ubuntu24-full-arm64`) is the target; fork
-CI should test aarch64 via the standalone `gencloud-test.yml` on
-`ubuntu-24.04-arm`.
+**aarch64 outside the AlmaLinux org.** Forks and CI mirrors have no arm64
+runner, so `build-self-hosted` runs on a GitHub-hosted x86_64 runner and
+shared-steps builds the image under QEMU TCG full-system emulation; it
+switches automatically whenever the runner is not arm64. The sources are the
+same, switched through variables:
+
+| Variable | arm64 host default | TCG value |
+| :--- | :--- | :--- |
+| `aarch64_accelerator` | `kvm` | `tcg` |
+| `aarch64_cpu_model` | `host` | `max,pauth-impdef=on` (every emulated feature; QEMU's cheap pointer-authentication algorithm instead of the architected one, which is very slow to emulate) |
+| `aarch64_grub_hold` | `false` | `true`: 90 s of once-a-second keypresses GRUB ignores from right after the VM starts, so the emulated UEFI firmware's unpredictable start-up does not matter, then a move to the plain "Install" entry (the default entry's `rd.live.check` would hash the whole ISO under emulation) |
+| `aarch64_extra_kernel_args` | empty | `console=ttyAMA0`, so anaconda's output reaches the captured serial console; the aarch64 kickstarts' `%post` removes it again from the installed boot loader configuration, undoes the serial GRUB terminal (`GRUB_TERMINAL`/`GRUB_SERIAL_COMMAND`) anaconda sets in `/etc/default/grub` because of it, and regenerates `grub.cfg`, which anaconda wrote with both before `%post` ran |
+| `aarch64_console_log` | empty | `<workspace>/aarch64-console.log`, streamed into the job log as `[aarch64 console]` lines. The serial port is teed into the file (`-chardev vc,logfile=`), not redirected: on the `virt` machine the firmware and GRUB console is the serial port on QEMU's VNC text console, which is where Packer types the boot command |
+| `boot_wait`, `ssh_timeout` | `30s`, `3600s` | `3s`, `5h` |
+
+The in-job boot test is skipped there (`gencloud-test-steps` needs KVM for
+the image's architecture), and the job timeout is the hosted runner's
+maximum of 6 hours. The AlmaLinux org keeps the RunsOn `a1.metal` runner
+with KVM and the in-job test, unchanged.
 
 ## s390x under TCG (experimental)
 
@@ -214,7 +228,6 @@ Kitten.
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 upload (build stage) |
 | `MATTERMOST_WEBHOOK_URL` | Mattermost incoming webhook URL |
 | `GIT_HUB_TOKEN` | Packer plugin GitHub API token |
-| `EC2_AMI_ID_AL9_AARCH64`, `EC2_SUBNET_ID`, `EC2_SECURITY_GROUP_ID` | fork-only aarch64 EC2 runner |
 
 ### Variables (`vars.*`)
 | Variable | Description |

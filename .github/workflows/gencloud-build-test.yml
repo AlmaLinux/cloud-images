@@ -14,6 +14,10 @@ run-name: >-
 #
 # Every built image is tested; for a build-only run use gencloud-build.yml.
 #
+# aarch64 outside the AlmaLinux org: no arm64 runner, so the image is built
+# on a GitHub-hosted x86_64 runner under QEMU TCG (the same sources, switched
+# through the aarch64_* variables) and gets the offline validation only.
+#
 # s390x (input s390x, on by default so scheduled runs build it too): there
 # are no s390x runners, so the image is built on an x86_64 runner under
 # QEMU TCG full-system emulation (see the s390x sources in the gencloud
@@ -54,7 +58,7 @@ on:
             - 8
 
         self-hosted:
-          description: "Build aarch64 images on self-hosted runner"
+          description: "Build aarch64 images (RunsOn a1.metal in the AlmaLinux org, QEMU TCG emulation on a GitHub-hosted x86_64 runner elsewhere)"
           required: true
           type: boolean
           default: true
@@ -233,58 +237,32 @@ jobs:
 
   # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
   # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
-  start-self-hosted-runner:
-    name: ${{ inputs.version_major }} gencloud-aarch64 runner
-    if: ${{ inputs.self-hosted }}
-    runs-on: ubuntu-24.04
-    needs: [init-data]
-
-    steps:
-    - name: Setup and start runner
-      if: github.repository_owner != 'AlmaLinux'
-      uses: unblocked/ec2-action-builder@v1.12
-      with:
-        github_token: ${{ secrets.GIT_HUB_TOKEN }}
-        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws_region: ${{ vars.AWS_REGION }}
-        ec2_ami_id: ${{ secrets.EC2_AMI_ID_AL9_AARCH64 }}
-
-        ec2_subnet_id: ${{ secrets.EC2_SUBNET_ID}}                  # Subnet and Security Group should match
-        ec2_security_group_id: ${{ secrets.EC2_SECURITY_GROUP_ID }} # Availability Zones list for 'a1.metal' Instance Type
-        ec2_instance_type: a1.metal
-
-        ec2_root_disk_size_gb: "16"         # override default size which is too small for actions and tests stuff
-        ec2_root_disk_ebs_class: "gp3"      # use faster and cheeper storage instead of default 'gp2'
-        ec2_instance_ttl: 30                # Optional (default is 60 minutes)
-        ec2_spot_instance_strategy: None    # Other options are: SpotOnly, BestEffort, MaxPerformance
-        ec2_instance_tags: >                # Required for IAM role resource permission scoping
-          [
-            {"Key": "Project", "Value": "GitHub Actions Self-hosted Runners"}
-          ]
-
   build-self-hosted:
     name: ${{ inputs.version_major }} ${{ matrix.subtype }}-aarch64 build+test
     permissions:
       id-token: write
       contents: read
     if: ${{ inputs.self-hosted }}
-    needs: [init-data, start-self-hosted-runner]
+    needs: [init-data]
     # AlmaLinux org: RunsOn a1.metal with the Ubuntu arm64 image (NOT
     # almalinux-9-aarch64) so the in-job QEMU test can run - shared-steps
     # builds fine on Ubuntu via its runner_os detection, and the bare-metal
     # a1 has /dev/kvm.
     #
-    # Forks fall back to the self-hosted EC2 a1.metal runner. That AMI is
-    # AlmaLinux 9 (EL9), where the apt-based test composite cannot run - the
-    # in-job test step will fail there; fork CI should test via gencloud-test.yml.
+    # Elsewhere (forks, CI mirrors) there is no arm64 runner to rely on, so
+    # the job runs on a GitHub-hosted x86_64 runner and shared-steps builds
+    # the image under QEMU TCG full-system emulation (it switches whenever
+    # the runner is not arm64). That takes hours rather than minutes, so the
+    # timeout is the hosted runner's maximum, and the in-job boot test is
+    # skipped: gencloud-test-steps needs KVM for the image's architecture.
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
           format('runs-on={0}/family=a1.metal/image=ubuntu24-full-arm64/volume=40g/spot=false', github.run_id)
         ||
-        github.run_id
+        'ubuntu-24.04'
       }}
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -314,12 +292,14 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
-          runner: aws-ec2
+          runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
       - uses: ./.github/actions/gencloud-test-steps
         name: Test ${{ inputs.version_major }} ${{ matrix.subtype }}-aarch64 image
+        # needs /dev/kvm for aarch64: only on the arm64 runner (see runs-on)
+        if: ${{ github.repository_owner == 'AlmaLinux' }}
         with:
           image_file: ${{ env.IMAGE_FILE }}
           image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}

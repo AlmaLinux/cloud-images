@@ -311,6 +311,48 @@ variable "ovmf_vars" {
   default = "/usr/share/OVMF/OVMF_VARS.secboot.fd"
 }
 
+# aarch64 QEMU knobs. The defaults reproduce the build on an arm64 host
+# (KVM, host CPU). Where there is no arm64 runner (outside the AlmaLinux
+# organisation, on a GitHub-hosted x86_64 runner) shared-steps overrides them
+# to run the whole install under TCG full-system emulation:
+#   -var aarch64_accelerator=tcg -var aarch64_cpu_model=max,pauth-impdef=on
+#   -var aarch64_grub_hold=true -var aarch64_extra_kernel_args=console=ttyAMA0
+#   -var aarch64_console_log=<file>
+variable "aarch64_accelerator" {
+  description = "Packer 'accelerator' of the aarch64 GenericCloud sources: 'kvm' on an arm64 host, 'tcg' to emulate on any host"
+
+  type    = string
+  default = "kvm"
+}
+
+variable "aarch64_cpu_model" {
+  description = "QEMU CPU model of the aarch64 GenericCloud sources: 'host' under KVM; under TCG 'max,pauth-impdef=on' (every emulated feature, with the cheap pointer-authentication algorithm)"
+
+  type    = string
+  default = "host"
+}
+
+variable "aarch64_console_log" {
+  description = "If set, capture the aarch64 guest's serial console (PL011, ttyAMA0) into this file"
+
+  type    = string
+  default = ""
+}
+
+variable "aarch64_extra_kernel_args" {
+  description = "Extra installer kernel arguments typed at the end of the aarch64 GenericCloud boot commands; empty on the arm64 host. The TCG build passes console=ttyAMA0 so anaconda's output reaches the captured serial console"
+
+  type    = string
+  default = ""
+}
+
+variable "aarch64_grub_hold" {
+  description = "Start the aarch64 GenericCloud boot commands with 90 s of once-a-second keypresses GRUB's menu ignores, then move to the plain Install entry. Under TCG the UEFI firmware needs an unpredictable time to reach GRUB; off on the arm64 host"
+
+  type    = bool
+  default = false
+}
+
 variable "aavmf_code" {
   description = "Path of AAVMF code file"
 
@@ -363,6 +405,22 @@ local "gencloud_boot_command_8_x86_64" {
   ]
 }
 
+# Prefix of the aarch64 GenericCloud boot commands when aarch64_grub_hold is
+# set (TCG). The emulated UEFI firmware takes an unpredictable time to reach
+# GRUB, so instead of guessing the moment press a key GRUB's menu ignores once
+# a second for 90 s from right after the VM starts: presses during the
+# firmware are ignored, the first one that reaches the menu stops its
+# countdown. Then move up from the ISO's default entry ("Test this media &
+# install", whose rd.live.check hashes the whole ISO for the better part of an
+# hour under emulation) to the plain "Install" entry; the "e" / "c" of the
+# commands below then act on that entry.
+local "aarch64_boot_prefix" {
+  expression = var.aarch64_grub_hold ? concat(
+    [for i in range(90) : "<spacebar><wait1>"],
+    ["<up><wait1>"],
+  ) : []
+}
+
 local "gencloud_boot_command_8_aarch64" {
   expression = [
     "c<wait>",
@@ -370,6 +428,7 @@ local "gencloud_boot_command_8_aarch64" {
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0",
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-aarch64.ks",
+    " ${var.aarch64_extra_kernel_args}",
     "<enter>",
     "initrd /images/pxeboot/initrd.img",
     "<enter>",
@@ -657,6 +716,7 @@ local "gencloud_ext4_boot_command_8_aarch64" {
     " inst.stage2=hd:LABEL=AlmaLinux-8-${local.os_ver_minor_8}-aarch64-dvd ro",
     " inst.text biosdevname=0 net.ifnames=0 fstype=ext4",
     " inst.ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/almalinux-8.gencloud-aarch64.ks",
+    " ${var.aarch64_extra_kernel_args}",
     "<enter>",
     "initrd /images/pxeboot/initrd.img",
     "<enter>",
@@ -2027,4 +2087,71 @@ variable "do_image_distribution" {
 
 local "do_image_tags" {
   expression = ["AlmaLinux", "${var.os_ver_8}", "8"]
+}
+
+# The aarch64 GenericCloud boot commands as the gencloud templates use them:
+# the TCG prefix (empty on the arm64 host) plus the command, with the extra
+# installer arguments (empty on the arm64 host) typed before GRUB's Ctrl-X.
+# The 8 commands are GRUB command-line sequences that carry the extra
+# arguments on their "linux" line already.
+local "aarch64_gencloud_boot_command_8" {
+  expression = concat(local.aarch64_boot_prefix, local.gencloud_boot_command_8_aarch64)
+}
+
+local "aarch64_gencloud_boot_command_9" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_boot_command_9_aarch64, 0, length(var.gencloud_boot_command_9_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_boot_command_9_aarch64[length(var.gencloud_boot_command_9_aarch64) - 1]],
+  )
+}
+
+local "aarch64_gencloud_boot_command_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_boot_command_10_aarch64, 0, length(var.gencloud_boot_command_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_boot_command_10_aarch64[length(var.gencloud_boot_command_10_aarch64) - 1]],
+  )
+}
+
+local "aarch64_gencloud_boot_command_kitten_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_boot_command_kitten_10_aarch64, 0, length(var.gencloud_boot_command_kitten_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_boot_command_kitten_10_aarch64[length(var.gencloud_boot_command_kitten_10_aarch64) - 1]],
+  )
+}
+
+local "aarch64_gencloud_ext4_boot_command_8" {
+  expression = concat(local.aarch64_boot_prefix, local.gencloud_ext4_boot_command_8_aarch64)
+}
+
+local "aarch64_gencloud_ext4_boot_command_9" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_ext4_boot_command_9_aarch64, 0, length(var.gencloud_ext4_boot_command_9_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_ext4_boot_command_9_aarch64[length(var.gencloud_ext4_boot_command_9_aarch64) - 1]],
+  )
+}
+
+local "aarch64_gencloud_ext4_boot_command_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_ext4_boot_command_10_aarch64, 0, length(var.gencloud_ext4_boot_command_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_ext4_boot_command_10_aarch64[length(var.gencloud_ext4_boot_command_10_aarch64) - 1]],
+  )
+}
+
+local "aarch64_gencloud_ext4_boot_command_kitten_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.gencloud_ext4_boot_command_kitten_10_aarch64, 0, length(var.gencloud_ext4_boot_command_kitten_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.gencloud_ext4_boot_command_kitten_10_aarch64[length(var.gencloud_ext4_boot_command_kitten_10_aarch64) - 1]],
+  )
 }
