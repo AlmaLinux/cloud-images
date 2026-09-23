@@ -60,5 +60,10 @@ echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
 # is added and these two lines are no-ops.
 sed -i 's/ console=hvc0//' /etc/default/grub
 grubby --update-kernel=ALL --remove-args="console=hvc0"
+# anaconda generated grub.cfg before this ran, with console=hvc0 in its
+# fallback kernelopts: regenerate it from the cleaned defaults
+if grep -q ' console=hvc0' /boot/grub2/grub.cfg 2>/dev/null; then
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+fi
 
 %end
