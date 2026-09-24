@@ -181,10 +181,8 @@ jobs:
                 # dentry*, struct page lost 'index', writepage removed),
                 # which defeats the version-gated compat code. The boxes
                 # build and publish, but vboxsf is missing and shared
-                # folders do not work. Reported upstream as
-                # https://github.com/VirtualBox/virtualbox/issues/833 -
-                # unpause when a Guest Additions release/test build with
-                # the fix is available.
+                # folders do not work. Unpause when a fixed Guest
+                # Additions release/test build is available.
                 if [ "${v}" = "10-kitten" ]; then
                   echo "[Info] Skipping ${wf}: Kitten paused (Guest Additions vboxsf does not build against the Kitten kernel)"
                   echo "- Skipped: \`${wf}\` (Kitten paused: Guest Additions incompatible with Kitten kernel)" >> "$GITHUB_STEP_SUMMARY"
