@@ -66,14 +66,6 @@ week.
   too.
 - `oci-build-release-test-publish.yml` has **no Kitten option** - on
   Kitten weeks the OCI dispatch is skipped (noted in the job summary).
-- `vagrant-build-test-publish.yml` is **temporarily paused on Kitten
-  weeks**: VirtualBox Guest Additions (7.2.16 and older, including the
-  current test builds) fail to build the vboxsf kernel module against
-  the Kitten kernel 6.12.0-250.el10 and newer, because CentOS Stream 10
-  backported 6.15/6.16 VFS/MM API changes that defeat the Guest
-  Additions' version-gated compatibility code. The box builds and
-  publishes, but shared folders do not work. Remove the skip in the
-  dispatch loop once a fixed Guest Additions build is available.
 
 ## Where scheduled runs fire
 

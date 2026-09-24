@@ -172,23 +172,6 @@ jobs:
                   continue
                 fi
                 ;;
-              vagrant-*)
-                # TEMPORARY: Kitten Vagrant builds are paused. VirtualBox
-                # Guest Additions (7.1.18/7.2.16 and the current test
-                # builds alike) fail to build vboxsf against the Kitten
-                # kernel 6.12.0-250.el10+ - CentOS Stream 10 backported
-                # the 6.15/6.16 VFS/MM API changes (mkdir returns struct
-                # dentry*, struct page lost 'index', writepage removed),
-                # which defeats the version-gated compat code. The boxes
-                # build and publish, but vboxsf is missing and shared
-                # folders do not work. Unpause when a fixed Guest
-                # Additions release/test build is available.
-                if [ "${v}" = "10-kitten" ]; then
-                  echo "[Info] Skipping ${wf}: Kitten paused (Guest Additions vboxsf does not build against the Kitten kernel)"
-                  echo "- Skipped: \`${wf}\` (Kitten paused: Guest Additions incompatible with Kitten kernel)" >> "$GITHUB_STEP_SUMMARY"
-                  continue
-                fi
-                ;;
             esac
 
             echo "[Debug] gh workflow run ${wf} -f version_major=${v} --ref ${GITHUB_REF_NAME}"
