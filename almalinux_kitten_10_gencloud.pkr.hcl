@@ -40,9 +40,9 @@ source "qemu" "almalinux_kitten_10_gencloud_aarch64" {
   ssh_username       = var.gencloud_ssh_username
   ssh_password       = var.gencloud_ssh_password
   ssh_timeout        = var.ssh_timeout
-  boot_command       = var.gencloud_boot_command_kitten_10_aarch64
+  boot_command       = local.aarch64_gencloud_boot_command_kitten_10
   boot_wait          = var.boot_wait
-  accelerator        = "kvm"
+  accelerator        = var.aarch64_accelerator
   firmware           = var.aavmf_code
   use_pflash         = false
   disk_interface     = "virtio-scsi"
@@ -58,12 +58,17 @@ source "qemu" "almalinux_kitten_10_gencloud_aarch64" {
   net_device         = "virtio-net"
   qemu_binary        = var.qemu_binary
   vm_name            = "AlmaLinux-Kitten-GenericCloud-10-${formatdate("YYYYMMDD", timestamp())}.${var.build_number}.aarch64.qcow2"
-  cpu_model          = "host"
+  cpu_model          = var.aarch64_cpu_model
   cpus               = var.cpus
-  qemuargs = [
-    ["-boot", "strict=on"],
-    ["-monitor", "none"],
-  ]
+  qemuargs = concat(
+    [["-boot", "strict=on"], ["-monitor", "none"]],
+    # Tee the serial port into a log file instead of redirecting it: on the
+    # virt machine the firmware and GRUB console IS the serial port, shown
+    # on QEMU's VNC text console, and Packer types the boot command into it.
+    # "-serial file:" would take that input away (GRUB would never see the
+    # keys and boot its default media-check entry).
+    var.aarch64_console_log != "" ? [["-chardev", "vc,id=serial0,logfile=${var.aarch64_console_log}"], ["-serial", "chardev:serial0"]] : [],
+  )
 }
 
 source "qemu" "almalinux_kitten_10_gencloud_ppc64le" {
