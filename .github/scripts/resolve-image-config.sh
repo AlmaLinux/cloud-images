@@ -72,6 +72,26 @@ case "${type}_${version_major}" in
     packer_source="qemu.${packer_source}"
     ;;
 
+  # VMware Desktop aarch64 box built under QEMU (TCG) and packed by
+  # tools/raw-to-vagrant-vmware.sh, like the Hyper-V box
+  vmware_9)
+    output_mask="AlmaLinux-${version_major}-Vagrant-vmware-*.${alma_arch}.box"
+    packer_source="qemu.${packer_source}"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  vmware_10)
+    packer_source="qemu.almalinux_10_vagrant_vmware_qemu_${alma_arch}"
+    output_mask="AlmaLinux-${version_major}-Vagrant-vmware-*.${alma_arch}.box"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  vmware*kitten*)
+    packer_source="qemu.almalinux_kitten_10_vagrant_vmware_qemu_${alma_arch}"
+    output_mask="AlmaLinux-Kitten-Vagrant-vmware-10-*.${alma_arch}.box"
+    aws_s3_path="images/kitten/10/vagrant/${timestamp}"
+    ;;
+
   azure*kitten*)
     packer_source="almalinux_kitten_10_${type}_${alma_arch}"
     [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"

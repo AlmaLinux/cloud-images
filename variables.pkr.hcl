@@ -2155,3 +2155,33 @@ local "aarch64_gencloud_ext4_boot_command_kitten_10" {
     [var.gencloud_ext4_boot_command_kitten_10_aarch64[length(var.gencloud_ext4_boot_command_kitten_10_aarch64) - 1]],
   )
 }
+
+# The Vagrant aarch64 boot commands as the QEMU-built VMware box sources use
+# them (see the *vmware*aarch64 qemu sources): the same TCG prefix and extra
+# installer arguments as the GenericCloud aarch64 commands above.
+local "aarch64_vagrant_boot_command_9" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.vagrant_boot_command_9_aarch64, 0, length(var.vagrant_boot_command_9_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.vagrant_boot_command_9_aarch64[length(var.vagrant_boot_command_9_aarch64) - 1]],
+  )
+}
+
+local "aarch64_vagrant_boot_command_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.vagrant_boot_command_10_aarch64, 0, length(var.vagrant_boot_command_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.vagrant_boot_command_10_aarch64[length(var.vagrant_boot_command_10_aarch64) - 1]],
+  )
+}
+
+local "aarch64_vagrant_boot_command_kitten_10" {
+  expression = concat(
+    local.aarch64_boot_prefix,
+    slice(var.vagrant_boot_command_kitten_10_aarch64, 0, length(var.vagrant_boot_command_kitten_10_aarch64) - 1),
+    var.aarch64_extra_kernel_args != "" ? ["<spacebar>", var.aarch64_extra_kernel_args] : [],
+    [var.vagrant_boot_command_kitten_10_aarch64[length(var.vagrant_boot_command_kitten_10_aarch64) - 1]],
+  )
+}

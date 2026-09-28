@@ -19,6 +19,15 @@ run-name: >-
 # forces run_test=false for the hyperv leg (only shared-steps' offline
 # validation runs); the box is then published like the other providers.
 #
+# The VMware Desktop aarch64 box (vagrant_type ALL or vagrant_vmware) is built
+# the Hyper-V way, as the vmware-aarch64 leg of build-gh-hosted: installed and
+# provisioned under QEMU (TCG, the runner is x86_64) and packed into a
+# vmware_desktop box by tools/raw-to-vagrant-vmware.sh. No runner can run
+# VMware Fusion guests (GitHub's macOS runners expose no hypervisor), so it
+# has no live `vagrant up` test either (run_test forced off, offline
+# validation of the raw disk only). aarch64 has no x86_64_v2 variant, so the
+# leg is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
+#
 # Stage implementations live in composite actions:
 #   .github/actions/shared-steps           - Packer build + vagrant up smoke test
 #   .github/actions/vagrant-publish-steps  - HCP Vagrant Registry publish of the local box
@@ -142,6 +151,12 @@ jobs:
               # the build-gh-hosted leg forces run_test=false for it.
               VARIANTS_GH+=("hyperv-x86_64")
           fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_vmware" -o "${{ inputs.vagrant_type }}" = "ALL" ] \
+             && [ "${{ inputs.version_major }}" != "8" ]; then
+              # VMware aarch64: built under QEMU (TCG) and converted, like Hyper-V;
+              # no live test, see the header. There is no AlmaLinux 8 box.
+              VARIANTS_GH+=("vmware-aarch64")
+          fi
 
           [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
           matrix_gh=${matrix_gh%,}  # Remove the trailing comma
@@ -192,6 +207,12 @@ jobs:
       matrix:
         variant: ${{ fromJSON(format('["{0}"]', ( inputs.version_major == '10-kitten' || inputs.version_major == '10' ) && format('{0}", "{0}-v2', inputs.version_major) || inputs.version_major )) }}
         matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_gh) }}
+        # aarch64 has no x86_64_v2 variant
+        exclude:
+          - variant: 10-v2
+            matrix_gh: vmware-aarch64
+          - variant: 10-kitten-v2
+            matrix_gh: vmware-aarch64
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
@@ -207,7 +228,7 @@ jobs:
           # Hyper-V has no live `vagrant up` test (a Hyper-V guest can't boot on
           # the Linux runner), so force run_test off for it; honor the input for
           # the libvirt / virtualbox legs.
-          if [ "$type" = "hyperv" ]; then
+          if [ "$type" = "hyperv" ] || [ "$type" = "vmware" ]; then
             echo "RUN_TEST=false" >> $GITHUB_ENV
           else
             echo "RUN_TEST=${{ inputs.run_test }}" >> $GITHUB_ENV

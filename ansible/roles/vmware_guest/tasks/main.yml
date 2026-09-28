@@ -4,3 +4,17 @@
     install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
     name: open-vm-tools
     state: latest
+
+# The aarch64 VMware boxes have their disk on an NVMe controller, and anaconda
+# installs nvme-cli (with libnvme) when it installs onto an NVMe disk. The
+# box built under QEMU (qemu *vmware*aarch64 sources) is installed onto a
+# virtio-scsi disk instead, as Packer's QEMU builder cannot present NVMe, so
+# install it here to keep that box the same as one built on VMware Fusion.
+# A no-op for the Fusion-built box, which already has it; the x86_64 VMware
+# box uses a SCSI disk and does not get it.
+- name: Install nvme-cli for the NVMe disk of the aarch64 box
+  dnf:
+    install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
+    name: nvme-cli
+    state: latest
+  when: ansible_facts['architecture'] == 'aarch64'
