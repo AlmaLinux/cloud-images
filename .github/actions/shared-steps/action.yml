@@ -338,9 +338,40 @@ runs:
 
     - name: Install ansible
       shell: bash
+      env:
+        # The last ansible-core that manages Python 3.6 targets, and the uv
+        # release that installs it (with its own Python 3.12)
+        ANSIBLE_CORE_EL8: "2.16"
+        UV_VERSION: "0.8.0"
       run: |
         # Install ansible
         sudo ${{ env.runner_os == 'ubuntu' && 'apt-get' || 'dnf -q' }} -y install ansible
+
+        # AlmaLinux 8 guests have only platform-python (Python 3.6), and
+        # ansible-core 2.17 dropped Python 3.6 targets: 2.18+ needs 3.8 on the
+        # managed side, and the distribution packages of newer runner images
+        # (Ubuntu 26.04: ansible-core 2.20) cannot provision an EL8 image at
+        # all ("No python interpreters found"). For an AlmaLinux 8 build with
+        # such an ansible-core, install ansible-core 2.16 in its own
+        # environment, with a Python 3.12 of its own (2.16 does not run on
+        # the newer system Python), and put it first on sudo's PATH, where
+        # Packer finds ansible-playbook and ansible-galaxy.
+        core=$(ansible --version 2>/dev/null | sed -nE '1s/.*core ([0-9]+\.[0-9]+).*/\1/p')
+        echo "[Debug] distribution ansible-core: ${core:-none}"
+        if [ "${{ env.version_major }}" = "8" ] && [ -n "${core}" ] \
+           && [ "$(printf '%s\n' "${core}" 2.17 | sort -V | head -1)" = "2.17" ]; then
+          echo "[Info] ansible-core ${core} cannot manage AlmaLinux 8 (Python 3.6); installing ansible-core ${ANSIBLE_CORE_EL8} for this build"
+          curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sudo env UV_INSTALL_DIR=/opt/uv/bin UV_NO_MODIFY_PATH=1 sh
+          sudo env UV_PYTHON_INSTALL_DIR=/opt/uv/python /opt/uv/bin/uv venv --python 3.12 /opt/ansible-el8
+          sudo env UV_PYTHON_INSTALL_DIR=/opt/uv/python /opt/uv/bin/uv pip install \
+            --python /opt/ansible-el8/bin/python "ansible-core==${ANSIBLE_CORE_EL8}.*"
+          for b in /opt/ansible-el8/bin/ansible*; do
+            sudo ln -sf "${b}" "/usr/local/bin/$(basename "${b}")"
+          done
+          hash -r
+          sudo ansible-playbook --version | head -1
+          sudo ansible-galaxy --version | head -1
+        fi
 
     - name: Initialize packer
       shell: bash
