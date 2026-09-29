@@ -1896,6 +1896,13 @@ variable "parallels_tools_flavor_aarch64" {
   default = "lin-arm"
 }
 
+variable "parallels_tools_iso_aarch64" {
+  description = "Local path of the Parallels Tools ISO the QEMU-built Parallels AArch64 box installs (the parallels-iso builder brings its own)"
+
+  type    = string
+  default = "prl-tools-lin-arm.iso"
+}
+
 # Oracle Cloud Infrastructure (OCI)
 
 local "oci_boot_command_8_x86_64" {
@@ -2156,9 +2163,10 @@ local "aarch64_gencloud_ext4_boot_command_kitten_10" {
   )
 }
 
-# The Vagrant aarch64 boot commands as the QEMU-built VMware box sources use
-# them (see the *vmware*aarch64 qemu sources): the same TCG prefix and extra
-# installer arguments as the GenericCloud aarch64 commands above.
+# The Vagrant aarch64 boot commands as the QEMU-built VMware and Parallels box
+# sources use them (see the *vmware*aarch64 and *parallels*aarch64 qemu
+# sources): the same TCG prefix and extra installer arguments as the
+# GenericCloud aarch64 commands above.
 local "aarch64_vagrant_boot_command_9" {
   expression = concat(
     local.aarch64_boot_prefix,

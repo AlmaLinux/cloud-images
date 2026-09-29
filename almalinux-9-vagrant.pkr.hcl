@@ -259,6 +259,46 @@ source "qemu" "almalinux-9-vmware-aarch64" {
   )
 }
 
+# The Parallels aarch64 box built under QEMU instead of Parallels Desktop,
+# like the Hyper-V box: there is no runner that can run Parallels guests, so
+# the install and provisioning run in QEMU (TCG on an x86_64 runner, see the
+# aarch64_* variables) and tools/raw-to-vagrant-parallels.sh packs the raw
+# disk into a parallels box (.pvm: config.pvs + expanding .hdd). The
+# kickstart installs a generic initramfs (dracut-config-generic), so the SATA
+# disk and virtio NIC Parallels presents are handled on the first boot there.
+source "qemu" "almalinux-9-parallels-aarch64" {
+  iso_url            = local.iso_url_9_aarch64
+  iso_checksum       = local.iso_checksum_9_aarch64
+  http_directory     = var.http_directory
+  shutdown_command   = var.vagrant_shutdown_command
+  ssh_username       = var.vagrant_ssh_username
+  ssh_password       = var.vagrant_ssh_password
+  ssh_timeout        = var.ssh_timeout
+  boot_command       = local.aarch64_vagrant_boot_command_9
+  boot_wait          = var.boot_wait
+  accelerator        = var.aarch64_accelerator
+  firmware           = var.aavmf_code
+  use_pflash         = false
+  disk_interface     = "virtio-scsi"
+  disk_size          = var.vagrant_disk_size
+  disk_cache         = "unsafe"
+  disk_discard       = "unmap"
+  disk_detect_zeroes = "unmap"
+  format             = "raw"
+  headless           = var.headless
+  machine_type       = "virt,gic-version=max"
+  memory             = var.memory_aarch64
+  net_device         = "virtio-net"
+  qemu_binary        = var.qemu_binary
+  vm_name            = "almalinux-9-parallels-aarch64.raw"
+  cpu_model          = var.aarch64_cpu_model
+  cpus               = var.cpus
+  qemuargs = concat(
+    [["-boot", "strict=on"], ["-monitor", "none"]],
+    var.aarch64_console_log != "" ? [["-chardev", "vc,id=serial0,logfile=${var.aarch64_console_log}"], ["-serial", "chardev:serial0"]] : [],
+  )
+}
+
 build {
   sources = [
     "source.qemu.almalinux-9",
@@ -270,6 +310,7 @@ build {
     "source.virtualbox-iso.almalinux-9-aarch64",
     "source.vmware-iso.almalinux-9-aarch64",
     "source.qemu.almalinux-9-vmware-aarch64",
+    "source.qemu.almalinux-9-parallels-aarch64",
     "source.parallels-iso.almalinux-9-aarch64",
   ]
 
@@ -376,6 +417,45 @@ build {
     only = ["qemu.almalinux-9-vmware-aarch64"]
   }
 
+  # The QEMU-built Parallels box is provisioned as a Parallels box: Parallels
+  # Tools (parallels_guest role) instead of the QEMU guest agent. The
+  # parallels-iso builder uploads the Tools ISO itself; here it comes from
+  # var.parallels_tools_iso_aarch64, to where the role looks for it.
+  provisioner "file" {
+    source      = var.parallels_tools_iso_aarch64
+    destination = "/home/vagrant/prl-tools-${var.parallels_tools_flavor_aarch64}.iso"
+    only        = ["qemu.almalinux-9-parallels-aarch64"]
+  }
+
+  provisioner "ansible" {
+    user                 = "vagrant"
+    galaxy_file          = "./ansible/requirements.yml"
+    galaxy_force_install = true
+    collections_path     = "./ansible/collections"
+    roles_path           = "./ansible/roles"
+    playbook_file        = "./ansible/vagrant.yml"
+    ansible_env_vars = [
+      "ANSIBLE_PIPELINING=True",
+      "ANSIBLE_REMOTE_TEMP=/tmp",
+      "ANSIBLE_SSH_TRANSFER_METHOD=scp",
+      "ANSIBLE_SCP_EXTRA_ARGS=-O",
+    ]
+    extra_arguments = [
+      "--extra-vars",
+      "packer_provider=parallels-iso",
+    ]
+    only = ["qemu.almalinux-9-parallels-aarch64"]
+  }
+
+  # The installed Parallels Tools version, for the box's config.pvs and disk
+  # descriptor (tools/raw-to-vagrant-parallels.sh)
+  provisioner "file" {
+    direction   = "download"
+    source      = "/usr/lib/parallels-tools/version"
+    destination = "output-${source.name}/parallels-tools.version"
+    only        = ["qemu.almalinux-9-parallels-aarch64"]
+  }
+
   post-processors {
 
     post-processor "vagrant" {
@@ -440,6 +520,21 @@ build {
         "tools/raw-to-vagrant-vmware.sh ${source.name} AlmaLinux-9-Vagrant-vmware-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64",
       ]
       only = ["qemu.almalinux-9-vmware-aarch64"]
+    }
+
+    post-processor "shell-local" {
+      inline = [
+        "tools/raw-to-vagrant-parallels.sh ${source.name} AlmaLinux-9-Vagrant-parallels-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64",
+      ]
+      only = ["qemu.almalinux-9-parallels-aarch64"]
+    }
+
+    post-processor "artifice" {
+      files = [
+        "AlmaLinux-9-Vagrant-parallels-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.box",
+        "AlmaLinux-9-Vagrant-parallels-${var.os_ver_9}-${formatdate("YYYYMMDD", timestamp())}.aarch64.raw",
+      ]
+      only = ["qemu.almalinux-9-parallels-aarch64"]
     }
 
     post-processor "artifice" {

@@ -7,11 +7,11 @@ box lifecycle in a single `workflow_dispatch`:
 
 1. **Build** the boxes with Packer (one Packer builder per provider:
    `libvirt`, `virtualbox`, `vmware`, `hyperv`; x86_64, plus the
-   `x86_64_v2` microarch for AL10 / Kitten, and the VMware aarch64 box for
-   9, 10 and Kitten).
+   `x86_64_v2` microarch for AL10 / Kitten, and the VMware and Parallels
+   aarch64 boxes for 9, 10 and Kitten).
 2. **Test** each box with a live `vagrant up` smoke test on the build
-   runner (via `shared-steps`, gated by `run_test`). Hyper-V is the
-   exception - see below.
+   runner (via `shared-steps`, gated by `run_test`). Hyper-V and the
+   QEMU-built aarch64 boxes are the exceptions - see below.
 3. **Publish** each box to the HCP Vagrant Registry, **in-job on the same
    runner**, straight from the locally-built `.box` (no S3 round-trip),
    gated by `release_to_hcp`.
@@ -56,6 +56,44 @@ leg of `build-gh-hosted`, for `vagrant_type` `ALL` or `vagrant_vmware`:
   is published like the others. It is excluded for the `-v2` variants and
   for AlmaLinux 8 (no VMware aarch64 box for 8).
 
+### Parallels aarch64 is built under QEMU (no live test)
+
+No runner can run Parallels Desktop guests (they need an Apple silicon Mac),
+so the Parallels aarch64 box is built the Hyper-V way, as a
+`parallels-aarch64` leg of `build-gh-hosted`, for `vagrant_type` `ALL` or
+`vagrant_parallels`:
+
+- the leg first downloads the Parallels Tools ISO
+  (`https://almalinux-images.s3.us-east-1.amazonaws.com/tools/parallels/26/prl-tools-lin-arm.iso`),
+  which the `parallels-iso` builder would take from Parallels Desktop itself.
+  It is Parallels Tools 26.x on purpose: the 27.x shared-folder daemon uses
+  FUSE 3, which rejects the `-o big_writes` option the `vagrant-parallels`
+  plugin (2.4.9) passes, so `/vagrant` would not mount;
+- the `*parallels*aarch64` qemu sources (`almalinux-9-parallels-aarch64`,
+  `almalinux_10_vagrant_parallels_qemu_aarch64`,
+  `almalinux_kitten_10_vagrant_parallels_qemu_aarch64`) install from the
+  boot ISO under QEMU TCG on the x86_64 runner, with the same `aarch64_*`
+  variables, GRUB keypress hold and captured console as the GenericCloud
+  aarch64 TCG build. Packer uploads the Tools ISO (`parallels_tools_iso_aarch64`)
+  and `ansible/vagrant.yml` provisions the guest as a Parallels box
+  (`packer_provider=parallels-iso`: the `parallels_guest` role installs the
+  Tools); the installed Tools version is downloaded back for the box
+  metadata;
+- `tools/raw-to-vagrant-parallels.sh` packs the raw disk into a `parallels`
+  box: a `.pvm` with `config.pvs` from `tpl/vagrant/parallels/box-aarch64.pvs`
+  (cut from a `parallels-iso` box: EFI, one SATA disk, one virtio network
+  adapter, 4 vCPUs / 4096 MB; fresh VM/disk UUIDs and MAC addresses), the
+  disk as an expanding Parallels image (`harddisk1.hdd`: `DiskDescriptor.xml`
+  and one `.hds`, converted by `qemu-img` and rewritten to the
+  `WithoutFreeSpace` layout Parallels Desktop writes), and `metadata.json`
+  with `arm64`. Parallels Desktop creates `NVRAM.dat` and `VmInfo.pvi` on the
+  first boot. The kickstart's generic initramfs boots on the SATA disk and
+  virtio NIC;
+- the leg forces `run_test=false`: only `shared-steps`' offline validation
+  of the raw disk (release, architecture, package list) runs, then the box
+  is published like the others. It is excluded for the `-v2` variants and
+  for AlmaLinux 8 (no Parallels aarch64 box for 8).
+
 ### When to use which
 
 | Use | Workflow |
@@ -73,10 +111,10 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | :--- | :--- | :--- |
 | `date_time_stamp` | auto (`date -u +%Y%m%d%H%M%S`) | Shared stamp for every matrix leg. |
 | `version_major` | `10` | `10-kitten`, `10`, `9`, `8`. |
-| `vagrant_type` | `ALL` | `ALL`, `vagrant_libvirt`, `vagrant_virtualbox`, `vagrant_vmware`, `vagrant_hyperv`. |
+| `vagrant_type` | `ALL` | `ALL`, `vagrant_libvirt`, `vagrant_virtualbox`, `vagrant_vmware`, `vagrant_hyperv`, `vagrant_parallels`. |
 | `self-hosted` | `true` | Build the self-hosted providers on a self-hosted runner. |
 | `self_hosted_runner` | `aws-ec2` | `self-hosted` (manual) or `aws-ec2`. Routes libvirt/virtualbox to the self-hosted leg when set to `self-hosted`. |
-| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv and vmware-aarch64 legs, which are always build-only). |
+| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64 and parallels-aarch64 legs, which are always build-only). |
 | `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
 | `release_to_hcp` | `true` | Publish boxes to the HCP Vagrant Registry. `false` = build+test only. |
@@ -86,12 +124,13 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 
 ```
 init-data  (computes matrix_gh / matrix_sh from vagrant_type; adds
- |          hyperv-x86_64 to matrix_gh for ALL / vagrant_hyperv, and
- |          vmware-aarch64 for ALL / vagrant_vmware, except AlmaLinux 8)
+ |          hyperv-x86_64 to matrix_gh for ALL / vagrant_hyperv,
+ |          vmware-aarch64 for ALL / vagrant_vmware and parallels-aarch64
+ |          for ALL / vagrant_parallels, except AlmaLinux 8)
  |
  |- build-gh-hosted (matrix_gh x variant)   -. shared-steps build (+ vagrant up
  |     libvirt / virtualbox / hyperv /        | test, except hyperv and
- |     vmware-aarch64                         | vmware-aarch64), then
+ |     vmware-aarch64 / parallels-aarch64     | the aarch64 legs), then
  |                                            | vagrant-publish-steps in-job
  |- start-self-hosted-runner (fork EC2)       |
  '- build-self-hosted (matrix_sh x variant) -' (HCP publish, gated by release_to_hcp)
@@ -108,6 +147,7 @@ right after it is built and tested. Provider routing (matching
 | vmware | `build-self-hosted` (needs the AL9 AMI) | yes |
 | hyperv | `build-gh-hosted` leg | no (build-only) |
 | vmware aarch64 | `build-gh-hosted` leg, built under QEMU TCG | no (build-only) |
+| parallels aarch64 | `build-gh-hosted` leg, built under QEMU TCG | no (build-only) |
 
 ### Publishing: parallel, with retry-on-collision
 

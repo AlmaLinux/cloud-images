@@ -28,6 +28,14 @@ run-name: >-
 # validation of the raw disk only). aarch64 has no x86_64_v2 variant, so the
 # leg is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
 #
+# The Parallels aarch64 box (vagrant_type ALL or vagrant_parallels) is built
+# the same way, as the parallels-aarch64 leg of build-gh-hosted: installed
+# and provisioned under QEMU (TCG), with the Parallels Tools ISO downloaded
+# first, and packed into a parallels box by tools/raw-to-vagrant-parallels.sh.
+# No runner can run Parallels Desktop guests, so it has no live `vagrant up`
+# test either (run_test forced off, offline validation of the raw disk only).
+# It is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
+#
 # Stage implementations live in composite actions:
 #   .github/actions/shared-steps           - Packer build + vagrant up smoke test
 #   .github/actions/vagrant-publish-steps  - HCP Vagrant Registry publish of the local box
@@ -63,6 +71,7 @@ on:
             - vagrant_virtualbox
             - vagrant_vmware
             - vagrant_hyperv
+            - vagrant_parallels
 
         self-hosted:
           description: "Build on self-hosted runner"
@@ -157,6 +166,12 @@ jobs:
               # no live test, see the header. There is no AlmaLinux 8 box.
               VARIANTS_GH+=("vmware-aarch64")
           fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_parallels" -o "${{ inputs.vagrant_type }}" = "ALL" ] \
+             && [ "${{ inputs.version_major }}" != "8" ]; then
+              # Parallels aarch64: built under QEMU (TCG) and converted, like
+              # Hyper-V; no live test, see the header. There is no AlmaLinux 8 box.
+              VARIANTS_GH+=("parallels-aarch64")
+          fi
 
           [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
           matrix_gh=${matrix_gh%,}  # Remove the trailing comma
@@ -213,6 +228,10 @@ jobs:
             matrix_gh: vmware-aarch64
           - variant: 10-kitten-v2
             matrix_gh: vmware-aarch64
+          - variant: 10-v2
+            matrix_gh: parallels-aarch64
+          - variant: 10-kitten-v2
+            matrix_gh: parallels-aarch64
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
@@ -225,10 +244,11 @@ jobs:
           IFS=- read -r type arch <<< "${{ matrix.matrix_gh }}"
           echo "type=$type" >> $GITHUB_ENV
           echo "ARCH=$arch" >> $GITHUB_ENV
-          # Hyper-V has no live `vagrant up` test (a Hyper-V guest can't boot on
-          # the Linux runner), so force run_test off for it; honor the input for
-          # the libvirt / virtualbox legs.
-          if [ "$type" = "hyperv" ] || [ "$type" = "vmware" ]; then
+          # Hyper-V and the QEMU-built VMware / Parallels aarch64 boxes have no
+          # live `vagrant up` test (their guests can't boot on the Linux runner),
+          # so force run_test off for them; honor the input for the libvirt /
+          # virtualbox legs.
+          if [ "$type" = "hyperv" ] || [ "$type" = "vmware" ] || [ "$type" = "parallels" ]; then
             echo "RUN_TEST=false" >> $GITHUB_ENV
           else
             echo "RUN_TEST=${{ inputs.run_test }}" >> $GITHUB_ENV
@@ -236,6 +256,21 @@ jobs:
 
       - name: Checkout ${{ github.action_repository }}
         uses: actions/checkout@v6
+
+      - name: Download the Parallels Tools ISO
+        if: env.type == 'parallels'
+        env:
+          PRL_TOOLS_ISO: prl-tools-lin-arm.iso
+          # Parallels Tools 26.x: the 27.x prl_fsd needs FUSE 3, which drops the
+          # big_writes option the vagrant-parallels plugin (2.4.9) still passes
+          # when it mounts the shared folders
+          PRL_TOOLS_ISO_URL: https://almalinux-images.s3.us-east-1.amazonaws.com/tools/parallels/26/prl-tools-lin-arm.iso
+        run: |
+          # The parallels-iso builder takes the Tools ISO from Parallels
+          # Desktop; the QEMU-built box installs it from this copy, which the
+          # packer template uploads into the guest (parallels_tools_iso_aarch64).
+          curl -fsSL --retry 3 -o "${PRL_TOOLS_ISO}" "${PRL_TOOLS_ISO_URL}"
+          ls -la "${PRL_TOOLS_ISO}"
 
       - uses: ./.github/actions/shared-steps
         name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image
