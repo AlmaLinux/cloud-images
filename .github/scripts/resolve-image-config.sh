@@ -92,6 +92,26 @@ case "${type}_${version_major}" in
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     ;;
 
+  # Parallels aarch64 box built under QEMU (TCG) and packed by
+  # tools/raw-to-vagrant-parallels.sh, like the Hyper-V box
+  parallels_9)
+    output_mask="AlmaLinux-${version_major}-Vagrant-parallels-*.${alma_arch}.box"
+    packer_source="qemu.${packer_source}"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  parallels_10)
+    packer_source="qemu.almalinux_10_vagrant_parallels_qemu_${alma_arch}"
+    output_mask="AlmaLinux-${version_major}-Vagrant-parallels-*.${alma_arch}.box"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  parallels*kitten*)
+    packer_source="qemu.almalinux_kitten_10_vagrant_parallels_qemu_${alma_arch}"
+    output_mask="AlmaLinux-Kitten-Vagrant-parallels-10-*.${alma_arch}.box"
+    aws_s3_path="images/kitten/10/vagrant/${timestamp}"
+    ;;
+
   azure*kitten*)
     packer_source="almalinux_kitten_10_${type}_${alma_arch}"
     [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"

@@ -497,13 +497,14 @@ runs:
 
         # Image file format: raw or qcow2
         # Image file name is redefined for the Hyper-V and the QEMU-built VMware
-        # aarch64 box, as they are built using Qemu and converted to .box file
+        # and Parallels aarch64 boxes, as they are built using Qemu and converted
+        # to .box file
         case ${{ inputs.type }} in
           oci|gencloud|gencloud_ext4|opennebula)
             format=qcow2
             image_file=${{ env.IMAGE_FILE }}
             ;;
-          hyperv|vmware)
+          hyperv|vmware|parallels)
             format=raw
             image_file=$(echo ${{ env.IMAGE_FILE }} | sed 's/\.box$/.raw/')
             ;;
