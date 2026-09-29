@@ -7,7 +7,8 @@ box lifecycle in a single `workflow_dispatch`:
 
 1. **Build** the boxes with Packer (one Packer builder per provider:
    `libvirt`, `virtualbox`, `vmware`, `hyperv`; x86_64, plus the
-   `x86_64_v2` microarch for AL10 / Kitten).
+   `x86_64_v2` microarch for AL10 / Kitten, and the VMware aarch64 box for
+   9, 10 and Kitten).
 2. **Test** each box with a live `vagrant up` smoke test on the build
    runner (via `shared-steps`, gated by `run_test`). Hyper-V is the
    exception - see below.
@@ -30,6 +31,31 @@ A Hyper-V guest can't boot on the Linux runner, so there is no live
 installed-package list) runs, and the box is then published like the
 others.
 
+### VMware aarch64 is built under QEMU (no live test)
+
+No runner can run VMware Fusion guests: GitHub's macOS runners expose no
+hypervisor (`kern.hv_support=0`), and the other runners are x86_64. So the
+VMware Desktop aarch64 box is built the Hyper-V way, as a `vmware-aarch64`
+leg of `build-gh-hosted`, for `vagrant_type` `ALL` or `vagrant_vmware`:
+
+- the `*vmware*aarch64` qemu sources (`almalinux-9-vmware-aarch64`,
+  `almalinux_10_vagrant_vmware_qemu_aarch64`,
+  `almalinux_kitten_10_vagrant_vmware_qemu_aarch64`) install from the boot
+  ISO under QEMU TCG on the x86_64 runner, with the same `aarch64_*`
+  variables, GRUB keypress hold and captured console as the GenericCloud
+  aarch64 TCG build, and are provisioned by `ansible/vagrant.yml` as a
+  VMware box (`packer_provider=vmware-iso`: open-vm-tools);
+- `tools/raw-to-vagrant-vmware.sh` packs the raw disk into a
+  `vmware_desktop` box: a VMX from `tpl/vagrant/vmware/box-aarch64.vmx`
+  (EFI, one NVMe disk, no network adapter, 4 vCPUs / 4096 MB like the
+  hand-built Fusion boxes), a split sparse VMDK, `metadata.json` with
+  `arm64`. The kickstart's generic initramfs (`dracut-config-generic`) boots
+  on Fusion's NVMe disk and vmxnet3 NIC;
+- the leg forces `run_test=false`: only `shared-steps`' offline validation
+  of the raw disk (release, architecture, package list) runs, then the box
+  is published like the others. It is excluded for the `-v2` variants and
+  for AlmaLinux 8 (no VMware aarch64 box for 8).
+
 ### When to use which
 
 | Use | Workflow |
@@ -50,7 +76,7 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `vagrant_type` | `ALL` | `ALL`, `vagrant_libvirt`, `vagrant_virtualbox`, `vagrant_vmware`, `vagrant_hyperv`. |
 | `self-hosted` | `true` | Build the self-hosted providers on a self-hosted runner. |
 | `self_hosted_runner` | `aws-ec2` | `self-hosted` (manual) or `aws-ec2`. Routes libvirt/virtualbox to the self-hosted leg when set to `self-hosted`. |
-| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv leg, which is always build-only). |
+| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv and vmware-aarch64 legs, which are always build-only). |
 | `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
 | `release_to_hcp` | `true` | Publish boxes to the HCP Vagrant Registry. `false` = build+test only. |
@@ -60,10 +86,12 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 
 ```
 init-data  (computes matrix_gh / matrix_sh from vagrant_type; adds
- |          hyperv-x86_64 to matrix_gh for ALL / vagrant_hyperv)
+ |          hyperv-x86_64 to matrix_gh for ALL / vagrant_hyperv, and
+ |          vmware-aarch64 for ALL / vagrant_vmware, except AlmaLinux 8)
  |
  |- build-gh-hosted (matrix_gh x variant)   -. shared-steps build (+ vagrant up
- |     libvirt / virtualbox / hyperv          | test, except hyperv), then
+ |     libvirt / virtualbox / hyperv /        | test, except hyperv and
+ |     vmware-aarch64                         | vmware-aarch64), then
  |                                            | vagrant-publish-steps in-job
  |- start-self-hosted-runner (fork EC2)       |
  '- build-self-hosted (matrix_sh x variant) -' (HCP publish, gated by release_to_hcp)
@@ -79,6 +107,7 @@ right after it is built and tested. Provider routing (matching
 | libvirt, virtualbox | `build-gh-hosted` (or `build-self-hosted` if `self_hosted_runner=self-hosted`) | yes |
 | vmware | `build-self-hosted` (needs the AL9 AMI) | yes |
 | hyperv | `build-gh-hosted` leg | no (build-only) |
+| vmware aarch64 | `build-gh-hosted` leg, built under QEMU TCG | no (build-only) |
 
 ### Publishing: parallel, with retry-on-collision
 
