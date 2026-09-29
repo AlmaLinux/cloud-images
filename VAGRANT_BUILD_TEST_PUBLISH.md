@@ -319,14 +319,25 @@ before it is published. The script rewrites the boot ISO URLs and the
 hosts, so the anaconda install comes from the compose. The installs that
 stay in Ansible - cloud-init (`vagrant_guest` must configure its Vagrant
 datasource before it first runs), the per-provider guest agents
-(`qemu-guest-agent` / `hyperv-daemons` / `open-vm-tools`) and the
-VirtualBox Guest Additions build dependencies - are covered by an
+(`qemu-guest-agent` / `hyperv-daemons` / `open-vm-tools`, plus `nvme-cli`
+on the VMware aarch64 box, and the Parallels Tools installer's
+dependencies) and the VirtualBox Guest Additions build dependencies (on
+x86_64 and on the VirtualBox aarch64 box) - are covered by an
 injected `%post` writing `/etc/yum.repos.d/pungi.repo` (compose
 BaseOS/AppStream at `priority=1`). That override is what lets the Guest
 Additions build succeed on a pre-release system: `kernel-devel` /
 `kernel-headers` must match the running compose kernel, which the
 released repositories cannot provide. A task injected into the
 `cleanup_vm` role removes the override before the boxes ship.
+
+The QEMU-built VMware, Parallels and VirtualBox aarch64 boxes need nothing
+of their own: they install from the same aarch64 boot ISO and
+`http/almalinux-<major>.vagrant-aarch64.ks` as the other aarch64 builds,
+so the rewrite and the override cover them too (for the VirtualBox box,
+the override is what provides the compose's `kernel-devel` for the Guest
+Additions build). Only the Parallels Tools ISO (from `almalinux-images`)
+and the VirtualBox Guest Additions ISO (from download.virtualbox.org)
+still come from outside - they are not part of the compose.
 
 The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
 notification carry a `:warning: Built from **PUNGI pre-release

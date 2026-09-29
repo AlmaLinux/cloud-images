@@ -274,7 +274,9 @@ for major in "${MAJORS[@]}"; do
     done
 
     for suffix in x86_64 x86_64-bios x86_64_v2 aarch64; do
-        # the x86_64-bios kickstart installs from the plain x86_64 compose
+        # the x86_64-bios kickstart installs from the plain x86_64 compose;
+        # the aarch64 one also serves the QEMU-built VMware, Parallels and
+        # VirtualBox aarch64 boxes
         inject_repo_override "http/almalinux-${major}.vagrant-${suffix}.ks" "${major}" "${suffix%-bios}"
     done
 done
