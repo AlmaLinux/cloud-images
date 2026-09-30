@@ -77,7 +77,7 @@ Runs on `ubuntu-24.04`. Emits `time_stamp` (YYYYMMDDhhmmss) and `date_stamp` (YY
 
 ### `build-gcp-x86_64`
 
-Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn metal instance (`c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*` / `image=ubuntu24-full-x64`) inside the AlmaLinux org. No matrix fan-out — `variant = inputs.version_major`.
+Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn nested-virt instance (`c8i.2xlarge+m8i.2xlarge+r8i.2xlarge` / `image=ubuntu24-full-x64` / `nested-virt`) inside the AlmaLinux org. No matrix fan-out — `variant = inputs.version_major`.
 
 ### `start-self-hosted-runner`
 

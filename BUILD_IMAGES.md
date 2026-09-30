@@ -81,7 +81,7 @@ Runs on `ubuntu-24.04`. Generates (or passes through) `time_stamp` (YYYYMMDDhhmm
 
 ### `build-gh-hosted` (x86_64)
 
-Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn metal instance (`c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*` / `image=ubuntu24-full-x64`) when the repository is under the `AlmaLinux` org. Invokes `./.github/actions/shared-steps` with:
+Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn nested-virt instance (`c8i.2xlarge+m8i.2xlarge+r8i.2xlarge` / `image=ubuntu24-full-x64` / `nested-virt`) when the repository is under the `AlmaLinux` org. Invokes `./.github/actions/shared-steps` with:
 
 - `type` — workflow's image type (`azure` / `gencloud` / `gencloud_ext4` / `oci` / `opennebula`).
 - `variant` — the per-matrix variant from the fan-out, or the raw `version_major` for Azure/OCI (neither of which fans out on x86_64).

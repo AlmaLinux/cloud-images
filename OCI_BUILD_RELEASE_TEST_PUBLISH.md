@@ -115,7 +115,7 @@ compatibility steps and runs them on the local `.qcow2`.
 
 | Job | Runner | Notes |
 | :--- | :--- | :--- |
-| `build-x86_64` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | x86_64 Packer build + compute-image import. |
+| `build-x86_64` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | x86_64 Packer build + compute-image import. |
 | `build-aarch64` | `a1.metal`, `image=almalinux-9-aarch64`, `volume=40g` (org) / `ec2_root_disk_size_gb: 16` (fork) | aarch64. |
 
 The OCI compute-image stage **uploads** the qcow2 to Object Storage and

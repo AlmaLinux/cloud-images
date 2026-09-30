@@ -95,7 +95,7 @@ The logic lives in the `set-matrix` step of the `init-data` job in [`.github/wor
 
 #### `build-gh-hosted` (x86_64 GH-hosted)
 
-Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn metal instance (`c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*` / `image=ubuntu24-full-x64`) inside the AlmaLinux org. Matrix dimension is `(variant × matrix_gh)` — typically `{8 | 9 | 10[-v2] | 10-kitten[-v2]} × {vagrant_libvirt-x86_64, vagrant_virtualbox-x86_64}`. Each leg parses `matrix_gh` into `type` and `arch` env vars, then delegates to `./.github/actions/shared-steps` with `runner: 'aws-ec2'` (AlmaLinux org) or `'gh_hosted'` (forks).
+Runs on a GitHub-hosted Ubuntu 24.04 runner, or a RunsOn nested-virt instance (`c8i.2xlarge+m8i.2xlarge+r8i.2xlarge` / `image=ubuntu24-full-x64` / `nested-virt`) inside the AlmaLinux org. Matrix dimension is `(variant × matrix_gh)` — typically `{8 | 9 | 10[-v2] | 10-kitten[-v2]} × {vagrant_libvirt-x86_64, vagrant_virtualbox-x86_64}`. Each leg parses `matrix_gh` into `type` and `arch` env vars, then delegates to `./.github/actions/shared-steps` with `runner: 'aws-ec2'` (AlmaLinux org) or `'gh_hosted'` (forks).
 
 #### `start-self-hosted-runner`
 
