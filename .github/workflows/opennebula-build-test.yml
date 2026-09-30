@@ -94,12 +94,13 @@ jobs:
       contents: read
     needs: [init-data]
     # use runs-on runners if within the almalinux org, otherwise GH runners.
-    # Both are Ubuntu-with-KVM (metal in the org, nested-KVM on the gh-hosted
-    # fallback), so the in-job QEMU test can boot the image just built.
+    # Both are Ubuntu-with-KVM (nested-virt 8th-gen Intel in the org,
+    # nested-KVM on the gh-hosted fallback), so the in-job QEMU test can boot
+    # the image just built.
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*/image=ubuntu24-full-x64/spot=false', github.run_id)
+          format('runs-on={0}/family=c8i.2xlarge+m8i.2xlarge+r8i.2xlarge/image=ubuntu24-full-x64/spot=false/nested-virt', github.run_id)
         ||
         'ubuntu-24.04'
       }}

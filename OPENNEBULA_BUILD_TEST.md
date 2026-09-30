@@ -90,11 +90,12 @@ The change is backward-compatible - `opennebula-test.yml` keeps passing
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
-| `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
+| `build-gh-hosted` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
 | `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
 
-Both org runners are bare metal, so `/dev/kvm` is present for the in-job
-QEMU test. The composite installs `qemu-system-*` + `qemu-utils` +
+Both org KVM runners have `/dev/kvm` for the in-job QEMU test: the x86_64
+one through nested virtualization (`nested-virt`, the 8th-gen Intel
+families), the aarch64 one as bare metal. The composite installs `qemu-system-*` + `qemu-utils` +
 `genisoimage` via `apt-get`, which is why the aarch64 leg must be on an
 Ubuntu image.
 

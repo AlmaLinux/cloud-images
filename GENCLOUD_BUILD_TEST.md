@@ -101,13 +101,14 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
-| `build-gh-hosted` | `c7i.metal-24xl+c7a.metal-48xl+*8gd.metal*`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
+| `build-gh-hosted` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
 | `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
-| `build-s390x-tcg` | same x86_64 metal family as `build-gh-hosted` (KVM unused - TCG) | `ubuntu-24.04` |
-| `build-ppc64le-tcg` | same x86_64 metal family as `build-gh-hosted`, `image=ubuntu26-full-x64` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
+| `build-s390x-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu24-full-x64`, `nested-virt` (KVM unused by the TCG guest, but shared-steps sets `/dev/kvm` up) | `ubuntu-24.04` |
+| `build-ppc64le-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu26-full-x64`, `nested-virt` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
 
-Both org runners are bare metal, so `/dev/kvm` is present for the in-job
-QEMU test. The composite installs `qemu-system-*` + `cloud-image-utils`
+Both org KVM runners have `/dev/kvm` for the in-job QEMU test: the x86_64
+one through nested virtualization (`nested-virt`, the 8th-gen Intel
+families), the aarch64 one as bare metal. The composite installs `qemu-system-*` + `cloud-image-utils`
 via `apt-get`, which is why the aarch64 leg must be on an Ubuntu image.
 
 **aarch64 outside the AlmaLinux org.** Forks and CI mirrors have no arm64
