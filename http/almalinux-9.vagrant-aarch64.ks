@@ -28,6 +28,10 @@ rsyslog-logrotate
 -*firmware
 -dracut-config-rescue
 -firewalld
+# anaconda adds qemu-guest-agent when it installs under KVM, as the
+# QEMU-built VMware and Parallels boxes are on the AlmaLinux org's arm64
+# runner; none of the aarch64 boxes wants it
+-qemu-guest-agent
 %end
 
 # disable kdump service
