@@ -214,7 +214,8 @@ jobs:
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
     # use runs-on runners if within the almalinux org, otherwise GH runners.
     # The QEMU-built aarch64 legs (vmware-aarch64, parallels-aarch64):
-    # - in the AlmaLinux org: the arm64 RunsOn a1.metal, where shared-steps
+    # - in the AlmaLinux org: RunsOn arm64 bare metal (a1.metal or a newer
+    #   Graviton .metal, whichever is free), where shared-steps
     #   builds natively under KVM (-cpu host). No Vagrant exists for arm64
     #   Linux, so their box is handed to the publish-aarch64 job, which
     #   publishes it from an x86_64 runner.
@@ -226,7 +227,7 @@ jobs:
       ${{
         github.repository_owner == 'AlmaLinux' &&
           (endsWith(matrix.matrix_gh, '-aarch64') &&
-            format('runs-on={0}/family=a1.metal/image=ubuntu24-full-arm64/volume=60g/spot=false', github.run_id) ||
+            format('runs-on={0}/family=a1.metal+c6g.metal+m6g.metal+c7g.metal+m7g.metal+*8gd.metal*/image=ubuntu24-full-arm64/volume=60g/spot=false', github.run_id) ||
             format('runs-on={0}/family=r8i.2xlarge/image=ubuntu24-full-x64/volume=60g/spot=false/nested-virt', github.run_id))
         ||
         'ubuntu-24.04'

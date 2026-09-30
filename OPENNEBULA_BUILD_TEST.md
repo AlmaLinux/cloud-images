@@ -91,7 +91,7 @@ The change is backward-compatible - `opennebula-test.yml` keeps passing
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
-| `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
+| `build-self-hosted` | `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=40g` | self-hosted EC2 `a1.metal` (`EC2_AMI_ID_AL9_AARCH64`) |
 
 Both org KVM runners have `/dev/kvm` for the in-job QEMU test: the x86_64
 one through nested virtualization (`nested-virt`, the 8th-gen Intel

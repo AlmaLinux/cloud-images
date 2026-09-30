@@ -97,7 +97,7 @@ In `azure-build.yml` the `start-self-hosted-runner` job fans out over the same a
 
 Runs on:
 
-- `runs-on={RUN_ID}/family=a1.metal/image=almalinux-9-aarch64` for AlmaLinux-org runs.
+- `runs-on={RUN_ID}/family=a1.metal+c6g.metal+m6g.metal+c7g.metal+m7g.metal+*8gd.metal*/image=almalinux-9-aarch64` for AlmaLinux-org runs (`a1.metal` or a newer Graviton bare metal, whichever is free).
 - The ephemeral EC2 runner created above (targeted by `github.run_id`) otherwise.
 
 Dispatches a matrix over the aarch64 variants, then calls `./.github/actions/shared-steps` with `arch: aarch64` and the appropriate `type` / `variant` / `subtype`.

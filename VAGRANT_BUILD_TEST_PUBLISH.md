@@ -194,7 +194,7 @@ falls back to an interactive browser login that hangs in CI).
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
-| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` legs: arm64 `a1.metal`, `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
+| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` legs: arm64 `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
 | `publish-aarch64` | `ubuntu-24.04` | - (not run) |
 | `build-self-hosted` | `r8i.2xlarge`, `ami=<AL9 x86_64>`, `volume=60g`, `nested-virt`, `spot=false` | EC2 `c5n.metal` (`EC2_AMI_ID_AL9_X86_64`) or a manual self-hosted runner |
 
@@ -205,14 +205,14 @@ lives on the self-hosted leg. **Hyper-V now builds on `build-gh-hosted`'s
 `hyperv-build.yml` used - this matches the metal-to-`r8i.2xlarge`
 migration the vagrant build already made; KVM is available either way.
 
-The `vmware-aarch64` and `parallels-aarch64` legs build on the arm64
-`a1.metal` in the AlmaLinux org, where shared-steps runs QEMU natively under
-KVM (`-cpu host`, the runner's own firmware), like the GenericCloud aarch64
-build. Forks have no arm64 runner, so the legs run on GitHub's x86_64
-Ubuntu 24.04 like the others, and shared-steps emulates their install under
-QEMU TCG on a Neoverse V1 CPU (see
-[GENCLOUD_BUILD_TEST.md](GENCLOUD_BUILD_TEST.md)). No AlmaLinux 8 box is
-built on those legs.
+The `vmware-aarch64` and `parallels-aarch64` legs build on arm64 bare
+metal (`a1.metal` or a newer Graviton `.metal`, whichever is free) in the
+AlmaLinux org, where shared-steps runs QEMU natively under KVM (`-cpu
+host`, the runner's own firmware), like the GenericCloud aarch64 build.
+Forks have no arm64 runner, so the legs run on GitHub's x86_64 Ubuntu
+24.04 like the others, and shared-steps emulates their install under QEMU
+TCG on a Neoverse V1 CPU (see [GENCLOUD_BUILD_TEST.md](GENCLOUD_BUILD_TEST.md)).
+No AlmaLinux 8 box is built on those legs.
 
 `spot=false` pins the build runners on-demand to avoid spot-reclaim
 cancellations mid-build (Vagrant builds are long); drop it or switch to a

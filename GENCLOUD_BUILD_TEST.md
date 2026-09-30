@@ -102,7 +102,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
-| `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
+| `build-self-hosted` | `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
 | `build-s390x-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu24-full-x64`, `nested-virt` (KVM unused by the TCG guest, but shared-steps sets `/dev/kvm` up) | `ubuntu-24.04` |
 | `build-ppc64le-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu26-full-x64`, `nested-virt` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
 
@@ -128,7 +128,7 @@ same, switched through variables:
 
 The in-job boot test is skipped there (`gencloud-test-steps` needs KVM for
 the image's architecture), and the job timeout is the hosted runner's
-maximum of 6 hours. The AlmaLinux org keeps the RunsOn `a1.metal` runner
+maximum of 6 hours. The AlmaLinux org keeps the RunsOn arm64 bare-metal runner
 with KVM and the in-job test, unchanged.
 
 ## s390x under TCG (experimental)

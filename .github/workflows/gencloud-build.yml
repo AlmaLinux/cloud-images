@@ -163,13 +163,13 @@ jobs:
       contents: read
     if: ${{ inputs.self-hosted }}
     needs: [init-data, start-self-hosted-runner]
-    # If almalinux org, use RunsOn with almalinux-9-aarch64 on a1.metal
+    # If almalinux org, use RunsOn with almalinux-9-aarch64 on arm64 bare metal (a1.metal or a newer Graviton .metal)
     #
     # Otherwise use AWS EC2 Self-Hosted aarch64 runner set up with the 'start-self-hosted-runner' job above
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=40g/spot=false', github.run_id)
+          format('runs-on={0}/family=a1.metal+c6g.metal+m6g.metal+c7g.metal+m7g.metal+*8gd.metal*/image=almalinux-9-aarch64/volume=40g/spot=false', github.run_id)
         ||
         github.run_id
       }}

@@ -118,7 +118,7 @@ is new — it wraps `tools/azure_uploader.sh` and runs it on the local `.raw`.
 | Job | Runner | Notes |
 | :--- | :--- | :--- |
 | `build-x86_64` | `r8i.2xlarge` + `nested-virt`, `volume=80g` | x86_64 Packer build + VHD conversion. |
-| `build-aarch64` / `build-aarch64-64k` | `a1.metal`, `volume=80g` (org) / `ec2_root_disk_size_gb: 80` (fork) | aarch64. |
+| `build-aarch64` / `build-aarch64-64k` | `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `volume=80g` (org) / `ec2_root_disk_size_gb: 80` (fork) | aarch64. |
 
 `volume=80g` (vs `40g` for `azure-build.yml`) leaves headroom: the
 gallery stage converts the ~30 GB `.raw` to a fixed VHD on the same
