@@ -41,10 +41,12 @@ leg of `build-gh-hosted`, for `vagrant_type` `ALL` or `vagrant_vmware`:
 - the `*vmware*aarch64` qemu sources (`almalinux-9-vmware-aarch64`,
   `almalinux_10_vagrant_vmware_qemu_aarch64`,
   `almalinux_kitten_10_vagrant_vmware_qemu_aarch64`) install from the boot
-  ISO under QEMU TCG on the x86_64 runner, with the same `aarch64_*`
+  ISO under QEMU - natively under KVM on the AlmaLinux org's arm64 runner,
+  elsewhere under TCG on an x86_64 runner with the same `aarch64_*`
   variables, GRUB keypress hold and captured console as the GenericCloud
-  aarch64 TCG build, and are provisioned by `ansible/vagrant.yml` as a
-  VMware box (`packer_provider=vmware-iso`: open-vm-tools);
+  aarch64 TCG build (see [Runner sizing](#runner-sizing)) - and are
+  provisioned by `ansible/vagrant.yml` as a VMware box
+  (`packer_provider=vmware-iso`: open-vm-tools);
 - `tools/raw-to-vagrant-vmware.sh` packs the raw disk into a
   `vmware_desktop` box: a VMX from `tpl/vagrant/vmware/box-aarch64.vmx`
   (EFI, one NVMe disk, no network adapter, 4 vCPUs / 4096 MB like the
@@ -72,11 +74,11 @@ so the Parallels aarch64 box is built the Hyper-V way, as a
 - the `*parallels*aarch64` qemu sources (`almalinux-9-parallels-aarch64`,
   `almalinux_10_vagrant_parallels_qemu_aarch64`,
   `almalinux_kitten_10_vagrant_parallels_qemu_aarch64`) install from the
-  boot ISO under QEMU TCG on the x86_64 runner, with the same `aarch64_*`
-  variables, GRUB keypress hold and captured console as the GenericCloud
-  aarch64 TCG build. Packer uploads the Tools ISO (`parallels_tools_iso_aarch64`)
-  and `ansible/vagrant.yml` provisions the guest as a Parallels box
-  (`packer_provider=parallels-iso`: the `parallels_guest` role installs the
+  boot ISO under QEMU the same way as the VMware aarch64 box (natively on
+  the org's arm64 runner, under TCG elsewhere). Packer uploads the Tools
+  ISO (`parallels_tools_iso_aarch64`) and `ansible/vagrant.yml` provisions
+  the guest as a Parallels box (`packer_provider=parallels-iso`: the
+  `parallels_guest` role installs the
   Tools); the installed Tools version is downloaded back for the box
   metadata;
 - `tools/raw-to-vagrant-parallels.sh` packs the raw disk into a `parallels`
@@ -131,23 +133,29 @@ init-data  (computes matrix_gh / matrix_sh from vagrant_type; adds
  |- build-gh-hosted (matrix_gh x variant)   -. shared-steps build (+ vagrant up
  |     libvirt / virtualbox / hyperv /        | test, except hyperv and
  |     vmware-aarch64 / parallels-aarch64     | the aarch64 legs), then
- |                                            | vagrant-publish-steps in-job
+ |      |                                     | vagrant-publish-steps in-job
+ |      '- publish-aarch64 (org only: the     |
+ |         aarch64 boxes built on arm64)      |
  |- start-self-hosted-runner (fork EC2)       |
  '- build-self-hosted (matrix_sh x variant) -' (HCP publish, gated by release_to_hcp)
        vmware
 ```
 
 There is no collect / aggregation stage: each box is published in-job,
-right after it is built and tested. Provider routing (matching
-`vagrant-build.yml`):
+right after it is built and tested. The one exception is the aarch64 boxes
+the AlmaLinux org builds on its arm64 runner: Vagrant exists only for
+x86_64 Linux (HashiCorp builds none for arm64, and Ubuntu no longer ships
+it), so those legs upload the box as a workflow artifact (one-day
+retention) and `publish-aarch64` runs the same `vagrant-publish-steps` on
+an x86_64 runner. Provider routing (matching `vagrant-build.yml`):
 
 | Provider | Job (AlmaLinux org default) | Live test? |
 | :--- | :--- | :--- |
 | libvirt, virtualbox | `build-gh-hosted` (or `build-self-hosted` if `self_hosted_runner=self-hosted`) | yes |
 | vmware | `build-self-hosted` (needs the AL9 AMI) | yes |
 | hyperv | `build-gh-hosted` leg | no (build-only) |
-| vmware aarch64 | `build-gh-hosted` leg, built under QEMU TCG | no (build-only) |
-| parallels aarch64 | `build-gh-hosted` leg, built under QEMU TCG | no (build-only) |
+| vmware aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
+| parallels aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
 
 ### Publishing: parallel, with retry-on-collision
 
@@ -186,7 +194,8 @@ falls back to an interactive browser login that hangs in CI).
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
-| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false` | `ubuntu-24.04` |
+| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` legs: arm64 `a1.metal`, `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
+| `publish-aarch64` | `ubuntu-24.04` | - (not run) |
 | `build-self-hosted` | `r8i.2xlarge`, `ami=<AL9 x86_64>`, `volume=60g`, `nested-virt`, `spot=false` | EC2 `c5n.metal` (`EC2_AMI_ID_AL9_X86_64`) or a manual self-hosted runner |
 
 `nested-virt` provides KVM for the Packer build and the `vagrant up` test;
@@ -195,6 +204,15 @@ lives on the self-hosted leg. **Hyper-V now builds on `build-gh-hosted`'s
 `r8i.2xlarge`** rather than the metal family the standalone
 `hyperv-build.yml` used - this matches the metal-to-`r8i.2xlarge`
 migration the vagrant build already made; KVM is available either way.
+
+The `vmware-aarch64` and `parallels-aarch64` legs build on the arm64
+`a1.metal` in the AlmaLinux org, where shared-steps runs QEMU natively under
+KVM (`-cpu host`, the runner's own firmware), like the GenericCloud aarch64
+build. Forks have no arm64 runner, so the legs run on GitHub's x86_64
+Ubuntu 24.04 like the others, and shared-steps emulates their install under
+QEMU TCG on a Neoverse V1 CPU (see
+[GENCLOUD_BUILD_TEST.md](GENCLOUD_BUILD_TEST.md)). No AlmaLinux 8 box is
+built on those legs.
 
 `spot=false` pins the build runners on-demand to avoid spot-reclaim
 cancellations mid-build (Vagrant builds are long); drop it or switch to a

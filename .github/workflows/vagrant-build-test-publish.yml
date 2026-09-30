@@ -129,6 +129,7 @@ jobs:
       date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
       matrix_gh: ${{ steps.set-matrix.outputs.matrix_gh }}
       matrix_sh: ${{ steps.set-matrix.outputs.matrix_sh }}
+      matrix_aarch64: ${{ steps.set-matrix.outputs.matrix_aarch64 }}
     steps:
       - name: Set matrix
         id: set-matrix
@@ -178,6 +179,11 @@ jobs:
           echo matrix_gh=$(jq -c <<< [${matrix_gh}]) >> $GITHUB_OUTPUT
           echo "[Debug] on GitHub Hosted [${matrix_gh}]"
 
+          # The aarch64 legs of matrix_gh: in the AlmaLinux org they build on
+          # an arm64 runner, which has no Vagrant to publish with, so the
+          # publish-aarch64 job publishes them from an x86_64 runner
+          echo matrix_aarch64=$(jq -c <<< "[${matrix_gh}]" | jq -c 'map(select(endswith("-aarch64")))') >> $GITHUB_OUTPUT
+
           [ ${#VARIANTS_SH[@]} -ne 0 ] && matrix_sh=$(printf '"%s",' "${VARIANTS_SH[@]}")
           matrix_sh=${matrix_sh%,}  # Remove the trailing comma
           echo matrix_sh=$(jq -c <<< [${matrix_sh}]) >> $GITHUB_OUTPUT
@@ -206,11 +212,22 @@ jobs:
       contents: read
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
-    # use runs-on runners if within the almalinux org, otherwise GH runners"
+    # use runs-on runners if within the almalinux org, otherwise GH runners.
+    # The QEMU-built aarch64 legs (vmware-aarch64, parallels-aarch64):
+    # - in the AlmaLinux org: the arm64 RunsOn a1.metal, where shared-steps
+    #   builds natively under KVM (-cpu host). No Vagrant exists for arm64
+    #   Linux, so their box is handed to the publish-aarch64 job, which
+    #   publishes it from an x86_64 runner.
+    # - elsewhere: GitHub's x86_64 Ubuntu 24.04, like the other legs, where
+    #   shared-steps emulates the install under TCG (see its environment
+    #   step for the CPU model), and publishes in-job.
+    # No AlmaLinux 8 box is built on the aarch64 legs.
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=r8i.2xlarge/image=ubuntu24-full-x64/volume=60g/spot=false/nested-virt', github.run_id)
+          (endsWith(matrix.matrix_gh, '-aarch64') &&
+            format('runs-on={0}/family=a1.metal/image=ubuntu24-full-arm64/volume=60g/spot=false', github.run_id) ||
+            format('runs-on={0}/family=r8i.2xlarge/image=ubuntu24-full-x64/volume=60g/spot=false/nested-virt', github.run_id))
         ||
         'ubuntu-24.04'
       }}
@@ -294,10 +311,78 @@ jobs:
 
       - uses: ./.github/actions/vagrant-publish-steps
         name: Publish ${{ matrix.variant }} ${{ matrix.matrix_gh }} box to HCP
-        if: ${{ inputs.release_to_hcp }}
+        if: ${{ inputs.release_to_hcp && runner.arch != 'ARM64' }}
         with:
           image_file: ${{ env.IMAGE_FILE }}
           image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
+          notify_mattermost: ${{ inputs.notify_mattermost }}
+          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
+          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
+          HCP_ORG: ${{ vars.HCP_ORG }}
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+
+      # arm64 runner (the aarch64 legs in the AlmaLinux org): no Vagrant for
+      # arm64 Linux, so hand the box and its S3 URL to publish-aarch64
+      - name: Save the box URL for the x86_64 publish job
+        if: ${{ inputs.release_to_hcp && runner.arch == 'ARM64' }}
+        run: |
+          # Save the box URL for the x86_64 publish job
+          echo "BOX_URL=${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}" > box-publish.env
+          cat box-publish.env
+
+      - name: Hand the box to the x86_64 publish job
+        if: ${{ inputs.release_to_hcp && runner.arch == 'ARM64' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: aarch64-box-${{ matrix.variant }}-${{ matrix.matrix_gh }}
+          path: |
+            ${{ env.IMAGE_FILE }}
+            box-publish.env
+          retention-days: 1
+          # the box is already gzip-compressed
+          compression-level: 0
+          if-no-files-found: error
+
+  # Publish the boxes the aarch64 legs of build-gh-hosted built on an arm64
+  # runner (AlmaLinux org only, see its runs-on): Vagrant exists only for
+  # x86_64 Linux, so this x86_64 job takes the box over as an artifact and
+  # runs the same vagrant-publish-steps the other legs run in-job.
+  publish-aarch64:
+    name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} publish
+    needs: [init-data, build-gh-hosted]
+    if: ${{ !cancelled() && inputs.release_to_hcp && github.repository_owner == 'AlmaLinux' && needs.init-data.outputs.matrix_aarch64 != '[]' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # aarch64 has no x86_64_v2 variant
+        variant: ${{ fromJSON(format('["{0}"]', inputs.version_major)) }}
+        matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_aarch64) }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - name: Take over the box built on the arm64 runner
+        uses: actions/download-artifact@v8
+        with:
+          name: aarch64-box-${{ matrix.variant }}-${{ matrix.matrix_gh }}
+
+      - name: Locate the box
+        run: |
+          # Locate the box
+          image_file=$(ls -1 AlmaLinux-*.aarch64.box | head -n 1)
+          [ -n "${image_file}" ] || { echo "[Error] no aarch64 box in the artifact"; exit 1; }
+          ls -la "${image_file}"
+          echo "IMAGE_FILE=${image_file}" >> "$GITHUB_ENV"
+          cat box-publish.env >> "$GITHUB_ENV"
+
+      - uses: ./.github/actions/vagrant-publish-steps
+        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_gh }} box to HCP
+        with:
+          image_file: ${{ env.IMAGE_FILE }}
+          image_url: ${{ env.BOX_URL }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
           HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
