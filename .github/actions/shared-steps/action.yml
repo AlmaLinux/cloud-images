@@ -131,7 +131,11 @@ runs:
 
         # aarch64 on an x86_64 runner (outside the AlmaLinux organisation there
         # is no arm64 runner): the same sources, switched from KVM to TCG
-        # full-system emulation. -cpu max exposes every feature TCG emulates;
+        # full-system emulation. -cpu neoverse-v1 rather than max: max also
+        # exposes FEAT_MOPS, and the guest kernel's MOPS memset intermittently
+        # faults under QEMU 8.2's emulation while loading a module (a kernel
+        # panic in move_module early in the install, seen on 10.2 and 10.3).
+        # Neoverse V1 keeps pointer authentication, LSE and SVE, without MOPS.
         # pauth-impdef=on swaps the architected pointer-authentication
         # algorithm, very slow to emulate, for QEMU's cheap one. The GRUB hold
         # absorbs the emulated firmware's unpredictable start-up (see
@@ -139,7 +143,7 @@ runs:
         # on the captured serial console, and SSH comes up only after the whole
         # emulated install.
         if [ "${{ inputs.arch }}" = "aarch64" ] && [ "$(uname -m)" != "aarch64" ]; then
-          packer_opts="${packer_opts} -var aarch64_accelerator=tcg -var aarch64_cpu_model=max,pauth-impdef=on"
+          packer_opts="${packer_opts} -var aarch64_accelerator=tcg -var aarch64_cpu_model=neoverse-v1,pauth-impdef=on"
           packer_opts="${packer_opts} -var aarch64_grub_hold=true -var aarch64_extra_kernel_args=console=ttyAMA0"
           packer_opts="${packer_opts} -var aarch64_console_log=${{ github.workspace }}/aarch64-console.log"
           packer_opts="${packer_opts} -var boot_wait=3s -var ssh_timeout=5h"

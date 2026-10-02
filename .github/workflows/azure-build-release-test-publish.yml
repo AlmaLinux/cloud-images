@@ -240,7 +240,7 @@ jobs:
       contents: read
     if: ${{ inputs.self-hosted }}
     needs: [init-data, start-self-hosted-runner]
-    # If almalinux org, use RunsOn with almalinux-9-aarch64 on a1.metal.
+    # If almalinux org, use RunsOn with almalinux-9-aarch64 on arm64 bare metal (a1.metal or a newer Graviton .metal).
     # volume=80g (was 40g in azure-build.yml): the gallery stage converts the
     # .raw to a fixed VHD on the same volume.
     #
@@ -248,7 +248,7 @@ jobs:
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=80g/spot=false', github.run_id)
+          format('runs-on={0}/family=a1.metal+c6g.metal+m6g.metal+c7g.metal+m7g.metal+*8gd.metal*/image=almalinux-9-aarch64/volume=80g/spot=false', github.run_id)
         ||
         github.run_id
       }}
@@ -311,7 +311,7 @@ jobs:
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=a1.metal/image=almalinux-9-aarch64/volume=80g/spot=false', github.run_id)
+          format('runs-on={0}/family=a1.metal+c6g.metal+m6g.metal+c7g.metal+m7g.metal+*8gd.metal*/image=almalinux-9-aarch64/volume=80g/spot=false', github.run_id)
         ||
         github.run_id
       }}

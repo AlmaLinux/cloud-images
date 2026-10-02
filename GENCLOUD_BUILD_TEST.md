@@ -102,7 +102,7 @@ The change is backward-compatible - `gencloud-test.yml` keeps passing
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | `ubuntu-24.04` (GitHub-hosted, has nested `/dev/kvm`) |
-| `build-self-hosted` | `a1.metal`, `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
+| `build-self-hosted` | `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=40g` | `ubuntu-24.04` (GitHub-hosted x86_64; the image is built under QEMU TCG, see below) |
 | `build-s390x-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu24-full-x64`, `nested-virt` (KVM unused by the TCG guest, but shared-steps sets `/dev/kvm` up) | `ubuntu-24.04` |
 | `build-ppc64le-tcg` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `image=ubuntu26-full-x64`, `nested-virt` (QEMU 10.2; KVM unused, TCG is CPU-bound) | `ubuntu-26.04` |
 
@@ -120,7 +120,7 @@ same, switched through variables:
 | Variable | arm64 host default | TCG value |
 | :--- | :--- | :--- |
 | `aarch64_accelerator` | `kvm` | `tcg` |
-| `aarch64_cpu_model` | `host` | `max,pauth-impdef=on` (every emulated feature; QEMU's cheap pointer-authentication algorithm instead of the architected one, which is very slow to emulate) |
+| `aarch64_cpu_model` | `host` | `neoverse-v1,pauth-impdef=on`: pointer authentication, LSE and SVE, but not FEAT_MOPS. `max` exposes MOPS too, and the guest kernel's MOPS `memset` intermittently faults under QEMU 8.2's emulation while loading a module, a kernel panic early in the install. `pauth-impdef=on` selects QEMU's cheap pointer-authentication algorithm instead of the architected one, which is very slow to emulate |
 | `aarch64_grub_hold` | `false` | `true`: 90 s of once-a-second keypresses GRUB ignores from right after the VM starts, so the emulated UEFI firmware's unpredictable start-up does not matter, then a move to the plain "Install" entry (the default entry's `rd.live.check` would hash the whole ISO under emulation) |
 | `aarch64_extra_kernel_args` | empty | `console=ttyAMA0`, so anaconda's output reaches the captured serial console; the aarch64 kickstarts' `%post` removes it again from the installed boot loader configuration, undoes the serial GRUB terminal (`GRUB_TERMINAL`/`GRUB_SERIAL_COMMAND`) anaconda sets in `/etc/default/grub` because of it, and regenerates `grub.cfg`, which anaconda wrote with both before `%post` ran |
 | `aarch64_console_log` | empty | `<workspace>/aarch64-console.log`, streamed into the job log as `[aarch64 console]` lines. The serial port is teed into the file (`-chardev vc,logfile=`), not redirected: on the `virt` machine the firmware and GRUB console is the serial port on QEMU's VNC text console, which is where Packer types the boot command |
@@ -128,7 +128,7 @@ same, switched through variables:
 
 The in-job boot test is skipped there (`gencloud-test-steps` needs KVM for
 the image's architecture), and the job timeout is the hosted runner's
-maximum of 6 hours. The AlmaLinux org keeps the RunsOn `a1.metal` runner
+maximum of 6 hours. The AlmaLinux org keeps the RunsOn arm64 bare-metal runner
 with KVM and the in-job test, unchanged.
 
 ## s390x under TCG (experimental)

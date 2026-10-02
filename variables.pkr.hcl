@@ -315,7 +315,7 @@ variable "ovmf_vars" {
 # (KVM, host CPU). Where there is no arm64 runner (outside the AlmaLinux
 # organisation, on a GitHub-hosted x86_64 runner) shared-steps overrides them
 # to run the whole install under TCG full-system emulation:
-#   -var aarch64_accelerator=tcg -var aarch64_cpu_model=max,pauth-impdef=on
+#   -var aarch64_accelerator=tcg -var aarch64_cpu_model=neoverse-v1,pauth-impdef=on
 #   -var aarch64_grub_hold=true -var aarch64_extra_kernel_args=console=ttyAMA0
 #   -var aarch64_console_log=<file>
 variable "aarch64_accelerator" {
@@ -326,7 +326,7 @@ variable "aarch64_accelerator" {
 }
 
 variable "aarch64_cpu_model" {
-  description = "QEMU CPU model of the aarch64 GenericCloud sources: 'host' under KVM; under TCG 'max,pauth-impdef=on' (every emulated feature, with the cheap pointer-authentication algorithm)"
+  description = "QEMU CPU model of the aarch64 GenericCloud sources: 'host' under KVM; under TCG 'neoverse-v1,pauth-impdef=on' (pointer authentication, LSE and SVE but not FEAT_MOPS, whose emulation faults; with the cheap pointer-authentication algorithm)"
 
   type    = string
   default = "host"

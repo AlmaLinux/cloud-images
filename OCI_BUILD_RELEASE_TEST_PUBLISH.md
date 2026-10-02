@@ -116,7 +116,7 @@ compatibility steps and runs them on the local `.qcow2`.
 | Job | Runner | Notes |
 | :--- | :--- | :--- |
 | `build-x86_64` | `c8i.2xlarge+m8i.2xlarge+r8i.2xlarge`, `nested-virt`, `image=ubuntu24-full-x64` | x86_64 Packer build + compute-image import. |
-| `build-aarch64` | `a1.metal`, `image=almalinux-9-aarch64`, `volume=40g` (org) / `ec2_root_disk_size_gb: 16` (fork) | aarch64. |
+| `build-aarch64` | `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=almalinux-9-aarch64`, `volume=40g` (org) / `ec2_root_disk_size_gb: 16` (fork) | aarch64. |
 
 The OCI compute-image stage **uploads** the qcow2 to Object Storage and
 imports it server-side, so unlike the Azure gallery stage it does not
