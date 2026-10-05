@@ -12,7 +12,8 @@ version-aware `run-name` works natively for scheduled runs.
 
 > **A scheduled firing is a real release cycle.** Dispatching with defaults
 > runs the FULL pipeline, publishing included: AWS releases AMIs to all
-> regions + Marketplace + a wiki PR, Vagrant publishes boxes to HCP, Azure
+> regions + Marketplace + a wiki PR, Vagrant uploads boxes to S3 (HCP
+> publishing is off by default: HCP Vagrant closed on 2026-10-01), Azure
 > releases to the Compute Gallery and creates Marketplace drafts, OCI
 > creates a Compute Image and submits a Marketplace revision for
 > publishing (only Azure Live publishing stays manual). Tests gate

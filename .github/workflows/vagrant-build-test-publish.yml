@@ -8,7 +8,8 @@ run-name: >-
 # round-trip).
 #
 # Build + test come from shared-steps (run_test gates the test). Publishing is
-# gated by release_to_hcp.
+# gated by release_to_hcp, off by default since HCP Vagrant stopped accepting
+# new box versions on 2026-10-01 (it shuts down on 2026-12-31).
 #
 # Each box is published in-job, right after it is built and tested; publishes
 # run in parallel across the provider/variant matrix.
@@ -106,11 +107,15 @@ on:
           type: boolean
           default: true
 
+        # Off by default: HCP Vagrant stopped accepting new boxes and box
+        # versions on 2026-10-01 ("resource creation is currently disabled")
+        # and shuts down on 2026-12-31, so a publish can only fail. The boxes
+        # are still built, tested and uploaded to S3.
         release_to_hcp:
-          description: "Publish boxes to the HCP Vagrant Registry"
+          description: "Publish boxes to the HCP Vagrant Registry (closed to new versions since 2026-10-01)"
           required: true
           type: boolean
-          default: true
+          default: false
 
         notify_mattermost:
           description: "Send notification to Mattermost"
