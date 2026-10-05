@@ -80,7 +80,7 @@ jobs:
     runs-on: >-
       ${{
         github.repository_owner == 'AlmaLinux' &&
-          format('runs-on={0}/family=c8i.2xlarge+m8i.2xlarge+r8i.2xlarge/volume=100gb/image=ubuntu24-full-x64/spot=false/nested-virt', github.run_id)
+          format('runs-on={0}/family=c8a.2xlarge+c8i.2xlarge+m8a.2xlarge+m8i.2xlarge+r8a.2xlarge+r8i.2xlarge/volume=100gb/image=ubuntu24-full-x64/spot=false/nested-virt', github.run_id)
         ||
         'ubuntu-24.04'
       }}
