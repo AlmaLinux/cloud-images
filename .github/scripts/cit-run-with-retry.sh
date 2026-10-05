@@ -2,7 +2,8 @@
 # Run Google's cloud-image-tests inside a container, retrying in a different
 # GCP zone if the failure is a recoverable zone-capacity or
 # shape-availability error. Real test failures and other errors exit
-# immediately without retry.
+# immediately without retry. Suites that passed on an earlier attempt are
+# excluded from later ones, so a retry only reruns the suites that failed.
 #
 # Inputs are passed via environment variables (set by the composite action
 # at .github/actions/cit-run-with-retry/action.yml):
@@ -93,6 +94,25 @@ record_quota_failures() {
   ')
 }
 
+# CIT test package names that passed on an earlier attempt, passed to later
+# attempts via -exclude.
+passed_suites=()
+
+# Append to passed_suites every suite that the JUnit XML in $1 (the captured
+# log; CIT prints the XML to stdout) reports with no failures or errors. CIT
+# names each suite "<test package>-<image basename>", so strip that suffix to
+# get back the name that -filter/-exclude match on.
+record_passed_suites() {
+  local log_file="$1" suffix="-${IMAGE##*/}" tag name failures errors
+  while read -r tag; do
+    name=$(sed -n 's/.* name="\([^"]*\)".*/\1/p' <<< "${tag}")
+    failures=$(sed -n 's/.* failures="\([0-9]*\)".*/\1/p' <<< "${tag}")
+    errors=$(sed -n 's/.* errors="\([0-9]*\)".*/\1/p' <<< "${tag}")
+    [[ -n "${name}" && "${failures}" == 0 && "${errors}" == 0 ]] || continue
+    passed_suites+=("${name%"${suffix}"}")
+  done < <(grep -o '<testsuite [^>]*>' "${log_file}")
+}
+
 # Optionally shuffle the fallback zone list so retries spread across zones
 # rather than always hitting the same one first. first_attempt_zone is added
 # afterward, so it stays pinned to the head when set.
@@ -143,6 +163,12 @@ for i in "${!attempts[@]}"; do
     fi
   fi
 
+  exclude_arg=()
+  if (( ${#passed_suites[@]} > 0 )); then
+    exclude_arg=(-exclude "^($(IFS='|'; echo "${passed_suites[*]}"))$")
+    echo "Skipping suites that passed on an earlier attempt: ${passed_suites[*]}"
+  fi
+
   log=$(mktemp)
   echo "::group::cloud-image-tests attempt ${attempt_num}/${MAX_ATTEMPTS} zone='${zone:-auto}'"
   set -o pipefail
@@ -156,6 +182,7 @@ for i in "${!attempts[@]}"; do
     ${PARALLEL_COUNT:+-parallel_count ${PARALLEL_COUNT}} \
     ${PARALLEL_STAGGER:+-parallel_stagger ${PARALLEL_STAGGER}} \
     -filter "${FILTER}" \
+    "${exclude_arg[@]}" \
     -images "${IMAGE}" \
     ${SHAPE_FLAG} \
     "${zone_arg[@]}" 2>&1 | tee "${log}"
@@ -179,6 +206,7 @@ for i in "${!attempts[@]}"; do
       rm -f "${log}"
       exit "${exit_code}"
     fi
+    record_passed_suites "${log}"
     echo "::warning::Retryable failure in zone '${zone:-auto}' (exit ${exit_code}); waiting ${RETRY_DELAY_SECONDS}s before next zone"
     rm -f "${log}"
     sleep "${RETRY_DELAY_SECONDS}"
