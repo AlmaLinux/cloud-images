@@ -188,7 +188,9 @@ jobs:
       uses: ./.github/actions/cit-run-with-retry
       with:
         image: "${{ needs.init-data.outputs.image_path }}${{ inputs.image_override == '' && matrix.arch == 'aarch64' && '-arm64' || '' }}"
-        filter: '^(lssd|disk|vmspec)$'
+        # cvm also pins its own zone (us-central1-a), so running it per shape
+        # only repeats the same test and contends for that zone's capacity.
+        filter: '^(lssd|disk|vmspec|cvm)$'
         # When an arch-matching shape_override input is set, pin that shape;
         # otherwise default to the smoke-test shape for the arch.
         shape_flag: "${{ matrix.arch == 'aarch64' && inputs.aarch64_shape_override != '' && format('-arm64_shape {0}', inputs.aarch64_shape_override) || matrix.arch == 'x86_64' && inputs.x86_shape_override != '' && format('-x86_shape {0}', inputs.x86_shape_override) || matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
@@ -343,7 +345,7 @@ jobs:
         runtime: ${{ env.docker_cmd }}
         image: ${{ needs.init-data.outputs.image_path || inputs.image_override }}
         # `network` removed — too inconsistent (flaky pass/fail across reruns).
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        filter: '^(livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-x86_shape ${{ matrix.shape }}"
         parallel_count: '2'
         first_attempt_zone: ${{ matrix.zone || '' }}
@@ -446,7 +448,7 @@ jobs:
       with:
         image: "${{ needs.init-data.outputs.image_path || inputs.image_override }}${{ inputs.image_override == '' && '-arm64' || '' }}"
         # `network` removed — too inconsistent (flaky pass/fail across reruns).
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        filter: '^(livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-arm64_shape ${{ matrix.shape }}"
         parallel_count: ${{ matrix.parallel_count || '2' }}
         first_attempt_zone: ${{ matrix.zone || '' }}

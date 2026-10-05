@@ -88,14 +88,14 @@ Determines the GCP image path to test based on inputs. If `image_override` is pr
 
 #### 2. `test-gcp-initialtest` — Initial Smoke Tests
 
-Runs a subset of CIT tests (`lssd`, `disk`, `vmspec`) with **high parallelism** (`-parallel_count 20`) to get quick feedback on obvious regressions before the full per-shape matrix runs.
+Runs a subset of CIT tests (`lssd`, `disk`, `vmspec`, `cvm`) with **high parallelism** (`-parallel_count 20`) to get quick feedback on obvious regressions before the full per-shape matrix runs.
 
 - Runs for each architecture in the matrix.
 - Uses fixed shapes: `c4-standard-8` (x86_64), `c4a-standard-8` (aarch64).
 
 #### 3. `test-gcp-nonpershape` — Non-Per-Shape Tests
 
-Runs CIT tests that are hard-coded to specific shapes internally (filter: `lssd`, `disk`, `vmspec`). Running these against every shape would be redundant since CIT forces specific shapes regardless.
+Runs CIT tests that are hard-coded to specific shapes internally (filter: `lssd`, `disk`, `vmspec`, `cvm`). Running these against every shape would be redundant since CIT forces specific shapes regardless. `cvm` also forces its VMs into `us-central1-a`, so running it per shape only adds contention for that zone's capacity.
 
 - Uses a slower stagger (`-parallel_stagger 10s`).
 
@@ -105,7 +105,7 @@ These are the comprehensive tests that run after the initial smoke tests pass. E
 
 **CIT test filter:**
 ```
-cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|
+livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|
 imageboot|licensevalidation|network|security|hotattach|packagevalidation|ssh|metadata
 ```
 

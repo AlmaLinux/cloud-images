@@ -318,7 +318,9 @@ jobs:
       uses: ./.github/actions/cit-run-with-retry
       with:
         image: "${{ needs.init-data.outputs.image_path }}${{ matrix.arch == 'aarch64' && '-arm64' || '' }}"
-        filter: '^(lssd|disk|vmspec)$'
+        # cvm also pins its own zone (us-central1-a), so running it per shape
+        # only repeats the same test and contends for that zone's capacity.
+        filter: '^(lssd|disk|vmspec|cvm)$'
         shape_flag: "${{ matrix.arch == 'aarch64' && '-arm64_shape c4a-standard-8' || '-x86_shape c4-standard-8' }}"
         parallel_count: '20'
         parallel_stagger: '1s'
@@ -420,7 +422,7 @@ jobs:
       with:
         runtime: ${{ env.docker_cmd }}
         image: ${{ needs.init-data.outputs.image_path }}
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        filter: '^(livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-x86_shape ${{ matrix.shape }}"
         parallel_count: '2'
         first_attempt_zone: ${{ matrix.zone || '' }}
@@ -501,7 +503,7 @@ jobs:
       uses: ./.github/actions/cit-run-with-retry
       with:
         image: "${{ needs.init-data.outputs.image_path }}-arm64"
-        filter: '^(cvm|livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
+        filter: '^(livemigrate|suspendresume|loadbalancer|guestagent|hostnamevalidation|imageboot|licensevalidation|security|hotattach|packagevalidation|ssh|metadata)$'
         shape_flag: "-arm64_shape ${{ matrix.shape }}"
         parallel_count: ${{ matrix.parallel_count || '2' }}
         first_attempt_zone: ${{ matrix.zone || '' }}
