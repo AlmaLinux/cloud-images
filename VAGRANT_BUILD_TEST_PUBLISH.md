@@ -104,6 +104,22 @@ so the Parallels aarch64 box is built the Hyper-V way, as a
 | Just (re)build boxes (no publish) | `vagrant-build.yml` / `hyperv-build.yml` |
 | Publish a box that already exists at a URL | `vagrant-publish.yml` |
 
+## HCP Vagrant is shutting down
+
+HashiCorp is retiring HCP Vagrant
+([deprecation notice](https://developer.hashicorp.com/hcp/docs/vagrant/hcp-vagrant-eol)):
+
+| Date | What stops |
+| :--- | :--- |
+| 2026-10-01 | creating boxes and registries - in practice also new versions of existing boxes: `vagrant cloud publish` fails with "Vagrant Cloud request failed - resource creation is currently disabled" |
+| 2026-11-02 | support and maintenance |
+| 2026-12-31 | everything, including downloads of the existing `almalinux/*` boxes |
+
+So `release_to_hcp` defaults to `false`, and the scheduled runs (which take
+the defaults) build, test and upload the boxes to S3 without trying to
+publish them. The publish steps stay in place for a manual run while HCP
+still answers. Hosting the boxes elsewhere before 2026-12-31 is still open.
+
 ## Workflow inputs
 
 The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
@@ -119,7 +135,7 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64 and parallels-aarch64 legs, which are always build-only). |
 | `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
-| `release_to_hcp` | `true` | Publish boxes to the HCP Vagrant Registry. `false` = build+test only. |
+| `release_to_hcp` | `false` | Publish boxes to the HCP Vagrant Registry. `false` = build + test + S3 upload only. Off by default: see [HCP Vagrant is shutting down](#hcp-vagrant-is-shutting-down). |
 | `notify_mattermost` | `true` | Post per-box build / publish notifications to Mattermost. |
 
 ## Job layout
