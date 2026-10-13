@@ -29,8 +29,8 @@ rsyslog-logrotate
 -dracut-config-rescue
 -firewalld
 # anaconda adds qemu-guest-agent when it installs under KVM, as the
-# QEMU-built VMware and Parallels boxes are on the AlmaLinux org's arm64
-# runner; none of the aarch64 boxes wants it
+# QEMU-built VMware, Parallels and VirtualBox boxes are on the AlmaLinux
+# org's arm64 runner; none of the aarch64 boxes wants it
 -qemu-guest-agent
 %end
 
@@ -50,13 +50,13 @@ sed -i "s/^.*requiretty/# Defaults requiretty/" /etc/sudoers
 # permit root login via SSH with password authetication
 echo "PermitRootLogin yes" > /etc/ssh/sshd_config.d/01-permitrootlogin.conf
 
-# A TCG build (the QEMU-built VMware or Parallels box, or any aarch64 build
-# on an x86_64 runner) types console=ttyAMA0 into the installer's GRUB
-# command line (so anaconda's output goes to the captured serial console),
-# and anaconda copies the installer's console= arguments into the installed
-# boot loader configuration. Take it out again so the image's kernel command
-# line is the same as from an arm64 host, where nothing is added and these
-# two lines are no-ops.
+# A TCG build (the QEMU-built VMware, Parallels or VirtualBox box, or any
+# aarch64 build on an x86_64 runner) types console=ttyAMA0 into the
+# installer's GRUB command line (so anaconda's output goes to the captured
+# serial console), and anaconda copies the installer's console= arguments
+# into the installed boot loader configuration. Take it out again so the
+# image's kernel command line is the same as from an arm64 host, where
+# nothing is added and these two lines are no-ops.
 sed -i 's/ console=ttyAMA0//' /etc/default/grub
 grubby --update-kernel=ALL --remove-args="console=ttyAMA0"
 # The serial console= argument also makes anaconda switch GRUB to a serial

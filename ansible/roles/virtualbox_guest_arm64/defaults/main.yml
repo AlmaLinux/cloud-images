@@ -1,0 +1,4 @@
+---
+# Where the packer template uploads the Guest Additions ISO (the same path
+# the virtualbox-iso builder and the ezamriy.vbox_guest role use)
+vbox_additions_iso_path: /home/vagrant/VBoxGuestAdditions.iso
