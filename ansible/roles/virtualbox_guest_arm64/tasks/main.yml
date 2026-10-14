@@ -1,0 +1,112 @@
+---
+# The VirtualBox Guest Additions for an arm64 guest (VirtualBox 7.1+ on
+# Apple Silicon). The ezamriy.vbox_guest role runs the x86 installer
+# (VBoxLinuxAdditions.run); the ISO carries a separate arm64 one.
+#
+# The QEMU-built box installs them while running under QEMU, not
+# VirtualBox: the installer builds and installs the kernel modules and the
+# services, which then load on the first boot in VirtualBox. Its exit code
+# reflects the services it could not start here, so success is judged by the
+# built modules instead.
+
+- name: Gather package facts
+  package_facts:
+    manager: rpm
+
+- name: Detect missing Guest Additions build dependencies
+  set_fact:
+    vbox_guest_missing_deps: "{{ vbox_guest_missing_deps | default([]) + [item] }}"
+  loop:
+    - bzip2
+    - elfutils-libelf-devel
+    - gcc
+    - make
+    - perl
+  when: item not in ansible_facts.packages | list
+
+# The modules are built for the running kernel, so its own kernel-devel
+- name: Check for the running kernel's kernel-devel
+  command: rpm -q kernel-devel-{{ ansible_kernel }}
+  register: vbox_guest_kernel_devel
+  failed_when: false
+  changed_when: false
+
+- name: Add the running kernel's kernel-devel to the dependencies
+  set_fact:
+    vbox_guest_missing_deps: "{{ vbox_guest_missing_deps | default([]) + ['kernel-devel-' ~ ansible_kernel] }}"
+  when: vbox_guest_kernel_devel.rc != 0
+
+- name: Install the Guest Additions build dependencies
+  dnf:
+    name: "{{ vbox_guest_missing_deps }}"
+    state: present
+  when: vbox_guest_missing_deps is defined
+
+- name: Create mount point for the Guest Additions ISO
+  file:
+    path: /mnt/vbox-additions
+    state: directory
+    mode: "0755"
+
+- name: Mount the Guest Additions ISO
+  command: mount -o loop,ro {{ vbox_additions_iso_path | quote }} /mnt/vbox-additions
+  args:
+    creates: /mnt/vbox-additions/VBoxLinuxAdditions-arm64.run
+
+- name: Install the VirtualBox Guest Additions (arm64)
+  command: /mnt/vbox-additions/VBoxLinuxAdditions-arm64.run --nox11
+  register: vbox_additions_install
+  failed_when: false
+  changed_when: true
+
+- name: Show the Guest Additions installer output
+  debug:
+    var: vbox_additions_install.stdout_lines
+
+- name: Find the built Guest Additions kernel modules
+  find:
+    paths: /lib/modules/{{ ansible_kernel }}
+    patterns: "vboxguest.ko*,vboxsf.ko*"
+    recurse: true
+  register: vbox_additions_modules
+
+- name: Fail if the Guest Additions kernel modules were not built
+  assert:
+    that: vbox_additions_modules.files | map(attribute='path') | map('basename') | map('regex_replace', '\.ko.*$', '') | unique | length == 2
+    fail_msg: >-
+      vboxguest/vboxsf not built for {{ ansible_kernel }} (installer exit code
+      {{ vbox_additions_install.rc }}); see /var/log/vboxadd-setup.log
+    success_msg: "{{ vbox_additions_modules.files | map(attribute='path') | list }}"
+
+- name: Unmount the Guest Additions ISO
+  command: umount /mnt/vbox-additions
+  args:
+    removes: /mnt/vbox-additions/VBoxLinuxAdditions-arm64.run
+
+- name: Remove the Guest Additions mount point
+  file:
+    path: /mnt/vbox-additions
+    state: absent
+
+- name: Remove the Guest Additions ISO
+  file:
+    path: "{{ vbox_additions_iso_path }}"
+    state: absent
+
+- name: Remove the Guest Additions build dependencies
+  dnf:
+    name: "{{ vbox_guest_missing_deps }}"
+    state: absent
+  when: vbox_guest_missing_deps is defined
+
+- name: Find /var/log/vboxadd-* logs
+  find:
+    paths: /var/log
+    patterns: "vboxadd-*"
+  register: vboxadd_logs
+
+- name: Delete /var/log/vboxadd-* logs
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ vboxadd_logs.files }}"

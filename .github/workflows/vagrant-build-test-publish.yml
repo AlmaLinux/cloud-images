@@ -37,6 +37,15 @@ run-name: >-
 # test either (run_test forced off, offline validation of the raw disk only).
 # It is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
 #
+# The VirtualBox aarch64 box (vagrant_type ALL or vagrant_virtualbox; for
+# VirtualBox 7.1+ on Apple Silicon) is built the same way, as the
+# virtualbox-aarch64 leg of build-gh-hosted: installed and provisioned under
+# QEMU (TCG), with the VirtualBox Guest Additions ISO downloaded first, and
+# packed into a virtualbox box by tools/raw-to-vagrant-virtualbox.sh. No
+# runner can run VirtualBox ARM guests, so it has no live `vagrant up` test
+# either (run_test forced off, offline validation of the raw disk only). It
+# is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
+#
 # Stage implementations live in composite actions:
 #   .github/actions/shared-steps           - Packer build + vagrant up smoke test
 #   .github/actions/vagrant-publish-steps  - HCP Vagrant Registry publish of the local box
@@ -178,6 +187,12 @@ jobs:
               # Hyper-V; no live test, see the header. There is no AlmaLinux 8 box.
               VARIANTS_GH+=("parallels-aarch64")
           fi
+          if [ "${{ inputs.vagrant_type }}" = "vagrant_virtualbox" -o "${{ inputs.vagrant_type }}" = "ALL" ] \
+             && [ "${{ inputs.version_major }}" != "8" ]; then
+              # VirtualBox aarch64: built under QEMU (TCG) and converted, like
+              # Parallels; no live test, see the header. There is no AlmaLinux 8 box.
+              VARIANTS_GH+=("virtualbox-aarch64")
+          fi
 
           [ ${#VARIANTS_GH[@]} -ne 0 ] && matrix_gh=$(printf '"%s",' "${VARIANTS_GH[@]}")
           matrix_gh=${matrix_gh%,}  # Remove the trailing comma
@@ -218,7 +233,8 @@ jobs:
     needs: [init-data]
     if: ${{ needs.init-data.outputs.matrix_gh != '[]' }}
     # use runs-on runners if within the almalinux org, otherwise GH runners.
-    # The QEMU-built aarch64 legs (vmware-aarch64, parallels-aarch64):
+    # The QEMU-built aarch64 legs (vmware-aarch64, parallels-aarch64,
+    # virtualbox-aarch64):
     # - in the AlmaLinux org: RunsOn arm64 bare metal (a1.metal or a newer
     #   Graviton .metal, whichever is free), where shared-steps
     #   builds natively under KVM (-cpu host). No Vagrant exists for arm64
@@ -255,6 +271,10 @@ jobs:
             matrix_gh: parallels-aarch64
           - variant: 10-kitten-v2
             matrix_gh: parallels-aarch64
+          - variant: 10-v2
+            matrix_gh: virtualbox-aarch64
+          - variant: 10-kitten-v2
+            matrix_gh: virtualbox-aarch64
 
     env:
       TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
@@ -267,11 +287,11 @@ jobs:
           IFS=- read -r type arch <<< "${{ matrix.matrix_gh }}"
           echo "type=$type" >> $GITHUB_ENV
           echo "ARCH=$arch" >> $GITHUB_ENV
-          # Hyper-V and the QEMU-built VMware / Parallels aarch64 boxes have no
-          # live `vagrant up` test (their guests can't boot on the Linux runner),
-          # so force run_test off for them; honor the input for the libvirt /
-          # virtualbox legs.
-          if [ "$type" = "hyperv" ] || [ "$type" = "vmware" ] || [ "$type" = "parallels" ]; then
+          # Hyper-V and the QEMU-built VMware / Parallels / VirtualBox aarch64
+          # boxes have no live `vagrant up` test (their guests can't boot on the
+          # Linux runner), so force run_test off for them; honor the input for
+          # the libvirt / x86_64 virtualbox legs.
+          if [ "$type" = "hyperv" ] || [ "$type" = "vmware" ] || [ "$type" = "parallels" ] || [ "$type" = "virtualbox" ]; then
             echo "RUN_TEST=false" >> $GITHUB_ENV
           else
             echo "RUN_TEST=${{ inputs.run_test }}" >> $GITHUB_ENV
@@ -294,6 +314,27 @@ jobs:
           # packer template uploads into the guest (parallels_tools_iso_aarch64).
           curl -fsSL --retry 3 -o "${PRL_TOOLS_ISO}" "${PRL_TOOLS_ISO_URL}"
           ls -la "${PRL_TOOLS_ISO}"
+
+      - name: Download the VirtualBox Guest Additions ISO
+        if: env.type == 'virtualbox'
+        env:
+          # 7.2.20+: the first Guest Additions whose vboxsf builds against
+          # the EL10 / Kitten 6.12 kernels; its ISO carries the arm64 Linux
+          # installer (VBoxLinuxAdditions-arm64.run)
+          VBOX_VERSION: 7.2.20
+          VBOX_GA_ISO: VBoxGuestAdditions.iso
+        run: |
+          # The virtualbox-iso builder takes the Guest Additions ISO from the
+          # installed VirtualBox; the QEMU-built box installs it from this
+          # copy, which the packer template uploads into the guest
+          # (virtualbox_guest_additions_iso_aarch64). Verified against
+          # Oracle's published checksums.
+          base_url="https://download.virtualbox.org/virtualbox/${VBOX_VERSION}"
+          curl -fsSL --retry 3 -o "${VBOX_GA_ISO}" "${base_url}/VBoxGuestAdditions_${VBOX_VERSION}.iso"
+          expected=$(curl -fsSL --retry 3 "${base_url}/SHA256SUMS" | awk -v f="*VBoxGuestAdditions_${VBOX_VERSION}.iso" '$2 == f { print $1 }')
+          [ -n "${expected}" ] || { echo "[Error] No checksum for VBoxGuestAdditions_${VBOX_VERSION}.iso"; exit 1; }
+          echo "${expected}  ${VBOX_GA_ISO}" | sha256sum -c -
+          ls -la "${VBOX_GA_ISO}"
 
       - uses: ./.github/actions/shared-steps
         name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} image

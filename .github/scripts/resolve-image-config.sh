@@ -112,6 +112,27 @@ case "${type}_${version_major}" in
     aws_s3_path="images/kitten/10/vagrant/${timestamp}"
     ;;
 
+  # VirtualBox aarch64 box built under QEMU (TCG) and packed by
+  # tools/raw-to-vagrant-virtualbox.sh, like the Parallels box (the x86_64
+  # VirtualBox box is the vagrant_virtualbox type, built by VirtualBox)
+  virtualbox_9)
+    output_mask="AlmaLinux-${version_major}-Vagrant-virtualbox-*.${alma_arch}.box"
+    packer_source="qemu.${packer_source}"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  virtualbox_10)
+    packer_source="qemu.almalinux_10_vagrant_virtualbox_qemu_${alma_arch}"
+    output_mask="AlmaLinux-${version_major}-Vagrant-virtualbox-*.${alma_arch}.box"
+    aws_s3_path="images/${version_major}/${release}/vagrant/${timestamp}"
+    ;;
+
+  virtualbox*kitten*)
+    packer_source="qemu.almalinux_kitten_10_vagrant_virtualbox_qemu_${alma_arch}"
+    output_mask="AlmaLinux-Kitten-Vagrant-virtualbox-10-*.${alma_arch}.box"
+    aws_s3_path="images/kitten/10/vagrant/${timestamp}"
+    ;;
+
   azure*kitten*)
     packer_source="almalinux_kitten_10_${type}_${alma_arch}"
     [[ ${variant} == *"v2"* ]] && packer_source="${packer_source}_v2"

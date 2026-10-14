@@ -7,8 +7,8 @@ box lifecycle in a single `workflow_dispatch`:
 
 1. **Build** the boxes with Packer (one Packer builder per provider:
    `libvirt`, `virtualbox`, `vmware`, `hyperv`; x86_64, plus the
-   `x86_64_v2` microarch for AL10 / Kitten, and the VMware and Parallels
-   aarch64 boxes for 9, 10 and Kitten).
+   `x86_64_v2` microarch for AL10 / Kitten, and the VMware, Parallels and
+   VirtualBox aarch64 boxes for 9, 10 and Kitten).
 2. **Test** each box with a live `vagrant up` smoke test on the build
    runner (via `shared-steps`, gated by `run_test`). Hyper-V and the
    QEMU-built aarch64 boxes are the exceptions - see below.
@@ -96,6 +96,47 @@ so the Parallels aarch64 box is built the Hyper-V way, as a
   is published like the others. It is excluded for the `-v2` variants and
   for AlmaLinux 8 (no Parallels aarch64 box for 8).
 
+### VirtualBox aarch64 is built under QEMU (no live test)
+
+VirtualBox 7.1+ runs arm64 guests only on Apple silicon Macs, so no runner
+can run them either, and the VirtualBox aarch64 box is built the Parallels
+way, as a `virtualbox-aarch64` leg of `build-gh-hosted`, for `vagrant_type`
+`ALL` or `vagrant_virtualbox` (the x86_64 VirtualBox box is still built by
+VirtualBox itself, as the `vagrant_virtualbox` leg):
+
+- the leg first downloads the VirtualBox Guest Additions ISO
+  (`https://download.virtualbox.org/virtualbox/7.2.20/VBoxGuestAdditions_7.2.20.iso`,
+  checked against Oracle's `SHA256SUMS`), which the `virtualbox-iso` builder
+  would take from the installed VirtualBox. 7.2.20 is the first release whose
+  `vboxsf` builds against the EL10 / Kitten 6.12 kernels; its ISO carries the
+  arm64 Linux installer (`VBoxLinuxAdditions-arm64.run`);
+- the `*virtualbox*aarch64` qemu sources (`almalinux-9-virtualbox-aarch64`,
+  `almalinux_10_vagrant_virtualbox_qemu_aarch64`,
+  `almalinux_kitten_10_vagrant_virtualbox_qemu_aarch64`) install from the
+  boot ISO under QEMU the same way as the Parallels aarch64 box (natively on
+  the org's arm64 runner, under TCG elsewhere). Packer uploads the Guest
+  Additions ISO (`virtualbox_guest_additions_iso_aarch64`) and
+  `ansible/vagrant.yml` provisions the guest as a VirtualBox box
+  (`packer_provider=virtualbox-iso`): on aarch64 the `virtualbox_guest_arm64`
+  role installs the Guest Additions with the arm64 installer (the
+  `ezamriy.vbox_guest` role runs only the x86 one). Under QEMU the installer
+  builds the `vboxguest` / `vboxsf` modules but cannot start the services, so
+  the role checks the built modules instead of the installer's exit code;
+- `tools/raw-to-vagrant-virtualbox.sh` packs the raw disk into a
+  `virtualbox` box: `box.ovf` from `tpl/vagrant/virtualbox/box-aarch64.ovf`
+  (exported by VirtualBox 7.2 from an ARM VM of its defaults for Red Hat
+  9.x / 10.x ARM 64-bit: `ARMv8Virtual` chipset, EFI, one VirtioSCSI disk, a
+  virtio NIC on NAT, 2 vCPUs / 2048 MB; fresh VM/disk UUIDs and MAC
+  address), the disk as a streamOptimized VMDK (`box-disk001.vmdk`, converted
+  by `qemu-img`), a `Vagrantfile` with the base MAC, and `metadata.json`
+  with `arm64`. The kickstart's generic initramfs boots on the VirtioSCSI
+  disk and virtio NIC, and shim's fallback boot loader
+  (`EFI/BOOT/BOOTAA64.EFI`) boots it without saved EFI variables;
+- the leg forces `run_test=false`: only `shared-steps`' offline validation
+  of the raw disk (release, architecture, package list) runs, then the box
+  is published like the others. It is excluded for the `-v2` variants and
+  for AlmaLinux 8 (no VirtualBox aarch64 box for 8).
+
 ### When to use which
 
 | Use | Workflow |
@@ -132,7 +173,7 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `vagrant_type` | `ALL` | `ALL`, `vagrant_libvirt`, `vagrant_virtualbox`, `vagrant_vmware`, `vagrant_hyperv`, `vagrant_parallels`. |
 | `self-hosted` | `true` | Build the self-hosted providers on a self-hosted runner. |
 | `self_hosted_runner` | `aws-ec2` | `self-hosted` (manual) or `aws-ec2`. Routes libvirt/virtualbox to the self-hosted leg when set to `self-hosted`. |
-| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64 and parallels-aarch64 legs, which are always build-only). |
+| `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64, parallels-aarch64 and virtualbox-aarch64 legs, which are always build-only). |
 | `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
 | `release_to_hcp` | `false` | Publish boxes to the HCP Vagrant Registry. `false` = build + test + S3 upload only. Off by default: see [HCP Vagrant is shutting down](#hcp-vagrant-is-shutting-down). |
@@ -143,13 +184,15 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 ```
 init-data  (computes matrix_gh / matrix_sh from vagrant_type; adds
  |          hyperv-x86_64 to matrix_gh for ALL / vagrant_hyperv,
- |          vmware-aarch64 for ALL / vagrant_vmware and parallels-aarch64
- |          for ALL / vagrant_parallels, except AlmaLinux 8)
+ |          vmware-aarch64 for ALL / vagrant_vmware, parallels-aarch64
+ |          for ALL / vagrant_parallels and virtualbox-aarch64 for ALL /
+ |          vagrant_virtualbox, except AlmaLinux 8)
  |
  |- build-gh-hosted (matrix_gh x variant)   -. shared-steps build (+ vagrant up
  |     libvirt / virtualbox / hyperv /        | test, except hyperv and
- |     vmware-aarch64 / parallels-aarch64     | the aarch64 legs), then
- |      |                                     | vagrant-publish-steps in-job
+ |     vmware- / parallels- / virtualbox-     | the aarch64 legs), then
+ |     aarch64                                | vagrant-publish-steps in-job
+ |      |                                     |
  |      '- publish-aarch64 (org only: the     |
  |         aarch64 boxes built on arm64)      |
  |- start-self-hosted-runner (fork EC2)       |
@@ -172,6 +215,7 @@ an x86_64 runner. Provider routing (matching `vagrant-build.yml`):
 | hyperv | `build-gh-hosted` leg | no (build-only) |
 | vmware aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
 | parallels aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
+| virtualbox aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
 
 ### Publishing: parallel, with retry-on-collision
 
@@ -210,7 +254,7 @@ falls back to an interactive browser login that hangs in CI).
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
-| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` legs: arm64 `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
+| `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` / `virtualbox-aarch64` legs: arm64 `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
 | `publish-aarch64` | `ubuntu-24.04` | - (not run) |
 | `build-self-hosted` | `r8i.2xlarge`, `ami=<AL9 x86_64>`, `volume=60g`, `nested-virt`, `spot=false` | EC2 `c5n.metal` (`EC2_AMI_ID_AL9_X86_64`) or a manual self-hosted runner |
 
@@ -221,9 +265,9 @@ lives on the self-hosted leg. **Hyper-V now builds on `build-gh-hosted`'s
 `hyperv-build.yml` used - this matches the metal-to-`r8i.2xlarge`
 migration the vagrant build already made; KVM is available either way.
 
-The `vmware-aarch64` and `parallels-aarch64` legs build on arm64 bare
-metal (`a1.metal` or a newer Graviton `.metal`, whichever is free) in the
-AlmaLinux org, where shared-steps runs QEMU natively under KVM (`-cpu
+The `vmware-aarch64`, `parallels-aarch64` and `virtualbox-aarch64` legs
+build on arm64 bare metal (`a1.metal` or a newer Graviton `.metal`,
+whichever is free) in the AlmaLinux org, where shared-steps runs QEMU natively under KVM (`-cpu
 host`, the runner's own firmware), like the GenericCloud aarch64 build.
 Forks have no arm64 runner, so the legs run on GitHub's x86_64 Ubuntu
 24.04 like the others, and shared-steps emulates their install under QEMU

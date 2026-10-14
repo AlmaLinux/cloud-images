@@ -11,7 +11,10 @@
       when: is_unified_boot is defined
     - vagrant_guest
     - role: ezamriy.vbox_guest
-      when: packer_provider == 'virtualbox-iso'
+      when: packer_provider == 'virtualbox-iso' and ansible_architecture == 'x86_64'
+    # The ezamriy.vbox_guest role runs the x86 installer only
+    - role: virtualbox_guest_arm64
+      when: packer_provider == 'virtualbox-iso' and ansible_architecture == 'aarch64'
     - role: vmware_guest
       when: packer_provider == 'vmware-iso'
     - role: parallels_guest

@@ -1903,6 +1903,15 @@ variable "parallels_tools_iso_aarch64" {
   default = "prl-tools-lin-arm.iso"
 }
 
+# VirtualBox
+
+variable "virtualbox_guest_additions_iso_aarch64" {
+  description = "Local path of the VirtualBox Guest Additions ISO the QEMU-built VirtualBox AArch64 box installs (the virtualbox-iso builder brings its own)"
+
+  type    = string
+  default = "VBoxGuestAdditions.iso"
+}
+
 # Oracle Cloud Infrastructure (OCI)
 
 local "oci_boot_command_8_x86_64" {
