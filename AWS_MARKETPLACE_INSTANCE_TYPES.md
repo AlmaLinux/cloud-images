@@ -116,7 +116,11 @@ Edit the list in the workflow to add or remove patterns.
   seller account (the ones the release workflow uses), with
   `aws-marketplace:ListEntities`, `DescribeEntity`, `StartChangeSet` and
   `DescribeChangeSet` (on the products and their offers), and
-  `ec2:DescribeRegions` / `ec2:DescribeInstanceTypes`.
+  `ec2:DescribeRegions` / `ec2:DescribeInstanceTypes`. In the AlmaLinux
+  account these are the CI bot's (`bots/almalinux-cloud-bot`), granted by
+  the `almalinux_cloud_ec2` policy. If no region returns any instance type
+  (for example without `ec2:DescribeInstanceTypes`), the run fails rather
+  than report every product as up to date.
 - Secret `MATTERMOST_WEBHOOK_URL` and variable `MATTERMOST_CHANNEL`.
 
 Scheduled runs happen only in the `AlmaLinux/cloud-images` repository; forks

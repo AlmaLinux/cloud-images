@@ -97,6 +97,10 @@ def ec2_instance_types():
                 types[it["t"]] = {"arch": set(it["a"] or []), "current": bool(it["c"]),
                                   "ena": it["e"] != "unsupported"}
     log(f"[Info] EC2: {len(types)} instance types in {len(regions)} regions")
+    # Every region failing (e.g. no ec2:DescribeInstanceTypes) would make
+    # every product look up to date
+    if not types:
+        raise RuntimeError("EC2: no instance types in any region, see the warnings above")
     return types
 
 
