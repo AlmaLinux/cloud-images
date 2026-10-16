@@ -14,9 +14,9 @@ run-name: >-
 # NOTE: dispatching with defaults means the FULL pipeline runs, including
 # publishing - a scheduled firing is a real release cycle: AWS releases
 # AMIs to all regions + Marketplace + wiki PR, Vagrant publishes boxes to
-# HCP, Azure releases to the gallery and creates Marketplace drafts, OCI
-# creates a Compute Image and submits a Marketplace revision for
-# publishing (only Azure Live publishing stays manual). Tests gate
+# the Vagrant box catalog on S3, Azure releases to the gallery and creates
+# Marketplace drafts, OCI creates a Compute Image and submits a Marketplace
+# revision for publishing (only Azure Live publishing stays manual). Tests gate
 # publishing inside each workflow. gcp-build-test-publish.yml is
 # deliberately NOT scheduled.
 #

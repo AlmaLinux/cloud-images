@@ -3,16 +3,21 @@ run-name: >-
   Vagrant: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Test and Publish (${{ inputs.vagrant_type }})
 
 # Unified Vagrant pipeline: build the boxes with Packer, run the `vagrant up`
-# smoke test, and publish each box to the HCP Vagrant Registry - all on the
-# same runner (the publish stage runs in-job on the locally-built .box, no S3
-# round-trip).
+# smoke test, upload them to S3, and publish them in the AlmaLinux Vagrant box
+# catalog on S3 (https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant/,
+# which replaces the HCP Vagrant Registry: it stopped accepting new box
+# versions on 2026-10-01 and shuts down on 2026-12-31).
 #
-# Build + test come from shared-steps (run_test gates the test). Publishing is
-# gated by release_to_hcp, off by default since HCP Vagrant stopped accepting
-# new box versions on 2026-10-01 (it shuts down on 2026-12-31).
-#
-# Each box is published in-job, right after it is built and tested; publishes
-# run in parallel across the provider/variant matrix.
+# Build + test + S3 upload come from shared-steps (run_test gates the live
+# test). Each build leg whose box passed its test - the `vagrant up` test, or
+# the offline validation for the legs without one - records it for the
+# catalog; the publish-catalog job then adds all of them at once: one new
+# version per catalog box (almalinux/10, almalinux/10-x86_64_v2, ...) with all
+# its providers, so legs never race on the same catalog file and users never
+# see a partly published version. Publishing is gated by release_to_catalog
+# (on by default, so the scheduled runs publish) and runs in the AlmaLinux
+# org's almalinux/cloud-images repository only - forks and ci-dev share the
+# bucket, and must not change the production catalog.
 #
 # Hyper-V (vagrant_type ALL or vagrant_hyperv) builds as a leg of
 # build-gh-hosted (x86_64 GitHub/RunsOn runner). It has NO live `vagrant up`
@@ -46,9 +51,10 @@ run-name: >-
 # either (run_test forced off, offline validation of the raw disk only). It
 # is excluded for the -v2 variants, and there is no AlmaLinux 8 box.
 #
-# Stage implementations live in composite actions:
-#   .github/actions/shared-steps           - Packer build + vagrant up smoke test
-#   .github/actions/vagrant-publish-steps  - HCP Vagrant Registry publish of the local box
+# Stage implementations:
+#   .github/actions/shared-steps        - Packer build + vagrant up smoke test + S3 upload
+#   .github/scripts/vagrant-catalog-add.py - add the built boxes to the catalog
+#     (tools/vagrant_catalog.py builds the whole catalog from scratch)
 
 on:
   workflow_dispatch:
@@ -116,15 +122,14 @@ on:
           type: boolean
           default: true
 
-        # Off by default: HCP Vagrant stopped accepting new boxes and box
-        # versions on 2026-10-01 ("resource creation is currently disabled")
-        # and shuts down on 2026-12-31, so a publish can only fail. The boxes
-        # are still built, tested and uploaded to S3.
-        release_to_hcp:
-          description: "Publish boxes to the HCP Vagrant Registry (closed to new versions since 2026-10-01)"
+        # The AlmaLinux Vagrant box catalog on S3 (replaces the HCP Vagrant
+        # Registry, closed to new versions since 2026-10-01). Needs
+        # upload_to_s3; applies in almalinux/cloud-images only.
+        release_to_catalog:
+          description: "Publish the tested boxes in the Vagrant box catalog on S3 (almalinux/cloud-images only)"
           required: true
           type: boolean
-          default: false
+          default: true
 
         notify_mattermost:
           description: "Send notification to Mattermost"
@@ -133,6 +138,13 @@ on:
           default: true
 env:
   PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
+  # The Vagrant box catalog: s3://<AWS_S3_BUCKET>/<VAGRANT_CATALOG_PREFIX>/<org>/<box>[.json],
+  # served at https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/<prefix>/ (the
+  # address users set as VAGRANT_SERVER_URL); the box URLs in it point at
+  # VAGRANT_BOX_BASE_URL/<S3 key>
+  VAGRANT_CATALOG_PREFIX: vagrant
+  VAGRANT_CATALOG_ORG: almalinux
+  VAGRANT_BOX_BASE_URL: https://${{ vars.AWS_S3_BUCKET }}.s3.amazonaws.com
 
 jobs:
   init-data:
@@ -143,7 +155,6 @@ jobs:
       date_stamp: ${{ steps.date-time-stamp.outputs.date_stamp }}
       matrix_gh: ${{ steps.set-matrix.outputs.matrix_gh }}
       matrix_sh: ${{ steps.set-matrix.outputs.matrix_sh }}
-      matrix_aarch64: ${{ steps.set-matrix.outputs.matrix_aarch64 }}
     steps:
       - name: Set matrix
         id: set-matrix
@@ -199,11 +210,6 @@ jobs:
           echo matrix_gh=$(jq -c <<< [${matrix_gh}]) >> $GITHUB_OUTPUT
           echo "[Debug] on GitHub Hosted [${matrix_gh}]"
 
-          # The aarch64 legs of matrix_gh: in the AlmaLinux org they build on
-          # an arm64 runner, which has no Vagrant to publish with, so the
-          # publish-aarch64 job publishes them from an x86_64 runner
-          echo matrix_aarch64=$(jq -c <<< "[${matrix_gh}]" | jq -c 'map(select(endswith("-aarch64")))') >> $GITHUB_OUTPUT
-
           [ ${#VARIANTS_SH[@]} -ne 0 ] && matrix_sh=$(printf '"%s",' "${VARIANTS_SH[@]}")
           matrix_sh=${matrix_sh%,}  # Remove the trailing comma
           echo matrix_sh=$(jq -c <<< [${matrix_sh}]) >> $GITHUB_OUTPUT
@@ -237,12 +243,10 @@ jobs:
     # virtualbox-aarch64):
     # - in the AlmaLinux org: RunsOn arm64 bare metal (a1.metal or a newer
     #   Graviton .metal, whichever is free), where shared-steps
-    #   builds natively under KVM (-cpu host). No Vagrant exists for arm64
-    #   Linux, so their box is handed to the publish-aarch64 job, which
-    #   publishes it from an x86_64 runner.
+    #   builds natively under KVM (-cpu host).
     # - elsewhere: GitHub's x86_64 Ubuntu 24.04, like the other legs, where
     #   shared-steps emulates the install under TCG (see its environment
-    #   step for the CPU model), and publishes in-job.
+    #   step for the CPU model).
     # No AlmaLinux 8 box is built on the aarch64 legs.
     runs-on: >-
       ${{
@@ -253,9 +257,6 @@ jobs:
         ||
         'ubuntu-24.04'
       }}
-    # Serialize publishes per box: every provider of the same box (matrix.variant
-    # -> same HCP box+version) runs one at a time; different boxes (10 vs 10-v2)
-    # run in parallel. cancel-in-progress:false queues instead of cancelling.
     strategy:
       fail-fast: false
       matrix:
@@ -356,86 +357,35 @@ jobs:
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
-      - uses: ./.github/actions/vagrant-publish-steps
-        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_gh }} box to HCP
-        if: ${{ inputs.release_to_hcp && runner.arch != 'ARM64' }}
-        with:
-          image_file: ${{ env.IMAGE_FILE }}
-          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
-          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
-          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
-          HCP_ORG: ${{ vars.HCP_ORG }}
-          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
-          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-
-      # arm64 runner (the aarch64 legs in the AlmaLinux org): no Vagrant for
-      # arm64 Linux, so hand the box and its S3 URL to publish-aarch64
-      - name: Save the box URL for the x86_64 publish job
-        if: ${{ inputs.release_to_hcp && runner.arch == 'ARM64' }}
+      # Record the box for the publish-catalog job: only once it is on S3 and
+      # passed its test (got_pkgs_list: the `vagrant up` test, or the offline
+      # validation for the legs without one), and only in the repository
+      # that publishes the catalog
+      - name: Record the box for the catalog
+        if: ${{ inputs.release_to_catalog && inputs.upload_to_s3 && github.repository == 'AlmaLinux/cloud-images' && env.got_pkgs_list == 'true' }}
         run: |
-          # Save the box URL for the x86_64 publish job
-          echo "BOX_URL=${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}" > box-publish.env
-          cat box-publish.env
+          # Record the box for the catalog
+          python3 - <<'EOF'
+          import json, os
+          image = os.environ["IMAGE_FILE"]
+          with open(f"{image}.sha256sum") as f:
+              sha256 = f.read().split()[0]
+          entry = {"file": os.environ["IMAGE_NAME"],
+                   "s3_key": f"{os.environ['AWS_S3_PATH']}/{os.environ['IMAGE_NAME']}",
+                   "sha256": sha256}
+          with open("catalog-entry.json", "w") as f:
+              json.dump(entry, f)
+          print(json.dumps(entry, indent=2))
+          EOF
 
-      - name: Hand the box to the x86_64 publish job
-        if: ${{ inputs.release_to_hcp && runner.arch == 'ARM64' }}
+      - name: Hand the box over to the publish-catalog job
+        if: ${{ inputs.release_to_catalog && inputs.upload_to_s3 && github.repository == 'AlmaLinux/cloud-images' && env.got_pkgs_list == 'true' }}
         uses: actions/upload-artifact@v7
         with:
-          name: aarch64-box-${{ matrix.variant }}-${{ matrix.matrix_gh }}
-          path: |
-            ${{ env.IMAGE_FILE }}
-            box-publish.env
+          name: catalog-entry-${{ matrix.variant }}-${{ matrix.matrix_gh }}
+          path: catalog-entry.json
           retention-days: 1
-          # the box is already gzip-compressed
-          compression-level: 0
           if-no-files-found: error
-
-  # Publish the boxes the aarch64 legs of build-gh-hosted built on an arm64
-  # runner (AlmaLinux org only, see its runs-on): Vagrant exists only for
-  # x86_64 Linux, so this x86_64 job takes the box over as an artifact and
-  # runs the same vagrant-publish-steps the other legs run in-job.
-  publish-aarch64:
-    name: ${{ matrix.variant }} ${{ matrix.matrix_gh }} publish
-    needs: [init-data, build-gh-hosted]
-    if: ${{ !cancelled() && inputs.release_to_hcp && github.repository_owner == 'AlmaLinux' && needs.init-data.outputs.matrix_aarch64 != '[]' }}
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # aarch64 has no x86_64_v2 variant
-        variant: ${{ fromJSON(format('["{0}"]', inputs.version_major)) }}
-        matrix_gh: ${{ fromJSON(needs.init-data.outputs.matrix_aarch64) }}
-
-    steps:
-      - name: Checkout ${{ github.action_repository }}
-        uses: actions/checkout@v6
-
-      - name: Take over the box built on the arm64 runner
-        uses: actions/download-artifact@v8
-        with:
-          name: aarch64-box-${{ matrix.variant }}-${{ matrix.matrix_gh }}
-
-      - name: Locate the box
-        run: |
-          # Locate the box
-          image_file=$(ls -1 AlmaLinux-*.aarch64.box | head -n 1)
-          [ -n "${image_file}" ] || { echo "[Error] no aarch64 box in the artifact"; exit 1; }
-          ls -la "${image_file}"
-          echo "IMAGE_FILE=${image_file}" >> "$GITHUB_ENV"
-          cat box-publish.env >> "$GITHUB_ENV"
-
-      - uses: ./.github/actions/vagrant-publish-steps
-        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_gh }} box to HCP
-        with:
-          image_file: ${{ env.IMAGE_FILE }}
-          image_url: ${{ env.BOX_URL }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
-          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
-          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
-          HCP_ORG: ${{ vars.HCP_ORG }}
-          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
-          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
 
   # The job is to start self-hosted runner on AWS EC2 instance if not in the almalinux org
   # It does nothing if in the almalinux org, so 'Setup and start runner' step is skipped
@@ -546,15 +496,166 @@ jobs:
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
 
-      - uses: ./.github/actions/vagrant-publish-steps
-        name: Publish ${{ matrix.variant }} ${{ matrix.matrix_sh }} box to HCP
-        if: ${{ inputs.release_to_hcp }}
+      # Record the box for the publish-catalog job: only once it is on S3 and
+      # passed its test (got_pkgs_list: the `vagrant up` test, or the offline
+      # validation for the legs without one), and only in the repository
+      # that publishes the catalog
+      - name: Record the box for the catalog
+        if: ${{ inputs.release_to_catalog && inputs.upload_to_s3 && github.repository == 'AlmaLinux/cloud-images' && env.got_pkgs_list == 'true' }}
+        run: |
+          # Record the box for the catalog
+          python3 - <<'EOF'
+          import json, os
+          image = os.environ["IMAGE_FILE"]
+          with open(f"{image}.sha256sum") as f:
+              sha256 = f.read().split()[0]
+          entry = {"file": os.environ["IMAGE_NAME"],
+                   "s3_key": f"{os.environ['AWS_S3_PATH']}/{os.environ['IMAGE_NAME']}",
+                   "sha256": sha256}
+          with open("catalog-entry.json", "w") as f:
+              json.dump(entry, f)
+          print(json.dumps(entry, indent=2))
+          EOF
+
+      - name: Hand the box over to the publish-catalog job
+        if: ${{ inputs.release_to_catalog && inputs.upload_to_s3 && github.repository == 'AlmaLinux/cloud-images' && env.got_pkgs_list == 'true' }}
+        uses: actions/upload-artifact@v7
         with:
-          image_file: ${{ env.IMAGE_FILE }}
-          image_url: ${{ inputs.upload_to_s3 && format('https://{0}.s3-accelerate.dualstack.amazonaws.com/{1}/{2}', vars.AWS_S3_BUCKET, env.AWS_S3_PATH, env.IMAGE_NAME) || '' }}
-          notify_mattermost: ${{ inputs.notify_mattermost }}
-          HCP_CLIENT_ID: ${{ secrets.HCP_CLIENT_ID }}
-          HCP_CLIENT_SECRET: ${{ secrets.HCP_CLIENT_SECRET }}
-          HCP_ORG: ${{ vars.HCP_ORG }}
+          name: catalog-entry-${{ matrix.variant }}-${{ matrix.matrix_sh }}
+          path: catalog-entry.json
+          retention-days: 1
+          if-no-files-found: error
+
+  # Publish the boxes the build legs recorded (on S3 and tested) in the
+  # Vagrant box catalog on S3, all at once: download the touched catalog
+  # files, add one version per catalog box with all its providers, keep the
+  # previous files under <prefix>/.history/<time stamp>/, and upload the new
+  # ones. AlmaLinux org's almalinux/cloud-images only (see the header).
+  publish-catalog:
+    name: Publish the boxes to the Vagrant catalog
+    needs: [init-data, build-gh-hosted, build-self-hosted]
+    if: ${{ !cancelled() && inputs.release_to_catalog && inputs.upload_to_s3 && github.repository == 'AlmaLinux/cloud-images' }}
+    runs-on: ubuntu-24.04
+    # One catalog update at a time, across runs too: a catalog file's
+    # download-change-upload must not interleave with another. Queued, not
+    # cancelled.
+    concurrency:
+      group: vagrant-catalog
+      cancel-in-progress: false
+    env:
+      TIME_STAMP: ${{ needs.init-data.outputs.time_stamp }}
+      BUCKET: ${{ vars.AWS_S3_BUCKET }}
+
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      # No artifact at all (every leg failed or was not tested) is not an
+      # error here: the next step finds no box and the job does nothing
+      - name: Take over the recorded boxes
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: catalog-entry-*
+          path: catalog-entries
+
+      - name: List the recorded boxes
+        id: entries
+        run: |
+          # List the recorded boxes
+          echo "CATALOG_URL=https://${BUCKET}.s3.us-east-1.amazonaws.com/${VAGRANT_CATALOG_PREFIX}" >> "$GITHUB_ENV"
+          entries=$(find catalog-entries -name catalog-entry.json 2>/dev/null | sort || true)
+          echo "count=$(echo -n "${entries}" | grep -c . || true)" >> "$GITHUB_OUTPUT"
+          for entry in ${entries}; do cat "${entry}"; echo; done
+          [ -n "${entries}" ] || echo "[Info] No tested box to publish"
+
+      - name: Configure AWS credentials
+        if: steps.entries.outputs.count != '0'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Add the boxes to the catalog
+        if: steps.entries.outputs.count != '0'
+        run: |
+          # Add the boxes to the catalog
+          {
+            echo "### Vagrant box catalog"
+            echo ""
+            echo "Catalog: ${CATALOG_URL}/ (\`VAGRANT_SERVER_URL\`)"
+            echo ""
+          } > catalog-report.md
+          # shellcheck disable=SC2046 # one argument per entry file
+          .github/scripts/vagrant-catalog-add.py \
+            --entry $(find catalog-entries -name catalog-entry.json | sort) \
+            --catalog-url "${CATALOG_URL}" \
+            --box-url "${VAGRANT_BOX_BASE_URL}" \
+            --org "${VAGRANT_CATALOG_ORG}" \
+            --out catalog-new \
+            --previous catalog-previous \
+            --changed catalog-changed.txt \
+            --report catalog-report.md
+          cat catalog-report.md
+
+      - name: Upload the catalog to S3
+        if: steps.entries.outputs.count != '0'
+        run: |
+          # Upload the catalog to S3
+          prefix="${VAGRANT_CATALOG_PREFIX}/${VAGRANT_CATALOG_ORG}"
+          while read -r box; do
+            # The previous file, private (untagged), to roll back from
+            aws s3 cp --only-show-errors "catalog-previous/${VAGRANT_CATALOG_ORG}/${box}.json" \
+              "s3://${BUCKET}/${VAGRANT_CATALOG_PREFIX}/.history/${TIME_STAMP}/${VAGRANT_CATALOG_ORG}/${box}.json"
+            # <box> for VAGRANT_SERVER_URL (Vagrant requires the JSON
+            # content type), <box>.json for browsers and box_url
+            for name in "${box}" "${box}.json"; do
+              aws s3api put-object --bucket "${BUCKET}" --key "${prefix}/${name}" \
+                --body "catalog-new/${VAGRANT_CATALOG_ORG}/${name}" \
+                --content-type application/json --cache-control 'max-age=300' \
+                --tagging 'public=yes' --output text --query ETag
+            done
+          done < catalog-changed.txt
+
+      - name: Check the published catalog
+        if: steps.entries.outputs.count != '0'
+        run: |
+          # Check the published catalog: public, JSON, and what was uploaded
+          while read -r box; do
+            for name in "${box}" "${box}.json"; do
+              url="${CATALOG_URL}/${VAGRANT_CATALOG_ORG}/${name}"
+              type=$(curl -fsSI "${url}" | tr -d '\r' | awk 'tolower($1) == "content-type:" { print $2 }')
+              [ "${type}" = "application/json" ] || { echo "[Error] ${url}: content type '${type}'"; exit 1; }
+              curl -fsS "${url}" | cmp -s - "catalog-new/${VAGRANT_CATALOG_ORG}/${name}" \
+                || { echo "[Error] ${url} differs from the uploaded file"; exit 1; }
+              echo "[Info] ${url}: OK"
+            done
+          done < catalog-changed.txt
+
+      - name: Print job summary
+        if: always() && steps.entries.outputs.count != '0' && hashFiles('catalog-report.md') != ''
+        run: cat catalog-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read the Mattermost message
+        if: always() && inputs.notify_mattermost && steps.entries.outputs.count != '0'
+        run: |
+          {
+            echo 'CATALOG_REPORT<<EOF'
+            sed -n 's/^- //p' catalog-report.md 2>/dev/null | sed 's/^/- /'
+            echo EOF
+          } >> "$GITHUB_ENV"
+
+      - name: Send notification to Mattermost
+        uses: mattermost/action-mattermost-notify@master
+        if: always() && inputs.notify_mattermost && steps.entries.outputs.count != '0'
+        with:
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+          TEXT: |
+            :almalinux: **Vagrant box catalog**: ${{ job.status == 'success' && 'published' || 'publishing FAILED' }}, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            ${{ env.CATALOG_REPORT }}
+
+            Catalog: ${{ env.CATALOG_URL }}/
