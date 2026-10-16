@@ -1,0 +1,150 @@
+name: "AWS: Sync Marketplace instance types"
+run-name: >-
+  AWS: Sync Marketplace instance types${{ inputs.product && inputs.product != 'ALL' && format(' of {0}', inputs.product) || '' }}${{ inputs.sync && ' (sync)' || ' (report only)' }}
+
+# An AWS Marketplace AMI product carries an explicit list of the instance
+# types it can be launched on, and AWS does not add new instance families to
+# existing products: customers launching an AlmaLinux product on a newer
+# family get "The instance configuration for this AWS Marketplace product is
+# not supported" until the seller adds it.
+#
+# Weekly (and on demand), this workflow compares each AlmaLinux AMI product
+# with the instance types EC2 offers (current generation, ENA, for the
+# product's architecture, in any enabled region) and lists the ones the
+# product does not allow yet - leaving out the product's own restricted types
+# and EXCLUDE_INSTANCE_TYPES below. It reports them in the job summary and on
+# Mattermost. Only with sync=true does it add them: one change set per
+# product with AddDimensions + AddInstanceTypes (product) and
+# UpdatePricingTerms ($0 rates, the product's offer). All products' change
+# sets are submitted first and then waited on together; AWS validates them
+# (incl. the AMI's compatibility with each type), and types AWS does not
+# know yet are dropped and that change set resubmitted.
+#
+# Scheduled runs use the defaults, so they only report. The logic lives in
+# .github/scripts/aws-marketplace-instance-types.py; see
+# AWS_MARKETPLACE_INSTANCE_TYPES.md.
+
+on:
+  schedule:
+    # Weekly, Wednesdays 06:43 UTC: away from the Monday image builds, which
+    # add versions to the same products
+    - cron: '43 6 * * 3'
+
+  workflow_dispatch:
+    inputs:
+      product:
+        description: "AWS Marketplace product to check (ALL: every product matching PRODUCT_PATTERN; almalinux-dev: the limited test product)"
+        required: true
+        type: choice
+        default: ALL
+        options:
+          - ALL
+          - AlmaLinux OS 8 (x86_64)
+          - AlmaLinux OS 8 (arm64)
+          - AlmaLinux OS 9 (x86_64)
+          - AlmaLinux OS 9 (arm64)
+          - AlmaLinux OS 10 (x86_64)
+          - AlmaLinux OS 10 (arm64)
+          - AlmaLinux OS Kitten 10 (x86_64)
+          - AlmaLinux OS Kitten 10 (arm64)
+          - almalinux-dev
+
+      sync:
+        description: "Add the new instance types to the products (false: report only)"
+        required: true
+        type: boolean
+        default: false
+
+      notify_mattermost:
+        description: "Send notification to Mattermost"
+        required: true
+        type: boolean
+        default: true
+
+env:
+  # Instance types never to add (fnmatch patterns, space- or newline-separated):
+  # - *.nano: no product allows a .nano size;
+  # - trn2u.*: Trn2 UltraServer type, offered only in ap-south-2, which the
+  #   Marketplace rejects as not valid (INVALID_INSTANCE_TYPES, 2026-10-15);
+  #   drop it once the Marketplace accepts it.
+  # GPU and accelerator types are added like any other: the products already
+  # allow g4dn..g6e, p4d..p5en, trn1, inf1/inf2, dl1. The products' own
+  # restricted types are never added either.
+  EXCLUDE_INSTANCE_TYPES: >-
+    *.nano
+    trn2u.*
+  # The products to sync with product=ALL (scheduled runs too), by AWS
+  # Marketplace product name
+  PRODUCT_PATTERN: "AlmaLinux OS *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aws-marketplace-instance-types
+  cancel-in-progress: false
+
+jobs:
+  sync-instance-types:
+    name: Sync Marketplace instance types
+    # Scheduled runs only in the AlmaLinux org's repository; manual runs
+    # anywhere (with that repository's AWS credentials)
+    if: ${{ github.event_name != 'schedule' || github.repository == 'AlmaLinux/cloud-images' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ${{ github.action_repository }}
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # The Marketplace Catalog API is in us-east-1
+          aws-region: us-east-1
+
+      - name: Compare the products with the EC2 instance types${{ inputs.sync && ' and add the new ones' || '' }}
+        id: sync
+        env:
+          # A scheduled run has no inputs: all products, report only
+          SYNC: ${{ inputs.sync == true }}
+          PRODUCT: ${{ inputs.product || 'ALL' }}
+        run: |
+          # The exclusion patterns, one array element each (read does not
+          # expand the globs)
+          read -r -a exclude <<< "${EXCLUDE_INSTANCE_TYPES}"
+          args=()
+          [ "${SYNC}" = "true" ] && args+=(--sync)
+          # One product by its exact name, or all of PRODUCT_PATTERN
+          pattern=${PRODUCT_PATTERN}
+          [ "${PRODUCT}" != "ALL" ] && pattern=${PRODUCT}
+          .github/scripts/aws-marketplace-instance-types.py "${args[@]}" \
+            --exclude "${exclude[@]}" \
+            --product-pattern "${pattern}" \
+            --report "${GITHUB_STEP_SUMMARY}" \
+            --message mattermost-message.md \
+            --github-output "${GITHUB_OUTPUT}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Read the Mattermost message
+        if: always() && hashFiles('mattermost-message.md') != ''
+        run: |
+          {
+            echo 'MATTERMOST_TEXT<<EOF'
+            cat mattermost-message.md
+            echo EOF
+          } >> "$GITHUB_ENV"
+
+      # Notify when there is something to act on (new types, or a sync), or
+      # when the run failed - not every week the products are up to date
+      - name: Send notification to Mattermost
+        uses: mattermost/action-mattermost-notify@master
+        if: >-
+          always() && (github.event_name == 'schedule' || inputs.notify_mattermost) &&
+          (failure() || steps.sync.outputs.total_new != '0' || inputs.sync)
+        with:
+          MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
+          MATTERMOST_USERNAME: ${{ github.triggering_actor }}
+          TEXT: |
+            ${{ env.MATTERMOST_TEXT || format(':almalinux: **AWS Marketplace**: the instance types sync failed, see the GitHub [Action]({0}/{1}/actions/runs/{2})', github.server_url, github.repository, github.run_id) }}

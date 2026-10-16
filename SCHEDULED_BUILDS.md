@@ -2,9 +2,11 @@
 
 ## Overview
 
-`.github/workflows/scheduled-builds.yml` is the **only** workflow with an
-`on.schedule` trigger. When one of its crons fires, it converts the firing
-into a real `workflow_dispatch` of the target unified workflow via
+`.github/workflows/scheduled-builds.yml` is the **only** image-build workflow
+with an `on.schedule` trigger. (The one other scheduled workflow is not an
+image build: the weekly AWS Marketplace instance-types report,
+[AWS_MARKETPLACE_INSTANCE_TYPES.md](AWS_MARKETPLACE_INSTANCE_TYPES.md).) When
+one of its crons fires, it converts the firing into a real `workflow_dispatch` of the target unified workflow via
 `gh workflow run`, passing `version_major` as a genuine input. All other
 inputs take their `workflow_dispatch` defaults automatically, so the build
 workflows carry **no schedule handling and no input emulation**, and their

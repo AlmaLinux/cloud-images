@@ -2,9 +2,10 @@ name: "Scheduled: dispatch image builds"
 run-name: >-
   Scheduled: dispatch image builds${{ github.event_name == 'workflow_dispatch' && format(' ({0}, version {1})', inputs.target_workflow, inputs.version_major) || '' }}
 
-# Central scheduler for the unified image workflows. This is the ONLY
-# workflow with an on.schedule trigger: when a cron fires, it converts the
-# firing into a real workflow_dispatch of the target workflow via
+# Central scheduler for the unified image workflows. This is the ONLY image
+# build workflow with an on.schedule trigger (aws-marketplace-instance-types.yml
+# has its own weekly one, not an image build): when a cron fires, it converts
+# the firing into a real workflow_dispatch of the target workflow via
 # `gh workflow run`, passing version_major as a genuine input (all other
 # inputs take their workflow_dispatch defaults automatically). The target
 # workflows therefore need no schedule handling, no input emulation, and
