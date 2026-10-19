@@ -12,15 +12,17 @@ box lifecycle in a single `workflow_dispatch`:
 2. **Test** each box with a live `vagrant up` smoke test on the build
    runner (via `shared-steps`, gated by `run_test`). Hyper-V and the
    QEMU-built aarch64 boxes are the exceptions - see below.
-3. **Publish** each box to the HCP Vagrant Registry, **in-job on the same
-   runner**, straight from the locally-built `.box` (no S3 round-trip),
-   gated by `release_to_hcp`.
+3. **Upload** each box to S3 (`upload_to_s3`), and **publish** the boxes
+   that passed their test in the AlmaLinux **Vagrant box catalog on S3**
+   (`release_to_catalog`), all at once in the `publish-catalog` job - see
+   [The Vagrant box catalog](#the-vagrant-box-catalog).
 
-It reuses `shared-steps` for build+test (same as the standalone
-[`vagrant-build.yml`](BUILD_VAGRANT.md) / [`hyperv-build.yml`](BUILD_VAGRANT.md))
-and a new `vagrant-publish-steps` composite for the publish. The
-standalone [`vagrant-publish.yml`](VAGRANT_CLOUD.md) remains for
-publishing a box that already exists at a URL.
+It reuses `shared-steps` for build+test+upload (same as the standalone
+[`vagrant-build.yml`](BUILD_VAGRANT.md) / [`hyperv-build.yml`](BUILD_VAGRANT.md)).
+The HCP Vagrant Registry it used to publish to stopped accepting new box
+versions on 2026-10-01 and shuts down on 2026-12-31; the standalone
+[`vagrant-publish.yml`](VAGRANT_CLOUD.md) and its `vagrant-publish-steps`
+composite only publish there.
 
 ### Hyper-V is build-only (no live test)
 
@@ -145,26 +147,76 @@ VirtualBox itself, as the `vagrant_virtualbox` leg):
 | Just (re)build boxes (no publish) | `vagrant-build.yml` / `hyperv-build.yml` |
 | Publish a box that already exists at a URL | `vagrant-publish.yml` |
 
-## HCP Vagrant is shutting down
+## The Vagrant box catalog
 
-HashiCorp is retiring HCP Vagrant
+HashiCorp retired HCP Vagrant
 ([deprecation notice](https://developer.hashicorp.com/hcp/docs/vagrant/hcp-vagrant-eol)):
+no new box versions since 2026-10-01 ("resource creation is currently
+disabled"), end of support on 2026-11-02, shutdown on 2026-12-31. The
+`almalinux/*` boxes are served from our own catalog on S3 instead:
 
-| Date | What stops |
-| :--- | :--- |
-| 2026-10-01 | creating boxes and registries - in practice also new versions of existing boxes: `vagrant cloud publish` fails with "Vagrant Cloud request failed - resource creation is currently disabled" |
-| 2026-11-02 | support and maintenance |
-| 2026-12-31 | everything, including downloads of the existing `almalinux/*` boxes |
+- **Catalog:** one Vagrant metadata JSON per box (`almalinux/8`, `9`, `10`,
+  `10-x86_64_v2`, `10-kitten`, `10-kitten-x86_64_v2`) at
+  `s3://<AWS_S3_BUCKET>/vagrant/almalinux/<box>` (and `<box>.json`), public,
+  `Content-Type: application/json`;
+  `https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant/` is the
+  address users set as `VAGRANT_SERVER_URL` (or `config.vm.box_url` to the
+  box's file).
+- **Boxes:** the `.box` files the build uploads to `images/.../vagrant/`;
+  each catalog entry carries its S3 URL and sha256.
+- **Seed:** `tools/vagrant_catalog.py` built the whole catalog from a
+  snapshot of the HCP registry metadata (the released versions, mapped to
+  their S3 copies) plus the releases built after HCP closed (`--extra`);
+  since this workflow publishes, the S3 files are the source of truth.
 
-So `release_to_hcp` defaults to `false`, and the scheduled runs (which take
-the defaults) build, test and upload the boxes to S3 without trying to
-publish them. The publish steps stay in place for a manual run while HCP
-still answers. Hosting the boxes elsewhere before 2026-12-31 is still open.
+### How a run publishes
+
+1. Each build leg whose box is on S3 and **passed its test** - the
+   `vagrant up` test (libvirt, virtualbox, vmware x86_64), or the offline
+   validation for the legs without one (hyperv, the aarch64 legs) - records
+   the box (file name, S3 key, sha256) as a `catalog-entry-*` artifact. A
+   leg whose test failed records nothing, so its box is not published (with
+   `run_test=false`, the libvirt / virtualbox / vmware x86_64 boxes are not
+   tested and therefore not published either).
+2. `publish-catalog` (after all build jobs) runs
+   `.github/scripts/vagrant-catalog-add.py`: for each catalog box the
+   entries touch, it downloads the current file, adds the new version (or
+   updates it - a re-run replaces a provider, never duplicates it) with all
+   its providers (`vmware` -> `vmware_desktop`, `x86_64`/`x86_64_v2` ->
+   `amd64`, `aarch64` -> `arm64`; `default_architecture` on amd64, or on a
+   provider's only architecture), and writes the result.
+3. It copies the previous file to
+   `vagrant/.history/<time stamp>/almalinux/<box>.json` (private), uploads
+   the new `<box>` and `<box>.json` (`application/json`, `max-age=300`,
+   tagged `public=yes`), and checks them over HTTPS.
+
+All of a run's boxes go into the catalog at once - legs never race on the
+same file, and users never see a version with only some of its providers -
+and `publish-catalog` runs in a `vagrant-catalog` concurrency group, so
+runs never interleave their updates either (they queue).
+
+Publishing happens only in the AlmaLinux org's `almalinux/cloud-images`
+repository: forks and ci-dev upload to the same bucket, and must not change
+the production catalog. It needs the CI credentials to have `s3:PutObject`
+and `s3:PutObjectTagging` on `<AWS_S3_BUCKET>/vagrant/*`.
+
+### Rolling back
+
+Copy a box's file back from `.history` (the version before a run), then
+re-upload it as both names:
+
+```bash
+aws s3 cp s3://almalinux-cloud/vagrant/.history/<time stamp>/almalinux/10.json 10.json
+for name in 10 10.json; do
+  aws s3api put-object --bucket almalinux-cloud --key vagrant/almalinux/${name} --body 10.json \
+    --content-type application/json --cache-control 'max-age=300' --tagging 'public=yes'
+done
+```
 
 ## Workflow inputs
 
 The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
-`release_to_hcp`; the publish workflow's `dry-run-mode` is omitted.
+`release_to_catalog`.
 
 | Input | Default | Notes |
 | :--- | :--- | :--- |
@@ -176,7 +228,7 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64, parallels-aarch64 and virtualbox-aarch64 legs, which are always build-only). |
 | `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
-| `release_to_hcp` | `false` | Publish boxes to the HCP Vagrant Registry. `false` = build + test + S3 upload only. Off by default: see [HCP Vagrant is shutting down](#hcp-vagrant-is-shutting-down). |
+| `release_to_catalog` | `true` | Publish the tested boxes in the [Vagrant box catalog](#the-vagrant-box-catalog) on S3. Needs `upload_to_s3`; applies in `almalinux/cloud-images` only. On by default, so the scheduled runs publish. |
 | `notify_mattermost` | `true` | Post per-box build / publish notifications to Mattermost. |
 
 ## Job layout
@@ -189,73 +241,40 @@ init-data  (computes matrix_gh / matrix_sh from vagrant_type; adds
  |          vagrant_virtualbox, except AlmaLinux 8)
  |
  |- build-gh-hosted (matrix_gh x variant)   -. shared-steps build (+ vagrant up
- |     libvirt / virtualbox / hyperv /        | test, except hyperv and
- |     vmware- / parallels- / virtualbox-     | the aarch64 legs), then
- |     aarch64                                | vagrant-publish-steps in-job
- |      |                                     |
- |      '- publish-aarch64 (org only: the     |
- |         aarch64 boxes built on arm64)      |
- |- start-self-hosted-runner (fork EC2)       |
- '- build-self-hosted (matrix_sh x variant) -' (HCP publish, gated by release_to_hcp)
-       vmware
+ |     libvirt / virtualbox / hyperv /        | test, except hyperv and the
+ |     vmware- / parallels- / virtualbox-     | aarch64 legs) + S3 upload; a
+ |     aarch64                                | tested box is recorded for
+ |- start-self-hosted-runner (fork EC2)       | the catalog
+ |- build-self-hosted (matrix_sh x variant) -'
+ |     vmware
+ '- publish-catalog (after all builds; almalinux/cloud-images only, gated by
+       release_to_catalog): adds the recorded boxes to the catalog at once
 ```
 
-There is no collect / aggregation stage: each box is published in-job,
-right after it is built and tested. The one exception is the aarch64 boxes
-the AlmaLinux org builds on its arm64 runner: Vagrant exists only for
-x86_64 Linux (HashiCorp builds none for arm64, and Ubuntu no longer ships
-it), so those legs upload the box as a workflow artifact (one-day
-retention) and `publish-aarch64` runs the same `vagrant-publish-steps` on
-an x86_64 runner. Provider routing (matching `vagrant-build.yml`):
+Provider routing (matching `vagrant-build.yml`):
 
 | Provider | Job (AlmaLinux org default) | Live test? |
 | :--- | :--- | :--- |
 | libvirt, virtualbox | `build-gh-hosted` (or `build-self-hosted` if `self_hosted_runner=self-hosted`) | yes |
 | vmware | `build-self-hosted` (needs the AL9 AMI) | yes |
 | hyperv | `build-gh-hosted` leg | no (build-only) |
-| vmware aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
-| parallels aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
-| virtualbox aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG); published by `publish-aarch64` in the org | no (build-only) |
+| vmware aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG) | no (build-only) |
+| parallels aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG) | no (build-only) |
+| virtualbox aarch64 | `build-gh-hosted` leg on arm64 under KVM (forks: under QEMU TCG) | no (build-only) |
 
-### Publishing: parallel, with retry-on-collision
+### Stage implementations
 
-Publishes run **in parallel** across the provider/variant matrix. Sibling
-providers of the same box publish to the **same** HCP box version (e.g.
-`almalinux/10` gets libvirt + virtualbox + vmware + hyperv providers), so
-they can race while that shared version is being created. There is no CLI
-to detect an in-flight publish, so `vagrant-publish-steps` retries
-`vagrant cloud publish` with backoff (up to 6 attempts); the only real
-contention is the version-create race, which clears once a sibling
-finishes (`vagrant cloud publish -f` is idempotent). Different boxes
-(`10` vs `10-x86_64_v2`) are distinct HCP boxes and never contend.
-
-An earlier design serialized publishes with a per-box `concurrency` group,
-but GitHub Actions concurrency keeps at most one in-progress + one pending
-job per group - a third same-group job cancels the pending one - so it
-could not serialize 3+ providers. Retry-on-collision replaced it.
-
-### Stage composite actions
-
-| Stage | Composite action |
+| Stage | Implementation |
 | :--- | :--- |
-| Build + test | [`.github/actions/shared-steps`](.github/actions/shared-steps/action.yml) |
-| Publish | [`.github/actions/vagrant-publish-steps`](.github/actions/vagrant-publish-steps/action.yml) |
-
-`vagrant-publish-steps` is new - adapted from `vagrant-publish.yml` minus
-dry-run: it sources the box from the local file, parses the filename for
-the HCP box name / provider / version, installs the `hcp` CLI OS-aware
-(apt on the Ubuntu libvirt/virtualbox/hyperv legs, dnf / HashiCorp RPM
-repo on the EL9 vmware leg; `vagrant` is already present on every build
-runner), and publishes with the retry loop above. It fails fast with a
-clear message if the HCP credentials are empty (otherwise `hcp auth login`
-falls back to an interactive browser login that hangs in CI).
+| Build + test + S3 upload | [`.github/actions/shared-steps`](.github/actions/shared-steps/action.yml) |
+| Catalog publish | [`.github/scripts/vagrant-catalog-add.py`](.github/scripts/vagrant-catalog-add.py) (uses [`tools/vagrant_catalog.py`](tools/vagrant_catalog.py)'s box-name parsing) |
 
 ## Runner sizing
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |
 | :--- | :--- | :--- |
 | `build-gh-hosted` | `r8i.2xlarge`, `image=ubuntu24-full-x64`, `volume=60g`, `nested-virt`, `spot=false`; the `vmware-aarch64` / `parallels-aarch64` / `virtualbox-aarch64` legs: arm64 `a1.metal` or a newer Graviton bare metal (`c6g`/`m6g`/`c7g`/`m7g` `.metal`, `*8gd.metal*`), `image=ubuntu24-full-arm64`, `volume=60g`, `spot=false` | `ubuntu-24.04` |
-| `publish-aarch64` | `ubuntu-24.04` | - (not run) |
+| `publish-catalog` | `ubuntu-24.04` | - (not run) |
 | `build-self-hosted` | `r8i.2xlarge`, `ami=<AL9 x86_64>`, `volume=60g`, `nested-virt`, `spot=false` | EC2 `c5n.metal` (`EC2_AMI_ID_AL9_X86_64`) or a manual self-hosted runner |
 
 `nested-virt` provides KVM for the Packer build and the `vagrant up` test;
@@ -283,8 +302,7 @@ spot allocation strategy if cost matters more than reclaim resilience.
 ### Secrets
 | Secret | Description |
 |--------|-------------|
-| `HCP_CLIENT_ID` / `HCP_CLIENT_SECRET` | HCP service-principal credentials (publish). Without them the publish fails fast. |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 upload (build stage) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3 upload (build stage) and the catalog publish (`s3:PutObject` / `s3:PutObjectTagging` on `<AWS_S3_BUCKET>/vagrant/*` too) |
 | `MATTERMOST_WEBHOOK_URL` | Mattermost incoming webhook URL |
 | `GIT_HUB_TOKEN` | Packer plugin GitHub API token |
 | `EC2_AMI_ID_AL9_X86_64`, `EC2_SUBNET_ID`, `EC2_SECURITY_GROUP_ID` | fork-only self-hosted EC2 runner |
@@ -292,18 +310,16 @@ spot allocation strategy if cost matters more than reclaim resilience.
 ### Variables (`vars.*`)
 | Variable | Description |
 |----------|-------------|
-| `HCP_ORG` | HCP Vagrant Registry organization (e.g. `almalinux`) |
 | `EC2_AMI_ID_AL9_X86_64` | AL9 x86_64 AMI for the org self-hosted (vmware) runner |
-| `AWS_REGION`, `AWS_S3_BUCKET` | S3 upload target (also the publish summary link) |
+| `AWS_REGION`, `AWS_S3_BUCKET` | S3 upload target, and the bucket of the catalog |
 | `MATTERMOST_CHANNEL` | Mattermost channel for notifications |
 
 ## Troubleshooting
 
-1. **`unable to login to HCP: ... timed out waiting for response from
-   provider`** (a browser-auth URL is printed) - `HCP_CLIENT_ID` /
-   `HCP_CLIENT_SECRET` are empty, so `hcp auth login` fell back to
-   interactive login. Set the secrets on the repo/org. The composite now
-   guards this and fails fast with the `gh secret set` hint.
+1. **`publish-catalog` fails with `AccessDenied` on `PutObject`** - the
+   CI credentials lack `s3:PutObject` / `s3:PutObjectTagging` on
+   `<AWS_S3_BUCKET>/vagrant/*`. Nothing was changed; add the permission and
+   re-run the job.
 2. **Two build legs cancelled mid-build, ~simultaneously** - a run-level
    cancel (UI/API) or, on spot runners, a spot reclaim ("The runner has
    received a shutdown signal"). The build runners use `spot=false` to
@@ -311,11 +327,15 @@ spot allocation strategy if cost matters more than reclaim resilience.
 3. **`dnf -y remove --oldinstallonly` fails in the build** ("No old
    installonly packages found for removal") - a build-role issue in
    `shared-steps`' ansible, independent of this workflow.
-4. **Publish hits a version-create conflict** - expected when sibling
-   providers race on the same box version; the retry loop self-heals. A
-   persistent failure exhausts the 6 attempts and fails the leg.
+4. **A box is missing from the catalog** - its leg's test failed (or did
+   not run), so the leg recorded nothing; see the leg's "Tests ..." status.
+   Re-running the workflow for the same version adds it next to the
+   providers already published.
+5. **`publish-catalog` fails with "the catalog file must exist"** - a new
+   catalog box (e.g. a new major) has no file yet: create it with
+   `tools/vagrant_catalog.py` and upload it first.
 
 ## See also
 
 - [BUILD_VAGRANT.md](BUILD_VAGRANT.md) - the build stage (`shared-steps`), the per-provider Packer builders, and the `vagrant up` inline test.
-- [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) - the standalone publish flow and the HCP box/version/provider model.
+- [VAGRANT_CLOUD.md](VAGRANT_CLOUD.md) - the standalone HCP publish flow (HCP no longer accepts new versions).
