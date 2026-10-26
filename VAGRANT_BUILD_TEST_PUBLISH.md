@@ -159,9 +159,13 @@ disabled"), end of support on 2026-11-02, shutdown on 2026-12-31. The
   `10-x86_64_v2`, `10-kitten`, `10-kitten-x86_64_v2`) at
   `s3://<AWS_S3_BUCKET>/vagrant/almalinux/<box>` (and `<box>.json`), public,
   `Content-Type: application/json`;
-  `https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant/` is the
-  address users set as `VAGRANT_SERVER_URL` (or `config.vm.box_url` to the
-  box's file).
+  **`https://vagrant.almalinux.org`** - CloudFront in front of the
+  bucket's `vagrant/` folder - is the address users set as
+  `VAGRANT_SERVER_URL` (or `config.vm.box_url` to
+  `https://vagrant.almalinux.org/almalinux/<box>`). The bucket's own address,
+  `https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant`, serves the
+  same files; the publish job reads and checks the catalog there, as
+  CloudFront may serve a file up to its `max-age` (5 minutes) old.
 - **Boxes:** the `.box` files the build uploads to `images/.../vagrant/`;
   each catalog entry carries its S3 URL and sha256.
 - **Seed:** `tools/vagrant_catalog.py` built the whole catalog from a
@@ -212,6 +216,35 @@ for name in 10 10.json; do
     --content-type application/json --cache-control 'max-age=300' --tagging 'public=yes'
 done
 ```
+
+### The catalog page
+
+[`tools/vagrant-catalog-index.html`](tools/vagrant-catalog-index.html) is
+the catalog's web page, at `https://vagrant.almalinux.org` itself: the
+boxes, with their providers, architectures and versions, how to use them,
+and every version's box files, sizes and checksums - what the HCP Vagrant
+Discover page showed. It is a single static file in the almalinux.org style
+that reads the catalog files (`almalinux/<box>.json` under the root it is
+served from, same origin) when it loads, so publishing needs no change to
+it. The bucket cannot be listed publicly, so its `BOXES` list names the
+catalog boxes: add a new catalog box there.
+
+`https://vagrant.almalinux.org/` serves the `vagrant/` object. S3 serves no
+index document, so the page is uploaded as that object, and also as
+`vagrant/index.html` and `vagrant` (the bucket's own addresses), by hand,
+when it changes:
+
+```bash
+for key in vagrant vagrant/ vagrant/index.html; do
+  aws s3api put-object --bucket almalinux-cloud --key "${key}" --body tools/vagrant-catalog-index.html \
+    --content-type 'text/html; charset=utf-8' --cache-control 'max-age=300' --tagging 'public=yes'
+done
+```
+
+The page shows each box's size with a `HEAD` request to its file, which on
+`vagrant.almalinux.org` is another origin (the bucket's address): the
+bucket's CORS configuration allows `GET`/`HEAD` from
+`https://vagrant.almalinux.org` for that. Without it the sizes show `-`.
 
 ## Workflow inputs
 
