@@ -159,9 +159,13 @@ disabled"), end of support on 2026-11-02, shutdown on 2026-12-31. The
   `10-x86_64_v2`, `10-kitten`, `10-kitten-x86_64_v2`) at
   `s3://<AWS_S3_BUCKET>/vagrant/almalinux/<box>` (and `<box>.json`), public,
   `Content-Type: application/json`;
-  `https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant/` is the
-  address users set as `VAGRANT_SERVER_URL` (or `config.vm.box_url` to the
-  box's file).
+  **`https://vagrant.almalinux.org`** - CloudFront in front of the
+  bucket's `vagrant/` folder - is the address users set as
+  `VAGRANT_SERVER_URL` (or `config.vm.box_url` to
+  `https://vagrant.almalinux.org/almalinux/<box>`). The bucket's own address,
+  `https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant`, serves the
+  same files; the publish job reads and checks the catalog there, as
+  CloudFront may serve a file up to its `max-age` (5 minutes) old.
 - **Boxes:** the `.box` files the build uploads to `images/.../vagrant/`;
   each catalog entry carries its S3 URL and sha256.
 - **Seed:** `tools/vagrant_catalog.py` built the whole catalog from a

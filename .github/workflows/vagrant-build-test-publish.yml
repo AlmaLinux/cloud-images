@@ -4,9 +4,9 @@ run-name: >-
 
 # Unified Vagrant pipeline: build the boxes with Packer, run the `vagrant up`
 # smoke test, upload them to S3, and publish them in the AlmaLinux Vagrant box
-# catalog on S3 (https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/vagrant/,
-# which replaces the HCP Vagrant Registry: it stopped accepting new box
-# versions on 2026-10-01 and shuts down on 2026-12-31).
+# catalog on S3, served at https://vagrant.almalinux.org (which replaces the
+# HCP Vagrant Registry: it stopped accepting new box versions on 2026-10-01
+# and shuts down on 2026-12-31).
 #
 # Build + test + S3 upload come from shared-steps (run_test gates the live
 # test). Each build leg whose box passed its test - the `vagrant up` test, or
@@ -139,9 +139,10 @@ on:
 env:
   PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
   # The Vagrant box catalog: s3://<AWS_S3_BUCKET>/<VAGRANT_CATALOG_PREFIX>/<org>/<box>[.json],
-  # served at https://<AWS_S3_BUCKET>.s3.us-east-1.amazonaws.com/<prefix>/ (the
-  # address users set as VAGRANT_SERVER_URL); the box URLs in it point at
+  # served at VAGRANT_SERVER_URL (CloudFront in front of the bucket's
+  # <prefix>/ folder: the address users set); the box URLs in it point at
   # VAGRANT_BOX_BASE_URL/<S3 key>
+  VAGRANT_SERVER_URL: https://vagrant.almalinux.org
   VAGRANT_CATALOG_PREFIX: vagrant
   VAGRANT_CATALOG_ORG: almalinux
   VAGRANT_BOX_BASE_URL: https://${{ vars.AWS_S3_BUCKET }}.s3.amazonaws.com
@@ -563,6 +564,8 @@ jobs:
         id: entries
         run: |
           # List the recorded boxes
+          # The catalog is read and checked on the bucket itself, not through
+          # VAGRANT_SERVER_URL, whose CDN may serve a file up to its max-age old
           echo "CATALOG_URL=https://${BUCKET}.s3.us-east-1.amazonaws.com/${VAGRANT_CATALOG_PREFIX}" >> "$GITHUB_ENV"
           entries=$(find catalog-entries -name catalog-entry.json 2>/dev/null | sort || true)
           echo "count=$(echo -n "${entries}" | grep -c . || true)" >> "$GITHUB_OUTPUT"
@@ -584,7 +587,7 @@ jobs:
           {
             echo "### Vagrant box catalog"
             echo ""
-            echo "Catalog: ${CATALOG_URL}/ (\`VAGRANT_SERVER_URL\`)"
+            echo "Catalog: ${VAGRANT_SERVER_URL} (\`VAGRANT_SERVER_URL\`)"
             echo ""
           } > catalog-report.md
           # shellcheck disable=SC2046 # one argument per entry file
@@ -658,4 +661,4 @@ jobs:
 
             ${{ env.CATALOG_REPORT }}
 
-            Catalog: ${{ env.CATALOG_URL }}/
+            Catalog: ${{ env.VAGRANT_SERVER_URL }}
