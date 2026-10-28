@@ -1,11 +1,15 @@
 ---
-- name: Install GCP guest packages
-  dnf:
-    name:
-      - google-compute-engine
-      - google-osconfig-agent
-      - gce-disk-expand
-    state: present
+# Google asks for image builds to install the guest packages from the
+# "global" repo, since "stable" is a staged rollout. Point the kickstart's
+# stable repo at global for this one transaction only, so the image still
+# ships the stable repo. The dnf module has no --setopt, hence command.
+- name: Install GCP guest packages from the global repo
+  command: >-
+    dnf -y install
+    --setopt=google-compute-engine.baseurl=https://packages.cloud.google.com/yum/repos/google-compute-engine-el{{ ansible_distribution_major_version }}-{{ ansible_architecture }}-global
+    google-compute-engine google-osconfig-agent gce-disk-expand
+  register: gcp_guest_install
+  changed_when: "'Nothing to do' not in gcp_guest_install.stdout"
 
 - name: Install google-cloud-cli
   dnf:
