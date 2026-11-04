@@ -339,6 +339,15 @@ Additions build). Only the Parallels Tools ISO (from `almalinux-images`)
 and the VirtualBox Guest Additions ISO (from download.virtualbox.org)
 still come from outside - they are not part of the compose.
 
+The compose names its boot ISOs differently from the public repository:
+`AlmaLinux-<major>-latest-beta-<arch>-boot.iso` while it is in its beta
+phase, `AlmaLinux-<major>-latest-<arch>-boot.iso` once it carries the GA
+media, and never the `AlmaLinux-<os_ver>-<arch>-boot.iso` the `iso_url_*`
+locals encode. The script therefore reads the `-latest-` boot ISO name of
+every arch from the compose `CHECKSUM` and sets it on the rewritten
+locals, so no change is needed when a compose moves from its beta to its
+GA naming.
+
 The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
 notification carry a `:warning: Built from **PUNGI pre-release
 repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling

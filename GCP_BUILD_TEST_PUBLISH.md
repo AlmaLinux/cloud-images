@@ -122,6 +122,15 @@ before it is published. For GCP specifically the script:
   during provisioning (the 9 kickstarts already import
   `/etc/pki/rpm-gpg/*` themselves).
 
+The compose names its boot ISOs differently from the public repository:
+`AlmaLinux-<major>-latest-beta-<arch>-boot.iso` while it is in its beta
+phase, `AlmaLinux-<major>-latest-<arch>-boot.iso` once it carries the GA
+media, and never the `AlmaLinux-<os_ver>-<arch>-boot.iso` the `iso_url_*`
+locals encode. The script therefore reads the `-latest-` boot ISO name of
+every arch from the compose `CHECKSUM` and sets it on the rewritten
+locals, so no change is needed when a compose moves from its beta to its
+GA naming.
+
 The run name gets a `(PUNGI)` suffix, and the build summary and the
 Mattermost notification carry a
 `:warning: Built from **PUNGI pre-release repositories**` note. AlmaLinux 8

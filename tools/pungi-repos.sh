@@ -15,9 +15,20 @@
 # (x86_64 -> x86-64, x86_64_v2 -> x86-64-v2; aarch64/ppc64le/s390x as-is)
 # and <arch> is taken from the URL's own path.
 #
+# The boot ISOs are the one thing the compose names differently: it serves
+# AlmaLinux-<major>-latest[-beta]-<arch>-boot.iso (next to a
+# AlmaLinux-<ver>[-beta-N]-<arch>-boot.iso twin), never the
+# AlmaLinux-<os_ver>-<arch>-boot.iso the public repository has and the
+# iso_url_* locals encode. So after the prefix rewrite the script reads
+# the "-latest-" boot ISO name of every arch from the compose CHECKSUM
+# (the file packer verifies the download against) and sets it on the
+# rewritten locals - correct while the compose is in its beta phase and
+# once it carries the GA media alike, with no change needed in between.
+#
 # Rewritten files:
 #   - variables.pkr.hcl                  (iso_url_* / iso_checksum_* locals
-#                                         for 9/10, the s390x_kernel_url_* /
+#                                         for 9/10 incl. the boot ISO file
+#                                         names, the s390x_kernel_url_* /
 #                                         s390x_initrd_url_* locals of the
 #                                         s390x TCG build, and the os_ver_9 /
 #                                         os_ver_10 defaults - see below)
@@ -200,6 +211,45 @@ if [ -n "${LEFTOVER}" ]; then
     echo "${LEFTOVER}"
     exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Boot ISO file names from the compose -> iso_url_<major>_<arch> locals
+# ---------------------------------------------------------------------------
+
+# Prints the "-latest-" boot ISO file name of a major/arch compose, read
+# from its isos/<arch>/CHECKSUM - the file packer verifies the download
+# against, so a name listed there is one packer can check. The compose
+# names the ISO AlmaLinux-<major>-latest-beta-<arch>-boot.iso in its beta
+# phase and AlmaLinux-<major>-latest-<arch>-boot.iso once it carries the
+# GA media; the AlmaLinux-<os_ver>-<arch>-boot.iso name of the public
+# repository (and of variables.pkr.hcl) exists in neither.
+compose_boot_iso() {
+    local -r major="${1}" arch="${2}"
+    curl -sf "$(compose_base "${major}" "${arch}")/isos/${arch}/CHECKSUM" \
+        | sed -nE "s/^SHA256 \((AlmaLinux-${major}-latest[^)]*-${arch}-boot\.iso)\) = .*/\1/p" \
+        | head -n 1
+}
+
+for major in "${MAJORS[@]}"; do
+    for arch in "${ARCHES[@]}"; do
+        # Only the arches with an iso_url local: s390x boots kernel+initrd
+        # instead, and x86_64_v2 exists for 10 only.
+        grep -q "^  iso_url_${major}_${arch} " variables.pkr.hcl || continue
+        iso=$(compose_boot_iso "${major}" "${arch}") || true
+        if [ -z "${iso}" ]; then
+            echo "[Error] No AlmaLinux-${major}-latest*-${arch}-boot.iso listed in the AlmaLinux ${major} ${arch} PUNGI compose CHECKSUM"
+            exit 1
+        fi
+        sed -E "s#^(  iso_url_${major}_${arch} += \".*/isos/${arch}/)AlmaLinux-[^/\"]*-${arch}-boot\.iso\"#\1${iso}\"#" variables.pkr.hcl > variables.pkr.hcl.pungi.tmp
+        if ! cmp -s variables.pkr.hcl variables.pkr.hcl.pungi.tmp; then
+            mv variables.pkr.hcl.pungi.tmp variables.pkr.hcl
+            echo "[Info]   iso_url_${major}_${arch}: ${iso}"
+        else
+            rm -f variables.pkr.hcl.pungi.tmp
+            echo "[Info]   iso_url_${major}_${arch}: already ${iso}"
+        fi
+    done
+done
 
 # ---------------------------------------------------------------------------
 # AlmaLinux version from the compose -> os_ver_<major> in variables.pkr.hcl
