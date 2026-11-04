@@ -133,6 +133,11 @@ them and the release string the tests check. Scheduled (non-PUNGI)
 builds keep the released version from the committed defaults, so no
 version bump is needed to build an upcoming release from PUNGI.
 
+`pungi_repos` leaves the release inputs alone: with `copy_to_regions` and
+`release_to_marketplace` on, the pre-release AMIs are copied to every
+region, made public and released to the Marketplace products like any
+other build. Turn them off for a PUNGI run unless that is intended.
+
 ## Required GitHub Configuration
 
 ### Secrets

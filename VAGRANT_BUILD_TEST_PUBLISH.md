@@ -363,6 +363,11 @@ them and the release string the tests check. Scheduled (non-PUNGI)
 builds keep the released version from the committed defaults, so no
 version bump is needed to build an upcoming release from PUNGI.
 
+`pungi_repos` leaves the release inputs alone: with `release_to_catalog`
+on (the default), the pre-release boxes are published in the public
+AlmaLinux Vagrant box catalog like any other build. Turn it off for a
+PUNGI run unless that is intended.
+
 ## Runner sizing
 
 | Job | Runner (AlmaLinux org) | Runner (forks) |

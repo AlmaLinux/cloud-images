@@ -158,6 +158,11 @@ them and the release string the tests check. Scheduled (non-PUNGI)
 builds keep the released version from the committed defaults, so no
 version bump is needed to build an upcoming release from PUNGI.
 
+`pungi_repos` leaves the release inputs alone: with `release_to_gallery`
+and `release_to_marketplace` on, the pre-release images are released to
+the Compute Gallery and the Marketplace like any other build. Turn them
+off for a PUNGI run unless that is intended.
+
 ## Runner sizing
 
 | Job | Runner | Notes |

@@ -147,6 +147,10 @@ them and the release string the tests check. Scheduled (non-PUNGI)
 builds keep the released version from the committed defaults, so no
 version bump is needed to build an upcoming release from PUNGI.
 
+`pungi_repos` leaves the release inputs alone: with `publish_images` on,
+the pre-release images are published like any other build. Turn it off
+for a PUNGI run unless that is intended.
+
 ## Runners
 
 - **build-gcp-x86_64** / **build-gcp-aarch64**: RunsOn metal
