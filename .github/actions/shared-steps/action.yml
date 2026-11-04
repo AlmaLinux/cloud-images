@@ -41,6 +41,10 @@ inputs:
   run_test:
     description: 'Whether to run tests on the built image (true/false)'
     required: true
+  pungi_repos:
+    description: 'Build from the PUNGI pre-release repositories instead of repo.almalinux.org (true/false). AlmaLinux 8 (no PUNGI hosts) and Kitten (rolling stream, no releases) keep building from their public repos.'
+    required: false
+    default: 'false'
   runner:
     description: 'Type of runner to use for the build process'
     required: true
@@ -155,8 +159,22 @@ runs:
 
         # Release string and version
         if [[ ${{ env.version_major }} != *'kitten'* ]]; then
-          almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ env.version_major }}.${{ env.alma_arch }}.rpm
-          release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          if [[ "${{ inputs.pungi_repos }}" == "true" && "${{ env.version_major }}" =~ ^(9|10)$ ]]; then
+            # PUNGI builds install a pre-release almalinux-release (e.g.
+            # 10.3 while repo.almalinux.org still ships 10.2), so take
+            # the version from the PUNGI compose the image is actually
+            # built from - otherwise the release-string test greps
+            # /etc/almalinux-release for the wrong version and the S3
+            # path gets the old minor.
+            release=$(bash tools/pungi-repos.sh version ${{ env.version_major }}) || {
+              echo "::error::Failed to derive the almalinux-release version from the AlmaLinux ${{ env.version_major }} PUNGI compose"
+              exit 1
+            }
+            echo "[Debug] almalinux-release version from the PUNGI compose: ${release}"
+          else
+            almalinux_release=https://repo.almalinux.org/almalinux/almalinux-release-latest-${{ env.version_major }}.${{ env.alma_arch }}.rpm
+            release=$(rpm -q --qf="%{VERSION}\n" ${almalinux_release} 2>/dev/null)
+          fi
           release_string="AlmaLinux release ${release}"
           release_package="almalinux-release"
         else
@@ -376,6 +394,14 @@ runs:
           sudo ansible-playbook --version | head -1
           sudo ansible-galaxy --version | head -1
         fi
+
+    - name: Enable PUNGI repositories
+      if: inputs.pungi_repos == 'true'
+      shell: bash
+      run: |
+        # Rewrite variables.pkr.hcl / http/*.ks / *gencloud*.xml.tmpl to the
+        # PUNGI pre-release repositories (AlmaLinux 8 stays on public repos).
+        bash tools/pungi-repos.sh
 
     - name: Initialize packer
       shell: bash
@@ -642,8 +668,9 @@ runs:
           echo "[Debug] Check for updates:"
           sudo vagrant ssh default -c "sudo dnf check-update"
           echo "[Debug] Vagrant-specific RPM packages:"
-          # Packages installed by the 'vagrant_guest' Ansible role (common to
-          # every Vagrant box), plus the provider-specific guest role.
+          # Packages preinstalled by the vagrant kickstarts plus cloud-init
+          # (installed by the 'vagrant_guest' role) - common to every Vagrant
+          # box - plus the provider-specific guest role's agent.
           vagrant_pkgs="cloud-init cloud-utils-growpart cifs-utils jq nfs-utils rsync tcpdump tuned"
           case ${{ inputs.type }} in
             vagrant_libvirt*) vagrant_pkgs="${vagrant_pkgs} qemu-guest-agent" ;;
@@ -777,11 +804,16 @@ runs:
       env:
         got_pkgs_list: ${{ env.got_pkgs_list || 'false' }}
         upload_to_s3: ${{ inputs.upload_to_s3 || 'false' }}
+        pungi_repos: ${{ inputs.pungi_repos || 'false' }}
       with:
         result-encoding: string
         script: |
           const summary = core.summary
             .addRaw('**${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build `${{ env.TIME_STAMP }}`\n');;
+          if (process.env.pungi_repos === 'true') {
+            summary
+              .addRaw(':warning: Built from **PUNGI pre-release repositories**\n');
+          }
           if (process.env.upload_to_s3 === 'true') {
             summary
               .addRaw('S3 Bucket download URLs:\n')
@@ -804,6 +836,9 @@ runs:
           echo 'MATTERMOST_NOTIFICATION_MESSAGE<<EOF'
 
           echo ":almalinux: **${{ env.RELEASE_STRING }} ${{ env.alma_arch }}** ${{ env.IMAGE_TYPE }} Image build \`${{ env.TIME_STAMP }}\`, by the GitHub [Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [ "${{ inputs.pungi_repos }}" = "true" ]; then
+            echo ":warning: Built from **PUNGI pre-release repositories**"
+          fi
           if [ "${{ inputs.store_as_artifact }}" = "true" -a "${{ inputs.upload_to_s3 }}" = "false" ]; then
             echo "- CHECKSUM(SHA256) [zipped]: [${{ env.IMAGE_NAME }}.sha256sum](${{ steps.checksum-artifact.outputs.artifact-url }})"
             echo "- Image [zipped]: [${{ env.IMAGE_NAME }}](${{ steps.image-artifact.outputs.artifact-url }})"

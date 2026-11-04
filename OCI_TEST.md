@@ -90,7 +90,7 @@ Once SSH is reachable on the test instance, the following checks run in sequence
 
 1. **AlmaLinux release** — `grep '<RELEASE_STRING>' /etc/almalinux-release`
 2. **System architecture** — `rpm -q --qf='%{ARCH}\n' almalinux-release | grep '<ALMA_ARCH>'`
-3. **OCI-specific packages** — `rpm -q cloud-init nvme-cli iscsi-initiator-utils iscsi-initiator-utils-iscsiuio device-mapper-multipath`. `cloud-init` is OCI's instance provisioning agent (datasource at `/etc/cloud/cloud.cfg.d/99_oci.cfg`); the rest are NVMe / iSCSI / multipath support installed by [`ansible/roles/oci_guest/tasks/main.yaml`](ansible/roles/oci_guest/tasks/main.yaml). `rpm -q` exits non-zero if any package is missing
+3. **OCI-specific packages** — `rpm -q cloud-init nvme-cli iscsi-initiator-utils iscsi-initiator-utils-iscsiuio device-mapper-multipath`. `cloud-init` is OCI's instance provisioning agent (datasource at `/etc/cloud/cloud.cfg.d/99_oci.cfg`); the rest are NVMe / iSCSI / multipath support preinstalled by the OCI kickstarts (`http/almalinux-*.oci-*.ks`). `rpm -q` exits non-zero if any package is missing
 4. **Disk and filesystems** — `lsblk` listing
 5. **Root filesystem resize** — root must be ≥ 98 GiB (the boot-volume-size-in-gbs is 100 GiB)
 6. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)

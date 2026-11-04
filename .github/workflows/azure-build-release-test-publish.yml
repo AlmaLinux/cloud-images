@@ -1,6 +1,6 @@
 name: "Azure: Build, Release, Test, Publish"
 run-name: >-
-  Azure: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Release, Test, Publish
+  Azure: AlmaLinux ${{ inputs.version_major == '10-kitten' && 'Kitten 10' || inputs.version_major }} Build, Release, Test, Publish${{ inputs.pungi_repos && ' (PUNGI)' || '' }}
 
 # Unified Azure pipeline: build the .raw images with Packer, release each
 # built image to the Compute Gallery directly from the build runner (no S3
@@ -64,12 +64,6 @@ on:
           type: boolean
           default: true
 
-        store_as_artifact:
-          description: "Store images to the workflow Artifacts"
-          required: true
-          type: boolean
-          default: false
-
         upload_to_s3:
           description: "Upload to S3 Bucket"
           required: true
@@ -96,6 +90,12 @@ on:
 
         submit_to_preview:
           description: "Also submit drafts to Preview/certification"
+          required: true
+          type: boolean
+          default: false
+
+        pungi_repos:
+          description: "Build from PUNGI pre-release repositories instead of repo.almalinux.org (AlmaLinux 8 and Kitten keep their public repos)"
           required: true
           type: boolean
           default: false
@@ -169,10 +169,11 @@ jobs:
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-          store_as_artifact: ${{ inputs.store_as_artifact }}
+          store_as_artifact: 'false'
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -273,10 +274,11 @@ jobs:
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-          store_as_artifact: ${{ inputs.store_as_artifact }}
+          store_as_artifact: 'false'
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: aws-ec2
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -336,10 +338,11 @@ jobs:
           AWS_S3_BUCKET: ${{ vars.AWS_S3_BUCKET }}
           MATTERMOST_WEBHOOK_URL: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
           MATTERMOST_CHANNEL: ${{ vars.MATTERMOST_CHANNEL }}
-          store_as_artifact: ${{ inputs.store_as_artifact }}
+          store_as_artifact: 'false'
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: aws-ec2
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}

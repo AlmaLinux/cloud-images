@@ -1,26 +1,6 @@
 ---
-- name: Install Hyper-V support and common utils
-  dnf:
-    install_weak_deps: "{{ false if ansible_facts['distribution_major_version'] | int >= 9 else omit }}"
-    name:
-      - hyperv-daemons
-      - yum-utils
-      - nvme-cli
-      - jq
-      - tcpdump
-      - rsync
-      - nfs-utils
-      - cifs-utils
-      - sos
-      - tuned
-    state: present
-
-- name: Install disk utils
-  when: ansible_facts['distribution_major_version'] != '10'
-  ansible.builtin.dnf:
-    name: gdisk
-    state: present
-
+# Hyper-V support, the common utils, gdisk (8/9) and WALinuxAgent + mdadm
+# are preinstalled by the kickstarts.
 - name: Blacklist unnecessary kernel modules
   lineinfile:
     path: /etc/modprobe.d/blacklist.conf
@@ -34,11 +14,6 @@
     - options nouveau modeset=0
     - blacklist lbm-nouveau
     - blacklist floppy
-
-- name: Install NetworkManager Cloud Setup
-  ansible.builtin.dnf:
-    name: NetworkManager-cloud-setup
-    state: present
 
 - name: Configure NetworkManager Cloud Setup
   file:
@@ -72,11 +47,6 @@
     group: root
     mode: 0644
     seuser: system_u
-
-- name: Install WALinuxAgent
-  dnf:
-    name: WALinuxAgent
-    state: present
 
 - name: Enable waagent service
   ansible.builtin.systemd:

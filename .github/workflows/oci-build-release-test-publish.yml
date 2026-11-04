@@ -1,6 +1,6 @@
 name: "OCI: Build, Release to Compute, Test, Publish to Listings"
 run-name: >-
-  OCI: AlmaLinux ${{ inputs.version_major }} Build, Release to Compute, Test, Publish to Listings
+  OCI: AlmaLinux ${{ inputs.version_major }} Build, Release to Compute, Test, Publish to Listings${{ inputs.pungi_repos && ' (PUNGI)' || '' }}
 
 # Unified OCI pipeline: build the qcow2 images with Packer, create a
 # Compute Custom Image from each one directly on the build runner (upload to
@@ -87,6 +87,12 @@ on:
           type: boolean
           default: true
 
+        pungi_repos:
+          description: "Build from PUNGI pre-release repositories instead of repo.almalinux.org (AlmaLinux 8 and Kitten keep their public repos)"
+          required: true
+          type: boolean
+          default: false
+
         notify_mattermost:
           description: "Send notification to Mattermost"
           required: true
@@ -158,6 +164,7 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: ${{ github.repository_owner == 'AlmaLinux' && 'aws-ec2' || 'gh_hosted' }}
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}
@@ -253,6 +260,7 @@ jobs:
           upload_to_s3: ${{ inputs.upload_to_s3 }}
           notify_mattermost: ${{ inputs.notify_mattermost }}
           run_test: 'false'
+          pungi_repos: ${{ inputs.pungi_repos }}
           runner: aws-ec2
         env:
           PACKER_GITHUB_API_TOKEN: ${{ secrets.GIT_HUB_TOKEN }}

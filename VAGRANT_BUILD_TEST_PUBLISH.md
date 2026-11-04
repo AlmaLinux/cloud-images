@@ -259,10 +259,16 @@ The input set is [`vagrant-build.yml`](BUILD_VAGRANT.md)'s plus
 | `self-hosted` | `true` | Build the self-hosted providers on a self-hosted runner. |
 | `self_hosted_runner` | `aws-ec2` | `self-hosted` (manual) or `aws-ec2`. Routes libvirt/virtualbox to the self-hosted leg when set to `self-hosted`. |
 | `run_test` | `true` | Live `vagrant up` test (ignored for the hyperv, vmware-aarch64, parallels-aarch64 and virtualbox-aarch64 legs, which are always build-only). |
-| `store_as_artifact` | `false` | Upload boxes as workflow artifacts. |
 | `upload_to_s3` | `true` | Upload to S3 in parallel; also used for the publish summary/notification link. |
 | `release_to_catalog` | `true` | Publish the tested boxes in the [Vagrant box catalog](#the-vagrant-box-catalog) on S3. Needs `upload_to_s3`; applies in `almalinux/cloud-images` only. On by default, so the scheduled runs publish. |
+| `pungi_repos` | `false` | Build from the PUNGI pre-release repositories instead of `repo.almalinux.org` (see [Building from PUNGI pre-release repositories](#building-from-pungi-pre-release-repositories)). |
 | `notify_mattermost` | `true` | Post per-box build / publish notifications to Mattermost. |
+
+There is no `store_as_artifact` input: it was dropped to stay within the
+10-input `workflow_dispatch` limit when `pungi_repos` was added, and the
+workflow hardcodes it to `false` (no box/checksum artifacts). The ~2 KB
+installed-packages `.txt` list is stored as a workflow artifact
+unconditionally.
 
 ## Job layout
 
@@ -301,6 +307,66 @@ Provider routing (matching `vagrant-build.yml`):
 | :--- | :--- |
 | Build + test + S3 upload | [`.github/actions/shared-steps`](.github/actions/shared-steps/action.yml) |
 | Catalog publish | [`.github/scripts/vagrant-catalog-add.py`](.github/scripts/vagrant-catalog-add.py) (uses [`tools/vagrant_catalog.py`](tools/vagrant_catalog.py)'s box-name parsing) |
+
+## Building from PUNGI pre-release repositories
+
+`pungi_repos=true` runs `tools/pungi-repos.sh` before packer, so the boxes
+are built from the PUNGI pre-release compose
+(`https://<arch>-pungi-<major>.almalinux.dev`) instead of
+`repo.almalinux.org` - the way to validate a new AlmaLinux minor release
+before it is published. The script rewrites the boot ISO URLs and the
+(provider-shared) kickstart `url`/`repo` lines to the per-arch compose
+hosts, so the anaconda install comes from the compose. The installs that
+stay in Ansible - cloud-init (`vagrant_guest` must configure its Vagrant
+datasource before it first runs), the per-provider guest agents
+(`qemu-guest-agent` / `hyperv-daemons` / `open-vm-tools`, plus `nvme-cli`
+on the VMware aarch64 box, and the Parallels Tools installer's
+dependencies) and the VirtualBox Guest Additions build dependencies (on
+x86_64 and on the VirtualBox aarch64 box) - are covered by an
+injected `%post` writing `/etc/yum.repos.d/pungi.repo` (compose
+BaseOS/AppStream at `priority=1`). That override is what lets the Guest
+Additions build succeed on a pre-release system: `kernel-devel` /
+`kernel-headers` must match the running compose kernel, which the
+released repositories cannot provide. A task injected into the
+`cleanup_vm` role removes the override before the boxes ship.
+
+The QEMU-built VMware, Parallels and VirtualBox aarch64 boxes need nothing
+of their own: they install from the same aarch64 boot ISO and
+`http/almalinux-<major>.vagrant-aarch64.ks` as the other aarch64 builds,
+so the rewrite and the override cover them too (for the VirtualBox box,
+the override is what provides the compose's `kernel-devel` for the Guest
+Additions build). Only the Parallels Tools ISO (from `almalinux-images`)
+and the VirtualBox Guest Additions ISO (from download.virtualbox.org)
+still come from outside - they are not part of the compose.
+
+The compose names its boot ISOs differently from the public repository:
+`AlmaLinux-<major>-latest-beta-<arch>-boot.iso` while it is in its beta
+phase, `AlmaLinux-<major>-latest-<arch>-boot.iso` once it carries the GA
+media, and never the `AlmaLinux-<os_ver>-<arch>-boot.iso` the `iso_url_*`
+locals encode. The script therefore reads the `-latest-` boot ISO name of
+every arch from the compose `CHECKSUM` and sets it on the rewritten
+locals, so no change is needed when a compose moves from its beta to its
+GA naming.
+
+The run name gets a `(PUNGI)` suffix, and the build summary and Mattermost
+notification carry a `:warning: Built from **PUNGI pre-release
+repositories**` note. AlmaLinux 8 (no PUNGI hosts) and Kitten (a rolling
+stream - its public repos already ARE the latest compose) ignore the input
+and keep building from their public repositories.
+
+The AlmaLinux version comes from the compose: the script reads the
+`almalinux-release` version of the PUNGI compose (e.g. `10.3` while
+`repo.almalinux.org` still ships `10.2`) and sets it as the
+`os_ver_<major>` default in `variables.pkr.hcl`, so the boxes are named
+after the pre-release version and match `/etc/almalinux-release` inside
+them and the release string the tests check. Scheduled (non-PUNGI)
+builds keep the released version from the committed defaults, so no
+version bump is needed to build an upcoming release from PUNGI.
+
+`pungi_repos` leaves the release inputs alone: with `release_to_catalog`
+on (the default), the pre-release boxes are published in the public
+AlmaLinux Vagrant box catalog like any other build. Turn it off for a
+PUNGI run unless that is intended.
 
 ## Runner sizing
 

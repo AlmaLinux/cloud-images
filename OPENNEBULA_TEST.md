@@ -176,7 +176,7 @@ Once SSH is reachable on the guest, the following checks run in sequence (failur
 10. **`ETH0_METHOD=dhcp` applied** — `ip -4 -o addr show eth0` shows an inet address; `ip route` shows a default route (the symptom from the [`ETH0_MAC` discussion above](#why-eth0_mac-is-required))
 11. **Updates available** — `sudo dnf check-update` (exit code `100` is treated as success — it just means updates are pending)
 
-Items 1–4 and 11 mirror the assertions [`oci-test.yml`](OCI_TEST.md), [`azure-test.yml`](AZURE_TEST.md), and [`gencloud-test.yml`](GENCLOUD_TEST.md) run. Items 5–10 are OpenNebula-specific and protect against regressions in either the image's bundled OpenNebula payload (`one-context` + addons + supporting tools) or the contextualization invocation. The payload list (item 6) is kept in sync with `ansible/roles/opennebula_guest/tasks/main.yml` — when a package is added to or removed from the role, update the test in the same change.
+Items 1–4 and 11 mirror the assertions [`oci-test.yml`](OCI_TEST.md), [`azure-test.yml`](AZURE_TEST.md), and [`gencloud-test.yml`](GENCLOUD_TEST.md) run. Items 5–10 are OpenNebula-specific and protect against regressions in either the image's bundled OpenNebula payload (`one-context` + addons + supporting tools) or the contextualization invocation. The payload list (item 6) is kept in sync with `ansible/roles/opennebula_guest/tasks/main.yml` (one-context + addons) and the gencloud-shared kickstarts' preinstalled packages (supporting tools) — when a package is added or removed there, update the test in the same change.
 
 ## Workflow Process
 

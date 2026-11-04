@@ -1,9 +1,12 @@
+# cloud-utils-growpart and dracut-config-generic are preinstalled by the
+# kickstarts. cloud-init stays here: the gencloud x86_64/x86_64_v2/aarch64
+# kickstarts are shared with OpenNebula (whose images must not have it) and
+# the Vagrant ones with VMware (where a preinstalled, not-yet-configured
+# cloud-init activates on the first boot and breaks the networking), so it
+# is a no-op only where a kickstart preinstalls it (Azure, OCI, ppc64le).
 - name: Install cloud-init
   dnf:
-    name:
-      - cloud-init
-      - cloud-utils-growpart
-      - dracut-config-generic
+    name: cloud-init
 
 - name: Enable cloud-init services
   service:
