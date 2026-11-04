@@ -4,9 +4,9 @@
 # This allows building images before an AlmaLinux version is publicly
 # released.
 #
-# The PUNGI compose mirrors the public repository layout exactly (same
-# <Repo>/<arch>/os, BaseOS/<arch>/kickstart/, isos/<arch>/ with identical
-# file names), so every rewrite is a per-arch prefix substitution:
+# The PUNGI compose mirrors the public repository layout (same
+# <Repo>/<arch>/os, BaseOS/<arch>/kickstart/, isos/<arch>/ with its
+# CHECKSUM), so every URL rewrite is a per-arch prefix substitution:
 #
 #   https://repo.almalinux.org/almalinux/<major>
 #     -> https://<archdash>-pungi-<major>.almalinux.dev/almalinux/<major>/<arch>/latest_result_almalinux/compose
@@ -75,7 +75,16 @@
 #     no pre-release state to switch to. Kitten keeps its public repos.
 #
 # The script is idempotent: PUNGI URLs do not match the public-host
-# patterns, so a second run is a no-op. No arguments.
+# patterns and the compose-derived values are only rewritten when they
+# differ, so a second run is a no-op.
+#
+# Usage:
+#   tools/pungi-repos.sh                  rewrite the working tree (above)
+#   tools/pungi-repos.sh version <major>  print the almalinux-release version
+#                                         of the major's PUNGI compose and
+#                                         exit; the composite actions use it
+#                                         for the release string and S3 path
+#                                         of PUNGI builds
 
 set -euo pipefail
 
@@ -88,6 +97,66 @@ arch_dash() {
     # Host names dash the underscores: x86_64 -> x86-64, x86_64_v2 -> x86-64-v2
     echo "${1//_/-}"
 }
+
+compose_base() {
+    # compose_base <major> <arch> - the compose root of a major/arch
+    echo "https://$(arch_dash "${2}")-pungi-${1}.almalinux.dev/almalinux/${1}/${2}/latest_result_almalinux/compose"
+}
+
+# Prints the almalinux-release version (e.g. 10.3) of a major's PUNGI
+# compose, read from the BaseOS repodata. The composes of one major carry
+# the same version on every arch; the arches are tried in order in case a
+# host is down.
+compose_release_version() {
+    local -r major="${1}"
+    local arch base primary ver
+    for arch in x86_64 aarch64 ppc64le s390x; do
+        base="$(compose_base "${major}" "${arch}")/BaseOS/${arch}/os"
+        primary=$(curl -sf "${base}/repodata/repomd.xml" | grep -oE 'repodata/[^"]*-primary\.xml\.gz' | head -n 1) || true
+        [ -n "${primary}" ] || continue
+        ver=$(curl -sf "${base}/${primary}" | gunzip -c 2>/dev/null \
+            | python3 -c 'import re,sys; m=re.search(r"<name>almalinux-release</name>.*?ver=\"([^\"]+)\"", sys.stdin.read(), re.S); print(m.group(1) if m else "")') || true
+        if [ -n "${ver}" ]; then
+            echo "${ver}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+compose_version_checked() {
+    # Prints the compose version of <major>; exits when it cannot be read
+    # or does not look like <major>.<minor>.
+    local -r major="${1}"
+    local version
+    if ! version=$(compose_release_version "${major}"); then
+        echo "[Error] Could not read the almalinux-release version from the AlmaLinux ${major} PUNGI compose" >&2
+        exit 1
+    fi
+    if ! [[ "${version}" =~ ^${major}\.[0-9]+$ ]]; then
+        echo "[Error] Unexpected almalinux-release version '${version}' in the AlmaLinux ${major} PUNGI compose" >&2
+        exit 1
+    fi
+    echo "${version}"
+}
+
+# Modes (see the usage in the header)
+case "${1:-}" in
+    version)
+        major="${2:-}"
+        if [[ " ${MAJORS[*]} " != *" ${major} "* ]]; then
+            echo "[Error] usage: $0 version <major>   (major: ${MAJORS[*]})" >&2
+            exit 2
+        fi
+        compose_version_checked "${major}"
+        exit 0
+        ;;
+    "") ;;
+    *)
+        echo "[Error] usage: $0 [version <major>]" >&2
+        exit 2
+        ;;
+esac
 
 # Build one sed program covering every (major, arch) combination.
 SED_PROG=()
@@ -136,37 +205,8 @@ fi
 # AlmaLinux version from the compose -> os_ver_<major> in variables.pkr.hcl
 # ---------------------------------------------------------------------------
 
-# Prints the almalinux-release version (e.g. 10.3) of a major's PUNGI
-# compose, read from the BaseOS repodata. The composes of one major carry
-# the same version on every arch; the arches are tried in order in case a
-# host is down.
-compose_release_version() {
-    local -r major="${1}"
-    local arch ad base primary ver
-    for arch in x86_64 aarch64 ppc64le s390x; do
-        ad=$(arch_dash "${arch}")
-        base="https://${ad}-pungi-${major}.almalinux.dev/almalinux/${major}/${arch}/latest_result_almalinux/compose/BaseOS/${arch}/os"
-        primary=$(curl -sf "${base}/repodata/repomd.xml" | grep -oE 'repodata/[^"]*-primary\.xml\.gz' | head -n 1) || true
-        [ -n "${primary}" ] || continue
-        ver=$(curl -sf "${base}/${primary}" | gunzip -c 2>/dev/null \
-            | python3 -c 'import re,sys; m=re.search(r"<name>almalinux-release</name>.*?ver=\"([^\"]+)\"", sys.stdin.read(), re.S); print(m.group(1) if m else "")') || true
-        if [ -n "${ver}" ]; then
-            echo "${ver}"
-            return 0
-        fi
-    done
-    return 1
-}
-
 for major in "${MAJORS[@]}"; do
-    if ! version=$(compose_release_version "${major}"); then
-        echo "[Error] Could not read the almalinux-release version from the AlmaLinux ${major} PUNGI compose"
-        exit 1
-    fi
-    if ! [[ "${version}" =~ ^${major}\.[0-9]+$ ]]; then
-        echo "[Error] Unexpected almalinux-release version '${version}' in the AlmaLinux ${major} PUNGI compose"
-        exit 1
-    fi
+    version=$(compose_version_checked "${major}")
     current=$(sed -nE "/^variable \"os_ver_${major}\"/,/^}/ s/^  default = \"([^\"]+)\"/\1/p" variables.pkr.hcl)
     if [ -z "${current}" ]; then
         echo "[Error] No os_ver_${major} default found in variables.pkr.hcl"
@@ -196,7 +236,7 @@ inject_repo_override() {
     local f="$1" major="$2" arch="$3" base
     [ -e "${f}" ] || return 0
     grep -q '^\[pungi-baseos\]' "${f}" && return 0
-    base="https://$(arch_dash "${arch}")-pungi-${major}.almalinux.dev/almalinux/${major}/${arch}/latest_result_almalinux/compose"
+    base=$(compose_base "${major}" "${arch}")
     cat >> "${f}" <<EOF
 
 # PUNGI: repository override for the Ansible-provisioned installs that are
@@ -320,7 +360,7 @@ inject_ami_repo_override() {
             echo "[Error] ${os_yaml} has no 'Update the system' task, cannot inject the repo override"
             exit 1
         fi
-        base="https://$(arch_dash "${arch}")-pungi-${major}.almalinux.dev/almalinux/${major}/${arch}/latest_result_almalinux/compose"
+        base=$(compose_base "${major}" "${arch}")
         tmp=$(mktemp)
         cat > "${tmp}" <<EOF
 # PUNGI: the almalinux-repos package just seeded the chroot with the
