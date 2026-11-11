@@ -26,6 +26,7 @@ Workflow for uploading AlmaLinux OS High-Performance Computing (HPC) images to A
 
 **What it does:**
 - Accepts a base64-encoded Blob SAS Token URL (provided by the HPC image vendor) and an image version string
+- Treats the SAS URL as a credential: reads it from the event payload rather than the script text, and masks the encoded URL, the decoded URL and its signature, so none of them appear in the public run log
 - Downloads the HPC VHD blob via `azcopy`
 - Computes its MD5 checksum
 - Uploads the blob to the `almalinux` storage account in a `{major}-hpc` container (`8-hpc`, `9-hpc`, `10-hpc`) with content MD5 validation

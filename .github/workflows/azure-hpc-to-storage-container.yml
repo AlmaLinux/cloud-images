@@ -46,12 +46,39 @@ jobs:
 
     - name: Decode Blob SAS URL
       run: |
-        DECODED_BLOB_SAS_URL=$(echo '${{ inputs.blob_sas_url_b64 }}' | base64 -d)
+        # The SAS URL is a credential and the repository logs are public.
+        # Read the input from the event payload: an expression here would
+        # put it into the script text, which the log prints (and base64 is
+        # no protection). Then mask the encoded and the decoded URL, and its
+        # signature as is and URL-decoded, before anything else.
+        BLOB_SAS_URL_B64=$(jq -r '.inputs.blob_sas_url_b64 // empty' "${GITHUB_EVENT_PATH}" | tr -d '[:space:]')
+        if [ -z "${BLOB_SAS_URL_B64}" ]; then
+          echo "::error::The Blob SAS URL input is empty"
+          exit 1
+        fi
+        echo "::add-mask::${BLOB_SAS_URL_B64}"
+
+        DECODED_BLOB_SAS_URL=$(base64 -d <<< "${BLOB_SAS_URL_B64}" 2>/dev/null | tr -d '\r\n') || true
         if [ -z "${DECODED_BLOB_SAS_URL}" ]; then
           echo "::error::Failed to decode Blob SAS URL"
           exit 1
         fi
         echo "::add-mask::${DECODED_BLOB_SAS_URL}"
+
+        # A truncated or wrong paste can still decode to something: fail
+        # here rather than in azcopy, without printing the value
+        SAS_URL_RE='^https://[^/?]+/[^?]+[?](.*&)?sig=[^&]+'
+        if [[ ! "${DECODED_BLOB_SAS_URL}" =~ ${SAS_URL_RE} ]]; then
+          echo "::error::The decoded input is not a Blob SAS URL (expected https://<account>.blob.core.windows.net/<container>/<blob>?...&sig=...)"
+          exit 1
+        fi
+
+        SAS_SIG=$(sed -nE 's/.*[?&]sig=([^&]+).*/\1/p' <<< "${DECODED_BLOB_SAS_URL}")
+        if [ -n "${SAS_SIG}" ]; then
+          echo "::add-mask::${SAS_SIG}"
+          echo "::add-mask::$(printf '%b' "${SAS_SIG//%/\\x}")"
+        fi
+
         echo "DECODED_BLOB_SAS_URL=${DECODED_BLOB_SAS_URL}" >> $GITHUB_ENV
 
     - name: Parse image version

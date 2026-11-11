@@ -196,6 +196,8 @@ VHD SAS URI:   https://<account>.blob.core.windows.net/<container>/<blob>.vhd?<s
 
 > **Note:** User delegation SAS (`--as-user`) is limited to 7-day expiry. The workflow uses account-key auth to allow longer expiry windows.
 
+The repository's run logs are public, so the workflow masks every credential it handles before anything can print it: the storage account key, the new SAS token and its signature, and the signatures of the SAS URIs of the VM image versions already in the offer (they come back with the product resource tree). The logs and the job summary show `***` in their place.
+
 ### Partner Center API Authentication
 
 The workflow obtains an Azure AD token scoped to `https://graph.microsoft.com` using:
@@ -262,7 +264,7 @@ The certification process typically takes **30 minutes to several hours**. The w
    - Set `release_to_marketplace: false`
    - Performs: input validation → filename parsing → offer/plan mapping → SAS generation → resource tree fetch → tech config extraction
    - Does NOT configure any VM image version or submit anything
-   - Verify the parsed metadata, offer/plan mapping, and SAS URI in the job summary
+   - Verify the parsed metadata and offer/plan mapping in the job summary (the SAS itself is masked)
 
 2. **Full Run**
    - Set `release_to_marketplace: true`

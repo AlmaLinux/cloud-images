@@ -272,6 +272,11 @@ runs:
           exit 1
         fi
 
+        # The repository logs are public: mask the key, and below the SAS
+        # (whole token, and its signature as is and URL-decoded), before
+        # anything can print them
+        echo "::add-mask::${ACCOUNT_KEY}"
+
         SAS_TOKEN=$(az storage container generate-sas \
           --account-name "${STORAGE_ACCOUNT}" \
           --account-key "${ACCOUNT_KEY}" \
@@ -283,6 +288,13 @@ runs:
         if [ -z "${SAS_TOKEN}" ]; then
           echo "[Error] Failed to generate container SAS token"
           exit 1
+        fi
+
+        echo "::add-mask::${SAS_TOKEN}"
+        SAS_SIG=$(sed -nE 's/(^|.*&)sig=([^&]+).*/\2/p' <<< "${SAS_TOKEN}")
+        if [ -n "${SAS_SIG}" ]; then
+          echo "::add-mask::${SAS_SIG}"
+          echo "::add-mask::$(printf '%b' "${SAS_SIG//%/\\x}")"
         fi
 
         # Build the VHD SAS URI by inserting blob name into container SAS URL
@@ -369,6 +381,17 @@ runs:
           -H "Content-Type: application/json")
         HTTP_CODE=$(echo "${HTTP_RESPONSE}" | tail -1)
         RESOURCE_TREE=$(echo "${HTTP_RESPONSE}" | sed '$d')
+
+        # The resource tree carries the SAS URI of every VM image version
+        # already in the offer, and the repository logs are public: mask
+        # their signatures (as is and URL-decoded) before the tree, or
+        # anything taken from it, is printed by this or a later step
+        echo "${RESOURCE_TREE}" | jq -r '.. | strings | select(test("[?&]sig="))' 2>/dev/null \
+          | sed -nE 's/.*[?&]sig=([^&]+).*/\1/p' | sort -u \
+          | while read -r sig; do
+              echo "::add-mask::${sig}"
+              echo "::add-mask::$(printf '%b' "${sig//%/\\x}")"
+            done || true
 
         echo "[Debug] Resource tree HTTP status: ${HTTP_CODE}"
 
@@ -478,7 +501,8 @@ runs:
         TOKEN="${{ env.PC_ACCESS_TOKEN }}"
         OFFER="${{ env.OFFER_ID }}"
         PLAN="${{ env.PLAN_ID }}"
-        SAS_URI="${{ env.SAS_URI }}"
+        # SAS_URI comes from the environment as is: an expression here would
+        # put it into the script text, which the log prints
 
         PACKAGE_VERSION="${{ env.PACKAGE_VERSION }}"
         echo "[Debug] Package version: ${PACKAGE_VERSION}"
