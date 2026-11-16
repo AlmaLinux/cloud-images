@@ -33,9 +33,15 @@ packer {
       version = ">= 1.0.3"
       source  = "github.com/hashicorp/virtualbox"
     }
+    # The plugin moved from hashicorp/packer-plugin-vmware to
+    # vmware/packer-plugin-vmware. The old source still resolves, but only
+    # through a GitHub API redirect, and packer does not send
+    # PACKER_GITHUB_API_TOKEN on the redirected request: `packer init` then
+    # runs on the anonymous per-IP quota and fails with "403 API rate limit
+    # exceeded" on shared runners. Same releases, same binaries.
     vmware = {
       version = "~> 1.0"
-      source  = "github.com/hashicorp/vmware"
+      source  = "github.com/vmware/vmware"
     }
   }
 }
