@@ -69,6 +69,13 @@ week.
   too.
 - `oci-build-release-test-publish.yml` has **no Kitten option** - on
   Kitten weeks the OCI dispatch is skipped (noted in the job summary).
+- `vagrant-build-test-publish.yml` **temporarily leaves the VirtualBox
+  x86_64 boxes out on Kitten weeks** (`10-kitten` and `10-kitten-v2`; the
+  other Kitten boxes, VirtualBox aarch64 included, still build). VirtualBox
+  Guest Additions up to 7.2.22 do not build against the Kitten kernel
+  6.12.0-281.el10 and newer. The skip is in the workflow's own matrix step
+  (noted in its job summary), not in the dispatch loop - see
+  [VAGRANT_BUILD_TEST_PUBLISH.md](VAGRANT_BUILD_TEST_PUBLISH.md).
 
 ## Where scheduled runs fire
 
