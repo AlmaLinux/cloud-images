@@ -26,7 +26,7 @@ variable "os_ver_10" {
   description = "AlmaLinux OS 10 version"
 
   type    = string
-  default = "10.2"
+  default = "10.3"
 
   validation {
     condition     = can(regex("10.[0-9]$|10.[1-9][0-9]$", var.os_ver_10))
