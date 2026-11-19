@@ -86,6 +86,65 @@ the default branch**, so changes take effect once merged to `main`. Note
 GitHub cron is not punctual - firings can arrive tens of minutes late,
 but the 2-hour type stagger absorbs that.
 
+## Pausing the scheduled builds
+
+To stop scheduled firings from building - during a release freeze, an
+infrastructure outage, or while a broken build is being fixed - set the
+repository variable `SCHEDULED_BUILDS_PAUSE` (Settings -> Secrets and
+variables -> Actions -> Variables). No commit is needed, and it takes effect
+at the next firing. Everything can be paused, or only some image types.
+
+The value is a list of entries, separated by commas or spaces:
+
+| Entry | Pauses | Until |
+| :--- | :--- | :--- |
+| `true` (also `1`, `yes`, `on`, `all`) | every image type | the entry is removed |
+| `YYYY-MM-DD` | every image type | that day (UTC); builds resume on it by themselves |
+| `<type>` | one image type | the entry is removed |
+| `<type>:YYYY-MM-DD` | one image type | that day (UTC) |
+
+`<type>` is one of `opennebula`, `gencloud`, `aws`, `azure`, `oci`,
+`vagrant` - the workflow file name up to the first dash, so an image type
+added to the schedule gets its name automatically. Entries are not case
+sensitive. Unset, empty, `false`, `0`, `no` and `off` mean not paused.
+
+| Example value | Effect |
+| :--- | :--- |
+| `true` | Nothing is built until the variable is cleared. |
+| `2026-12-01` | Nothing is built before 1 December 2026. |
+| `azure` | Azure is not built; everything else is. |
+| `aws,vagrant` | AWS and Vagrant are not built. |
+| `azure:2026-12-01 oci` | Azure is paused until 1 December 2026, OCI until its entry is removed. |
+
+With the `gh` CLI:
+
+```sh
+gh variable set SCHEDULED_BUILDS_PAUSE --body true --repo AlmaLinux/cloud-images
+gh variable set SCHEDULED_BUILDS_PAUSE --body 'azure:2026-12-01,oci' --repo AlmaLinux/cloud-images
+gh variable delete SCHEDULED_BUILDS_PAUSE --repo AlmaLinux/cloud-images
+```
+
+A paused firing still runs and succeeds. It dispatches nothing and shows a
+notice and a job summary naming the workflow and version it would have built,
+so the run list keeps a record of every skipped slot.
+
+An entry that is not recognised - a mistyped type, an impossible date -
+dispatches nothing and **fails every scheduled firing**, whatever its image
+type, until the value is corrected. A scheduled firing is a full release
+cycle: a typo such as `vagrnt` must not go unnoticed until Vagrant fires and
+builds.
+
+The version rotation is stateless, so a pause does not shift it: a version
+whose week was paused is not built later to catch up. It comes round again
+with the next cycle, or can be dispatched by hand (see below).
+
+Manual runs of the dispatcher, and manual runs of the build workflows
+themselves, are **not** affected by the variable.
+
+Compared with GitHub's own "Disable workflow" button: that stops every image
+type, also blocks manual runs, leaves no trace in the run list, and has no
+end date.
+
 ## Manual runs (testing)
 
 The dispatcher itself also has `workflow_dispatch` (allowed on any repo,
