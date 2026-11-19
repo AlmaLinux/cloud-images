@@ -172,7 +172,23 @@ jobs:
             fi
           fi
           if [ "${{ inputs.vagrant_type }}" = "vagrant_virtualbox" -o "${{ inputs.vagrant_type }}" = "ALL" ]; then
-            if [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
+            # TEMPORARY: the Kitten VirtualBox x86_64 boxes (10-kitten and
+            # 10-kitten-v2) are left out of ALL runs. VirtualBox Guest
+            # Additions (up to 7.2.22, the latest release) do not build
+            # against the Kitten kernel 6.12.0-281.el10 and newer:
+            #   ERROR: modpost: module vboxguest uses symbol __flush_tlb_all
+            #   from namespace module:kvm,kvm-amd,kvm-intel, but does not
+            #   import it.
+            # CentOS Stream 10 backported the upstream restriction that
+            # exports the symbol to the KVM modules only, and the Guest
+            # Additions compat code is gated on the vanilla kernel version
+            # (6.12). The aarch64 box is not affected (x86-only symbol).
+            # Select vagrant_virtualbox explicitly to try the build again;
+            # drop this once a Guest Additions release builds on Kitten.
+            if [ "${{ inputs.vagrant_type }}" = "ALL" ] && [ "${{ inputs.version_major }}" = "10-kitten" ]; then
+              echo "::notice::Kitten VirtualBox x86_64 boxes are paused: Guest Additions do not build against the Kitten kernel"
+              echo "- Skipped: Kitten VirtualBox x86_64 boxes (paused: Guest Additions do not build against the Kitten kernel; select \`vagrant_virtualbox\` to try)" >> "$GITHUB_STEP_SUMMARY"
+            elif [ "${{ inputs.self-hosted }}" = "true" -a "${{ inputs.self_hosted_runner }}" = "self-hosted" ]; then
               VARIANTS_SH+=("vagrant_virtualbox-x86_64")
             else
               VARIANTS_GH+=("vagrant_virtualbox-x86_64") # tests aren't work on GitHub runners, use self-hosted to run tests

@@ -139,6 +139,36 @@ VirtualBox itself, as the `vagrant_virtualbox` leg):
   is published like the others. It is excluded for the `-v2` variants and
   for AlmaLinux 8 (no VirtualBox aarch64 box for 8).
 
+### Kitten VirtualBox x86_64 boxes are paused (temporary)
+
+With `vagrant_type: ALL` and `version_major: 10-kitten`, the matrix leaves
+out the `vagrant_virtualbox-x86_64` leg, so neither the `10-kitten` nor the
+`10-kitten-v2` VirtualBox x86_64 box is built; the run's job summary says so.
+Every other Kitten box, the VirtualBox aarch64 one included, still builds and
+publishes.
+
+VirtualBox Guest Additions (up to 7.2.22, the latest release at the time) do
+not build against the Kitten kernel 6.12.0-281.el10 and newer:
+
+```
+ERROR: modpost: module vboxguest uses symbol __flush_tlb_all from namespace
+module:kvm,kvm-amd,kvm-intel, but does not import it.
+```
+
+CentOS Stream 10 backported the upstream restriction that exports the symbol
+to the KVM modules only, and the Guest Additions compatibility code is gated
+on the vanilla kernel version (6.12), so it does not see the backport. The
+symbol is x86-only, which is why the aarch64 box is not affected.
+
+The catalog keeps the last VirtualBox x86_64 Kitten box (`10.20261019.0`);
+newer Kitten versions have no `virtualbox` / `amd64` provider until the pause
+is lifted.
+
+To try the build again (for example after a new VirtualBox release), run the
+workflow with `vagrant_type: vagrant_virtualbox`: an explicit selection is
+not skipped. Once it passes, remove the skip from the `Set matrix` step of
+`vagrant-build-test-publish.yml` and this section.
+
 ### When to use which
 
 | Use | Workflow |
