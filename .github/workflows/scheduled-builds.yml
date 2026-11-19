@@ -41,6 +41,25 @@ run-name: >-
 # append the workflow file to TYPES in the dispatch step - the positions
 # must correspond.
 #
+# PAUSING: set the repository variable SCHEDULED_BUILDS_PAUSE (Settings ->
+# Secrets and variables -> Actions -> Variables) to stop scheduled firings
+# from dispatching, without a commit. The value is a list of entries,
+# separated by commas or spaces:
+#   true              - everything, until the entry is removed (also: 1,
+#                       yes, on, all)
+#   YYYY-MM-DD        - everything, until that day (UTC); builds resume on it
+#   <type>            - one image type, until the entry is removed
+#   <type>:YYYY-MM-DD - one image type, until that day
+# where <type> is opennebula, gencloud, aws, azure, oci or vagrant (the
+# workflow file name up to the first dash). Unset, empty, false, 0, no and
+# off mean not paused. Examples: `true`, `2026-12-01`, `aws,vagrant`,
+# `azure:2026-12-01 oci`.
+# A paused firing still runs and succeeds: it dispatches nothing and says in
+# its notice and job summary what it would have built. An unrecognised
+# entry dispatches nothing and FAILS every firing, whatever its type - a
+# typo must not start a release cycle. Manual (workflow_dispatch) runs of
+# this dispatcher are not affected.
+#
 # GITHUB_TOKEN note: workflow_dispatch is exempt from the "events triggered
 # by GITHUB_TOKEN do not create workflow runs" rule, so the default token
 # with actions:write is enough - no PAT.
@@ -101,6 +120,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
+      SCHEDULED_BUILDS_PAUSE: ${{ vars.SCHEDULED_BUILDS_PAUSE }}
     steps:
       - name: Dispatch
         run: |
@@ -149,6 +169,61 @@ jobs:
             workflows=('${{ inputs.target_workflow }}')
           fi
 
+          # Pause switch: the SCHEDULED_BUILDS_PAUSE repository variable (see
+          # the header). Scheduled firings only. The whole value is checked
+          # before anything is dispatched: one bad entry fails the firing,
+          # whatever image type it is for - otherwise a mistyped type would
+          # go unnoticed until that type fires, and builds.
+          declare -A paused=()   # "all" or an image type -> until when
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            if [ -n "${SCHEDULED_BUILDS_PAUSE//[[:space:]]/}" ]; then
+              echo "[Info] SCHEDULED_BUILDS_PAUSE='${SCHEDULED_BUILDS_PAUSE}' applies to scheduled firings only - this manual run is not affected"
+            fi
+          else
+            # The image type names are the workflow file names up to the
+            # first dash: opennebula, gencloud, aws, azure, oci, vagrant
+            known=" all "
+            for wf in "${TYPES[@]}"; do known+="${wf%%-*} "; done
+            today=$(date -u +%F)
+            date_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+
+            read -ra entries <<< "$(tr '[:upper:]' '[:lower:]' <<< "${SCHEDULED_BUILDS_PAUSE}" | tr ',\n\r\t' '    ')"
+            for entry in "${entries[@]}"; do
+              # <scope>[:<until>]; a bare date pauses everything until that day
+              scope="${entry%%:*}"
+              until=""
+              if [[ "${entry}" =~ ${date_re} ]]; then
+                scope="all"
+                until="${entry}"
+              elif [[ "${entry}" == *:* ]]; then
+                until="${entry#*:}"
+                if [[ ! "${until}" =~ ${date_re} ]]; then
+                  echo "::error::SCHEDULED_BUILDS_PAUSE: '${entry}' - expected <type>:YYYY-MM-DD - nothing dispatched"
+                  exit 1
+                fi
+              fi
+              case "${scope}" in
+                true|1|yes|on) scope="all" ;;
+                false|0|no|off) [ -z "${until}" ] && continue ;;
+              esac
+              if [[ "${known}" != *" ${scope} "* ]]; then
+                echo "::error::SCHEDULED_BUILDS_PAUSE: unrecognised entry '${entry}' (use true, YYYY-MM-DD, or any of:${known% }, each optionally followed by :YYYY-MM-DD) - nothing dispatched"
+                exit 1
+              fi
+              if [ -z "${until}" ]; then
+                paused[${scope}]="until its entry is removed from the SCHEDULED_BUILDS_PAUSE repository variable"
+              elif [ "$(date -u -d "${until}" +%F 2>/dev/null)" != "${until}" ]; then
+                echo "::error::SCHEDULED_BUILDS_PAUSE: '${until}' in '${entry}' is not a valid date - nothing dispatched"
+                exit 1
+              elif [[ "${today}" < "${until}" ]]; then
+                # ISO dates compare correctly as strings
+                paused[${scope}]="until ${until} (SCHEDULED_BUILDS_PAUSE repository variable)"
+              else
+                echo "[Info] SCHEDULED_BUILDS_PAUSE: '${entry}' has passed - ignored"
+              fi
+            done
+          fi
+
           # Dispatch on the ref this dispatcher ran from: the default branch
           # for scheduled firings; the tested branch for manual runs.
           {
@@ -158,6 +233,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           for wf in "${workflows[@]}"; do
+            # Paused, as a whole or for this image type?
+            type="${wf%%-*}"
+            until="${paused[all]:-${paused[${type}]:-}}"
+            if [ -n "${until}" ]; then
+              echo "::notice::Scheduled ${type} builds are paused ${until}: ${wf} not dispatched (version ${version})"
+              echo "- **PAUSED**: \`${wf}\` (version \`${version}\`) - ${until}" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
             # Per-workflow version quirks: AWS spells the Kitten choice
             # 'kitten_10'; OCI has no Kitten option at all - dispatching an
             # unknown choice value is rejected by the API, so skip it.
